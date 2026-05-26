@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão RH — PontoAO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #07090d;
+  --s1:       #0d1117;
+  --s2:       #131a24;
+  --s3:       #1a2333;
+  --border:   #1f2d3d;
+  --accent:   #00e5a0;
+  --blue:     #3b82f6;
+  --warn:     #f59e0b;
+  --danger:   #ef4444;
+  --text:     #e2e8f0;
+  --muted:    #4a5568;
+  --muted2:   #718096;
+  --mono:     'DM Mono', monospace;
+  --sans:     'Sora', sans-serif;
+  --sidebar:  240px;
+  --radius:   12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ── LOGIN ── */
+#loginScreen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  background-image: radial-gradient(ellipse at 20% 50%, rgba(0,229,160,.04) 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 20%, rgba(59,130,246,.04) 0%, transparent 60%);
+}
+
+.login-box {
+  width: 380px;
+  background: var(--s1);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 44px 36px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-box::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--blue));
+}
+
+.brand { display: flex; align-items: center; gap: 10px; margin-bottom: 36px; }
+.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+.brand-name { font-size: 12px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted2); }
+
+.login-h { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.login-sub { font-size: 13px; color: var(--muted2); margin-bottom: 32px; }
+
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.field input {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 14px;
+  font-family: var(--sans); font-size: 14px; color: var(--text); outline: none;
+  transition: border-color .15s;
+}
+.field input:focus { border-color: var(--accent); }
+
+.btn-main {
+  width: 100%; padding: 13px; border-radius: 8px; border: none;
+  background: var(--accent); color: #07090d;
+  font-family: var(--sans); font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all .15s;
+}
+.btn-main:hover { background: #00ffb3; }
+.btn-main:disabled { opacity: .5; cursor: not-allowed; }
+
+.err-box {
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25);
+  border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--danger);
+  margin-bottom: 18px; display: none;
+}
+
+/* ── APP LAYOUT ── */
+#app { display: none; height: 100vh; display: none; flex-direction: row; }
+
+.sidebar {
+  width: var(--sidebar);
+  background: var(--s1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.sb-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 20px 0;
+  margin-bottom: 28px;
+}
+.sb-brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.sb-brand-name { font-size: 11px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted2); }
+
+.sb-section { font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); padding: 0 20px; margin-bottom: 6px; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 20px; margin: 0 8px 2px;
+  border-radius: 8px;
+  font-size: 13px; font-weight: 500; color: var(--muted2);
+  cursor: pointer; transition: all .15s; border: none; background: none; width: calc(100% - 16px); text-align: left;
+}
+.nav-item:hover { background: var(--s2); color: var(--text); }
+.nav-item.active { background: var(--s3); color: var(--text); }
+.nav-item .ni { font-size: 15px; width: 18px; text-align: center; }
+.nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; }
+
+.sb-divider { border: none; border-top: 1px solid var(--border); margin: 12px 16px; }
+
+.sb-user {
+  margin-top: auto;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+.sb-user-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.sb-user-role { font-size: 11px; color: var(--muted2); margin-bottom: 12px; }
+.btn-logout {
+  width: 100%; padding: 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: none;
+  font-family: var(--sans); font-size: 11px; font-weight: 600;
+  color: var(--muted2); cursor: pointer; letter-spacing: .08em;
+  text-transform: uppercase; transition: all .15s;
+}
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+/* MAIN */
+.main { flex: 1; overflow-y: auto; }
+
+.page { display: none; padding: 32px; max-width: 1100px; }
+.page.active { display: block; }
+
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.page-title { font-size: 22px; font-weight: 700; }
+.page-sub { font-size: 13px; color: var(--muted2); margin-top: 2px; }
+
+/* CARDS */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.kpi {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.kpi-val { font-family: var(--mono); font-size: 32px; font-weight: 500; line-height: 1; margin-bottom: 4px; }
+.kpi-label { font-size: 11px; color: var(--muted2); text-transform: uppercase; letter-spacing: .08em; }
+.kpi-val.green { color: var(--accent); }
+.kpi-val.blue  { color: var(--blue); }
+.kpi-val.warn  { color: var(--warn); }
+.kpi-val.red   { color: var(--danger); }
+
+.card {
+  background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 20px;
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted2); display: flex; align-items: center; gap: 8px; }
+.card-title::before { content: ''; width: 3px; height: 12px; border-radius: 2px; background: var(--accent); display: block; }
+.card-body { padding: 20px; }
+
+/* TABLE */
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl th { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 0 12px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+.tbl td { padding: 12px; border-bottom: 1px solid rgba(31,45,61,.5); font-size: 13px; vertical-align: middle; }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--s2); }
+
+/* BADGES */
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; }
+.badge-green { background: rgba(0,229,160,.12); color: var(--accent); }
+.badge-blue  { background: rgba(59,130,246,.12); color: var(--blue); }
+.badge-warn  { background: rgba(245,158,11,.12); color: var(--warn); }
+.badge-red   { background: rgba(239,68,68,.12);  color: var(--danger); }
+.badge-gray  { background: rgba(74,85,104,.2);   color: var(--muted2); }
+
+/* PRESENCE DOT */
+.presence { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.presence.in  { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.presence.out { background: var(--muted); }
+.presence.int { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--s2); font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; transition: all .15s; letter-spacing: .04em; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn-accent { background: var(--accent); border-color: var(--accent); color: #07090d; }
+.btn-accent:hover { background: #00ffb3; border-color: #00ffb3; color: #07090d; }
+.btn-danger { border-color: rgba(239,68,68,.3); }
+.btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+/* SEARCH / FILTER */
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.search-input {
+  flex: 1; min-width: 200px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 14px;
+  font-family: var(--sans); font-size: 13px; color: var(--text); outline: none;
+}
+.search-input:focus { border-color: var(--accent); }
+.select-input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 9px 14px; font-family: var(--sans); font-size: 13px; color: var(--text); outline: none;
+}
+.select-input:focus { border-color: var(--accent); }
+
+/* MODAL */
+.overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(7,9,13,.85); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--s1); border: 1px solid var(--border); border-radius: 16px;
+  width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto;
+  transform: translateY(16px); transition: transform .2s;
+}
+.overlay.open .modal { transform: translateY(0); }
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--s1); z-index: 1;
+}
+.modal-head h3 { font-size: 15px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--muted2); font-size: 18px; cursor: pointer; padding: 4px; }
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 24px; }
+.modal-foot { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* FORM */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+  font-family: var(--sans); font-size: 13px; color: var(--text); outline: none;
+  transition: border-color .15s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+.form-group textarea { resize: vertical; min-height: 80px; }
+.form-group select option { background: var(--s2); }
+
+/* EMPTY / LOADING */
+.empty { padding: 48px; text-align: center; color: var(--muted2); font-size: 13px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOAST */
+.toasts { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 18px; font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; gap: 10px; min-width: 240px;
+  animation: tin .25s ease; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+}
+.toast.ok  { border-color: rgba(0,229,160,.3); }
+.toast.err { border-color: rgba(239,68,68,.3); }
+.toast.inf { border-color: rgba(59,130,246,.3); }
+@keyframes tin { from { transform: translateX(100%); opacity: 0; } }
+
+/* MARCAÇÕES HOJE - timeline */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.tl-item { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid rgba(31,45,61,.5); }
+.tl-item:last-child { border-bottom: none; }
+.tl-time { font-family: var(--mono); font-size: 15px; font-weight: 500; min-width: 52px; }
+.tl-func { font-size: 13px; font-weight: 500; flex: 1; }
+.tl-sub  { font-size: 11px; color: var(--muted2); }
+
+/* PERÍODO MENSAL */
+.periodo-bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px; background: var(--s2); border-radius: 8px; margin-bottom: 16px; }
+.periodo-info { flex: 1; font-size: 13px; }
+.periodo-info strong { display: block; margin-bottom: 2px; }
+.periodo-info span { font-size: 11px; color: var(--muted2); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="brand"><div class="brand-dot"></div><span class="brand-name">PontoAO · Gestão</span></div>
+    <h2 class="login-h">Painel de RH</h2>
+    <p class="login-sub">Acesso restrito a gestores e supervisores.</p>
+    <div class="err-box" id="loginErr"></div>
+    <div class="field"><label>Email</label><input type="email" id="lEmail" placeholder="gestor@empresa.ao"></div>
+    <div class="field"><label>Password</label><input type="password" id="lPass" placeholder="••••••••"></div>
+    <button class="btn-main" id="lBtn" onclick="doLogin()">Entrar no painel</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sb-brand"><div class="sb-brand-dot"></div><span class="sb-brand-name">PontoAO</span></div>
+
+    <div class="sb-section">Principal</div>
+    <button class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard"><span class="ni">◈</span> Dashboard</button>
+    <button class="nav-item" onclick="nav('presenca')" id="nav-presenca"><span class="ni">◉</span> Presenças hoje</button>
+    <button class="nav-item" onclick="nav('marcacoes')" id="nav-marcacoes"><span class="ni">◷</span> Marcações</button>
+
+    <hr class="sb-divider">
+    <div class="sb-section">Recursos Humanos</div>
+    <button class="nav-item" onclick="nav('funcionarios')" id="nav-funcionarios"><span class="ni">◻</span> Funcionários</button>
+    <button class="nav-item" onclick="nav('ferias')" id="nav-ferias"><span class="ni">◈</span> Férias <span class="nav-badge" id="feriasBadge" style="display:none">0</span></button>
+    <button class="nav-item" onclick="nav('departamentos')" id="nav-departamentos"><span class="ni">◫</span> Departamentos</button>
+    <button class="nav-item" onclick="nav('horarios')" id="nav-horarios"><span class="ni">◷</span> Horários</button>
+
+    <hr class="sb-divider">
+    <div class="sb-section">Relatórios e Dados</div>
+    <button class="nav-item" onclick="nav('relatorios')" id="nav-relatorios"><span class="ni">◈</span> Relatórios</button>
+    <button class="nav-item" onclick="nav('exportacao')" id="nav-exportacao"><span class="ni">↑</span> Exportação</button>
+    <button class="nav-item" onclick="nav('importacao')" id="nav-importacao"><span class="ni">↓</span> Importação</button>
+    <hr class="sb-divider">
+    <div class="sb-section">Horários Avançados</div>
+    <button class="nav-item" onclick="nav('rotacoes')" id="nav-rotacoes"><span class="ni">↻</span> Rotações</button>
+
+    <hr class="sb-divider">
+    <div class="sb-section">Sistema</div>
+    <button class="nav-item" onclick="nav('periodos')" id="nav-periodos"><span class="ni">◰</span> Períodos mensais</button>
+    <button class="nav-item" onclick="nav('configs')" id="nav-configs"><span class="ni">◎</span> Configurações</button>
+
+    <div class="sb-user">
+      <div class="sb-user-name" id="sbName">—</div>
+      <div class="sb-user-role" id="sbRole">—</div>
+      <button class="btn-logout" onclick="doLogout()">Terminar sessão</button>
+    </div>
+  </nav>
+
+  <!-- PAGES -->
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div><div class="page-title">Dashboard</div><div class="page-sub" id="dashDate">—</div></div>
+        <button class="btn" onclick="loadDashboard()">↺ Actualizar</button>
+      </div>
+      <div class="kpi-row" id="kpiRow"><div class="empty"><span class="spinner"></span></div></div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Últimas marcações</div></div>
+        <div class="card-body" id="dashMarcacoes"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- PRESENÇAS HOJE -->
+    <div class="page" id="page-presenca">
+      <div class="page-header">
+        <div><div class="page-title">Presenças hoje</div><div class="page-sub">Estado actual de cada funcionário</div></div>
+        <button class="btn" onclick="loadPresenca()">↺ Actualizar</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Funcionários</div></div>
+        <div id="presencaTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- MARCAÇÕES -->
+    <div class="page" id="page-marcacoes">
+      <div class="page-header">
+        <div><div class="page-title">Marcações</div><div class="page-sub">Consulta e edição de registos</div></div>
+      </div>
+      <div class="toolbar">
+        <input class="search-input" type="date" id="marcData" onchange="loadMarcacoes()">
+        <input class="search-input" placeholder="Nº funcionário..." id="marcNumero" style="flex:0;width:160px" oninput="loadMarcacoes()">
+        <select class="select-input" id="marcFunc" onchange="loadMarcacoes()"><option value="">Todos os funcionários</option></select>
+        <button class="btn btn-accent" onclick="loadMarcacoes()">Filtrar</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Registos</div></div>
+        <div id="marcacoesTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- FUNCIONÁRIOS -->
+    <div class="page" id="page-funcionarios">
+      <div class="page-header">
+        <div><div class="page-title">Funcionários</div><div class="page-sub">Gestão da ficha de pessoal</div></div>
+        <button class="btn btn-accent" onclick="abrirModalFunc()">+ Novo funcionário</button>
+      </div>
+      <div class="toolbar">
+        <input class="search-input" placeholder="Pesquisar por nome, número ou email..." id="funcSearch" oninput="filtrarFuncionarios()">
+        <select class="select-input" id="funcEstado" onchange="filtrarFuncionarios()">
+          <option value="">Todos os estados</option>
+          <option value="activo">Activo</option>
+          <option value="suspenso">Suspenso</option>
+          <option value="desligado">Desligado</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Lista</div><div id="funcCount" style="font-size:12px;color:var(--muted2)">—</div></div>
+        <div id="funcionariosTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- FÉRIAS -->
+    <div class="page" id="page-ferias">
+      <div class="page-header">
+        <div><div class="page-title">Férias</div><div class="page-sub">Pedidos e saldos</div></div>
+      </div>
+      <div class="toolbar">
+        <select class="select-input" id="feriasEstadoFiltro" onchange="loadFerias()">
+          <option value="pendente">Pendentes</option>
+          <option value="aprovado_supervisor">Aguarda RH</option>
+          <option value="aprovado_rh">Aprovados</option>
+          <option value="rejeitado">Rejeitados</option>
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Pedidos de férias</div></div>
+        <div id="feriasTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- DEPARTAMENTOS -->
+    <div class="page" id="page-departamentos">
+      <div class="page-header">
+        <div><div class="page-title">Departamentos</div></div>
+        <button class="btn btn-accent" onclick="abrirModalDep()">+ Novo departamento</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Lista</div></div>
+        <div id="depTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- HORÁRIOS -->
+    <div class="page" id="page-horarios">
+      <div class="page-header">
+        <div><div class="page-title">Horários</div><div class="page-sub">Limites LGT: 8h/dia · 44h/semana · Intervalo mín. 30min</div></div>
+        <button class="btn btn-accent" onclick="abrirModalHorario()">+ Novo horário</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Lista</div></div>
+        <div id="horariosTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- PERÍODOS -->
+    <div class="page" id="page-periodos">
+      <div class="page-header">
+        <div><div class="page-title">Períodos mensais</div><div class="page-sub">Fecho bloqueia edição de marcações</div></div>
+      </div>
+      <div id="periodosContent"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- CONFIGURAÇÕES -->
+    <div class="page" id="page-configs">
+      <div class="page-header">
+        <div><div class="page-title">Configurações</div></div>
+        <button class="btn btn-accent" onclick="guardarConfigs()">Guardar</button>
+      </div>
+      <div id="configsContent"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+
+    <!-- RELATÓRIOS -->
+    <div class="page" id="page-relatorios">
+      <div class="page-header">
+        <div><div class="page-title">Relatórios</div><div class="page-sub">Assiduidade e horas trabalhadas · LGT Lei 7/15</div></div>
+      </div>
+      <div class="toolbar">
+        <select class="select-input" id="relTipo">
+          <option value="assiduidade">Assiduidade</option>
+          <option value="horas">Horas trabalhadas</option>
+        </select>
+        <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
+        <input class="search-input" type="date" id="relFim" style="flex:0;width:160px">
+        <select class="select-input" id="relDep"><option value="">Todos os departamentos</option></select>
+        <input class="search-input" placeholder="Nº ou nome..." id="relSearch" style="flex:0;width:150px">
+        <button class="btn btn-accent" onclick="gerarRelatorio()">Gerar</button>
+        <button class="btn" onclick="exportarRelatorio('csv')" title="Exportar CSV">↓ CSV</button>
+        <button class="btn" onclick="exportarRelatorioPDF()" title="Exportar PDF">↓ PDF</button>
+        <button class="btn" onclick="enviarRelatorioEmail()" title="Enviar por email">✉ Email</button>
+      </div>
+      <div id="relatorioOutput"></div>
+    </div>
+
+
+    <!-- ROTAÇÕES -->
+    <div class="page" id="page-rotacoes">
+      <div class="page-header">
+        <div><div class="page-title">Rotações</div><div class="page-sub">Ciclos on/off · Turnos rotativos · Saída antecipada</div></div>
+        <button class="btn btn-accent" onclick="abrirModalRotacao()">+ Nova rotação</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Rotações configuradas</div></div>
+        <div id="rotacoesTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- EXPORTAÇÁO -->
+    <div class="page" id="page-exportacao">
+      <div class="page-header">
+        <div><div class="page-title">Exportação</div><div class="page-sub">Primavera Professional V10 · CSV de arquivo</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="card">
+          <div class="card-head"><div class="card-title">Primavera V10</div></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Exporta dados de processamento salarial no formato compatível com o módulo RH do Primavera Professional V10.</p>
+            <div class="form-group"><label>Mês</label><input type="month" id="expMes" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none"></div>
+            <div class="form-group"><label>Departamento (opcional)</label><select id="expDep" class="select-input" style="width:100%"><option value="">Todos</option></select></div>
+            <button class="btn btn-accent" onclick="exportarPrimavera()" style="width:100%">↓ Descarregar CSV Primavera</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div class="card-title">Exportar funcionários</div></div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Exporta a lista completa de funcionários em CSV para arquivo, migração ou integração com outros sistemas.</p>
+            <button class="btn btn-accent" onclick="exportarFuncionarios()" style="width:100%;margin-bottom:12px">↓ Exportar lista de funcionários</button>
+            <button class="btn" onclick="descarregarTemplate()" style="width:100%">↓ Template para importação</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORTAÇÁO -->
+    <div class="page" id="page-importacao">
+      <div class="page-header">
+        <div><div class="page-title">Importação</div><div class="page-sub">Importar funcionários via CSV</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Importar funcionários</div></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">
+            Faça upload de um ficheiro CSV com os dados dos funcionários. Use o template disponível na secção Exportação para garantir o formato correcto.
+            O sistema irá validar os dados antes de importar.
+          </p>
+          <div style="border:2px dashed var(--border);border-radius:12px;padding:40px;text-align:center;margin-bottom:20px;cursor:pointer" id="dropZone" onclick="document.getElementById('csvInput').click()">
+            <div style="font-size:32px;margin-bottom:12px">📁</div>
+            <div style="font-size:14px;font-weight:600;margin-bottom:6px">Clique para seleccionar ficheiro CSV</div>
+            <div style="font-size:12px;color:var(--muted2)">Separador: ponto e vírgula (;) · Codificação: UTF-8</div>
+            <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="ficheiroCsvSelecionado(this)">
+          </div>
+          <div id="csvNome" style="font-size:13px;color:var(--accent);margin-bottom:16px;display:none"></div>
+          <div style="display:flex;gap:10px">
+            <button class="btn" onclick="validarCSV()" id="btnValidar" disabled>Validar (pré-visualizar)</button>
+            <button class="btn btn-accent" onclick="importarCSV()" id="btnImportar" disabled>Importar funcionários</button>
+          </div>
+          <div id="importacaoResultado" style="margin-top:20px"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL FUNCIONÁRIO -->
+<div class="overlay" id="modalFunc">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalFuncTitle">Novo funcionário</h3><button class="modal-close" onclick="fecharModal('modalFunc')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome completo *</label><input id="fNome" placeholder="Nome e apelido"></div>
+        <div class="form-group"><label>Data de admissão *</label><input type="date" id="fAdmissao"></div>
+        <div class="form-group"><label>Tipo de contrato</label><select id="fContrato"><option value="prazo_indeterminado">Prazo indeterminado</option><option value="prazo_determinado">Prazo determinado</option><option value="prestacao_servicos">Prestação de serviços</option></select></div>
+        <div class="form-group"><label>Data fim contrato</label><input type="date" id="fFimContrato"></div>
+        <div class="form-group"><label>Vencimento base (AOA)</label><input type="number" id="fVencimento" placeholder="0"></div>
+        <div class="form-group"><label>NIF</label><input id="fNif" placeholder="000000000"></div>
+        <div class="form-group"><label>NISS</label><input id="fNiss" placeholder="000000000"></div>
+        <div class="form-group"><label>Nº dependentes (IRT)</label><input type="number" id="fDependentes" placeholder="0" min="0"></div>
+        <div class="form-group"><label>Género</label><select id="fGenero"><option value="">—</option><option value="M">Masculino</option><option value="F">Feminino</option><option value="Outro">Outro</option></select></div>
+        <div class="form-group"><label>Email</label><input type="email" id="fEmail" placeholder="email@empresa.ao"></div>
+        <div class="form-group"><label>Telefone</label><input id="fTelefone" placeholder="9XX XXX XXX"></div>
+        <div class="form-group"><label>Departamento</label><select id="fDep"><option value="">— Nenhum —</option></select></div>
+        <div class="form-group"><label>Horário</label><select id="fHorario"><option value="">— Nenhum —</option></select></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Morada</label><input id="fMorada" placeholder="Rua, número, município"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalFunc')">Cancelar</button>
+      <button class="btn" onclick="abrirAcessoPortal()" id="btnAcessoPortal" style="display:none">🔑 Acesso Portal</button>
+      <button class="btn btn-accent" onclick="submeterFunc()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR MARCAÇÁO -->
+<div class="overlay" id="modalMarcacao">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h3>Editar marcação</h3><button class="modal-close" onclick="fecharModal('modalMarcacao')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Data e hora</label><input type="datetime-local" id="mDataHora"></div>
+      <div class="form-group"><label>Motivo da edição *</label><textarea id="mMotivo" placeholder="Descreva o motivo da correcção..."></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalMarcacao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterEdicaoMarcacao()">Guardar correcção</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DEPARTAMENTO -->
+<div class="overlay" id="modalDep">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>Novo departamento</h3><button class="modal-close" onclick="fecharModal('modalDep')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nome *</label><input id="dNome" placeholder="Ex: Recursos Humanos"></div>
+      <div class="form-group"><label>Código</label><input id="dCodigo" placeholder="Ex: RH"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalDep')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterDep()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HORÁRIO -->
+<div class="overlay" id="modalHorario">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>Novo horário</h3><button class="modal-close" onclick="fecharModal('modalHorario')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Nome *</label><input id="hNome" placeholder="Ex: Horário Normal"></div>
+      <div class="form-group"><label>Tipo</label><select id="hTipo"><option value="normal">Normal</option><option value="turnos">Turnos</option><option value="nocturno">Nocturno</option><option value="flexivel">Flexível</option></select></div>
+      <div class="form-row">
+        <div class="form-group"><label>Horas/dia (máx 8)</label><input type="number" id="hDia" value="8" max="8" step="0.5"></div>
+        <div class="form-group"><label>Horas/semana (máx 44)</label><input type="number" id="hSemana" value="44" max="44" step="0.5"></div>
+        <div class="form-group"><label>Tolerância entrada (min)</label><input type="number" id="hTol" value="10"></div>
+        <div class="form-group"><label>Intervalo (min, mín 30)</label><input type="number" id="hInt" value="60" min="30"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalHorario')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterHorario()">Criar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL ROTAÇÁO -->
+<div class="overlay" id="modalRotacao">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head"><h3>Nova rotação</h3><button class="modal-close" onclick="fecharModal('modalRotacao')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="grid-column:1/-1"><label>Nome da rotação *</label><input id="rNome" placeholder="Ex: Rotação 28/28, Turno 3x8, Semana + Sexta Curta"></div>
+        <div class="form-group"><label>Tipo</label>
+          <select id="rTipo" onchange="tipoRotacaoChanged()">
+            <option value="ciclo_on_off">Ciclo On/Off (ex: 28/28)</option>
+            <option value="turno_rotativo">Turnos rotativos (manhã/tarde/noite)</option>
+            <option value="personalizado">Personalizado</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Horário base</label><select id="rHorario"><option value="">— Seleccionar —</option></select></div>
+      </div>
+      <div id="rCicloFields" class="form-row">
+        <div class="form-group"><label>Dias ON</label><input type="number" id="rDiasOn" value="28" min="1"></div>
+        <div class="form-group"><label>Dias OFF</label><input type="number" id="rDiasOff" value="28" min="1"></div>
+        <div class="form-group"><label>Data início do ciclo</label><input type="date" id="rDataCiclo"></div>
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <div class="form-group"><label>Trabalha ao fim de semana?</label>
+          <select id="rFds"><option value="0">Não (dias úteis apenas)</option><option value="1">Sim (inclui sáb/dom)</option></select>
+        </div>
+        <div class="form-group"><label>Trabalha em feriados?</label>
+          <select id="rFeriados"><option value="0">Não</option><option value="1">Sim</option></select>
+        </div>
+        <div class="form-group"><label>Saída antecipada (dia semana)</label>
+          <select id="rDiaAnt"><option value="">Nenhuma</option><option value="1">Segunda</option><option value="2">Terça</option><option value="3">Quarta</option><option value="4">Quinta</option><option value="5">Sexta</option></select>
+        </div>
+        <div class="form-group"><label>Hora saída antecipada</label><input type="time" id="rHoraAnt"></div>
+      </div>
+      <div style="margin-top:20px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px">Fases do ciclo</div>
+        <div id="fasesContainer"></div>
+        <button class="btn btn-sm" onclick="adicionarFase()" style="margin-top:10px">+ Adicionar fase</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalRotacao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterRotacao()">Criar rotação</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL ENVIAR EMAIL -->
+<div class="overlay" id="modalEnviarEmail">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>✉ Enviar Relatório por Email</h3><button class="modal-close" onclick="fecharModal('modalEnviarEmail')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">O relatório será enviado como anexo PDF para o email indicado.</p>
+      <div class="form-group"><label>Email de destino *</label><input type="email" id="emailDestino" placeholder="gestor@empresa.ao"></div>
+      <div class="form-group"><label>Assunto</label><input type="text" id="emailAssunto" placeholder="Relatório de Assiduidade"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalEnviarEmail')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterEnvioEmail()">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ACESSO PORTAL -->
+<div class="overlay" id="modalAcessoPortal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>🔑 Acesso ao Portal de Ponto</h3><button class="modal-close" onclick="fecharModal('modalAcessoPortal')">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Configure as credenciais de acesso do funcionário ao portal de marcação de ponto. O acesso é automaticamente bloqueado quando o funcionário é suspenso ou desligado.</p>
+      <div class="form-group"><label>Email de acesso *</label><input type="email" id="apEmail" placeholder="funcionario@empresa.ao"></div>
+      <div class="form-group"><label>Password <span style="color:var(--muted2)">(deixe em branco para não alterar)</span></label><input type="password" id="apPassword" placeholder="mínimo 6 caracteres"></div>
+      	<div class="form-group"><label>Perfil de acesso</label>
+  	<select id="apPerfil">
+    	<option value="funcionario">Funcionário — apenas portal de ponto</option>
+    	<option value="supervisor">Supervisor — visualização e aprovações</option>
+    	<option value="rh_manager">Gestor RH — acesso completo ao painel RH</option>
+  	</select>
+	</div>
+	<div class="form-group"><label>Estado do acesso</label>
+        <select id="apActivo">
+          <option value="1">Activo — pode aceder ao portal</option>
+          <option value="0">Bloqueado — sem acesso ao portal</option>
+        </select>
+      </div>
+      <div id="apUltimoLogin" style="font-size:12px;color:var(--muted2);margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAcessoPortal')">Cancelar</button>
+      <button class="btn btn-accent" onclick="submeterAcessoPortal()">Guardar acesso</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ── STATE ──
+let TOKEN   = localStorage.getItem('rh_token')   || '';
+let REFRESH = localStorage.getItem('rh_refresh')  || '';
+let USER    = JSON.parse(localStorage.getItem('rh_user') || 'null');
+let TENANT  = new URLSearchParams(location.search).get('tenant') || '';
+let _funcionarios = [];
+let _editMarcacaoId = null;
+let _editFuncId = null;
+
+// ── BOOT ──
+(function boot() {
+  if (TOKEN && USER) showApp();
+  setInterval(() => {
+    document.getElementById('dashDate') && (document.getElementById('dashDate').textContent = fmtDate(new Date()));
+  }, 1000);
+})();
+
+// ── AUTH ──
+async function doLogin() {
+  const email = document.getElementById('lEmail').value.trim();
+  const pass  = document.getElementById('lPass').value;
+  const errEl = document.getElementById('loginErr');
+  const btn   = document.getElementById('lBtn');
+  errEl.style.display = 'none';
+  if (!email || !pass) { errEl.textContent = 'Preencha todos os campos.'; errEl.style.display = 'block'; return; }
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const res = await api('POST', '/api/auth/login', { email, password: pass });
+    if (res.erro) throw new Error(res.mensagem);
+    if (!['super_admin_tenant','rh_manager','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
+    TOKEN = res.access_token; REFRESH = res.refresh_token; USER = res.utilizador;
+    localStorage.setItem('rh_token', TOKEN);
+    localStorage.setItem('rh_refresh', REFRESH);
+    localStorage.setItem('rh_user', JSON.stringify(USER));
+    showApp();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  } finally { btn.disabled = false; btn.textContent = 'Entrar no painel'; }
+}
+
+async function doLogout() {
+  try { await api('POST', '/api/auth/logout', { refresh_token: REFRESH }); } catch(_) {}
+  localStorage.removeItem('rh_token');
+  localStorage.removeItem('rh_refresh');
+  localStorage.removeItem('rh_user');
+  TOKEN = REFRESH = ''; USER = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  // Garantir nome correcto a partir do token JWT
+  try {
+    const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+    USER.nome   = payload.nome  || USER.nome;
+    USER.perfil = payload.perfil || USER.perfil;
+    localStorage.setItem('rh_user', JSON.stringify(USER));
+  } catch(_) {}
+  document.getElementById('sbName').textContent  = USER.nome;
+  document.getElementById('sbRole').textContent  = labelPerfil(USER.perfil);
+  document.getElementById('dashDate').textContent = fmtDate(new Date());
+  loadDashboard();
+  loadFeriasCount();
+  carregarSelectores();
+}
+
+// ── NAV ──
+function nav(page) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('nav-' + page)?.classList.add('active');
+  document.getElementById('page-' + page)?.classList.add('active');
+  const loaders = {
+    dashboard: loadDashboard, presenca: loadPresenca,
+    marcacoes: loadMarcacoes, funcionarios: loadFuncionarios,
+    ferias: loadFerias, departamentos: loadDepartamentos,
+    horarios: loadHorarios, periodos: loadPeriodos, configs: loadConfigs
+  };
+  loaders[page]?.();
+}
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  const hoje = new Date().toISOString().slice(0,10);
+
+  // KPIs
+  document.getElementById('kpiRow').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const [funcs, marc] = await Promise.all([
+      api('GET', '/api/funcionarios?estado=activo'),
+      api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}`)
+    ]);
+
+    const total    = funcs.dados?.length || 0;
+    const presentes = new Set((marc.dados||[]).filter(m=>m.tipo==='entrada').map(m=>m.funcionario)).size;
+    const pendFerias = await api('GET', '/api/ferias?estado=pendente');
+    const nPend = pendFerias.dados?.length || 0;
+
+    document.getElementById('kpiRow').innerHTML = `
+      <div class="kpi"><div class="kpi-val green">${presentes}</div><div class="kpi-label">Presentes hoje</div></div>
+      <div class="kpi"><div class="kpi-val blue">${total}</div><div class="kpi-label">Funcionários activos</div></div>
+      <div class="kpi"><div class="kpi-val ${nPend>0?'warn':'green'}">${nPend}</div><div class="kpi-label">Férias pendentes</div></div>
+      <div class="kpi"><div class="kpi-val">${(marc.dados||[]).length}</div><div class="kpi-label">Marcações hoje</div></div>
+    `;
+
+    const recentes = (marc.dados||[]).slice(0,8);
+    document.getElementById('dashMarcacoes').innerHTML = recentes.length
+      ? `<div class="timeline">${recentes.map(m=>`
+          <div class="tl-item">
+            <span class="tl-time">${m.data_hora.slice(11,16)}</span>
+            <span class="badge badge-${tipoCor(m.tipo)}">${labelTipo(m.tipo)}</span>
+            <div><div class="tl-func">${m.funcionario||'—'}</div><div class="tl-sub">${m.numero_funcionario||''}</div></div>
+          </div>`).join('')}</div>`
+      : '<div class="empty">Sem marcações hoje.</div>';
+  } catch(e) {
+    document.getElementById('kpiRow').innerHTML = '<div class="empty">Erro ao carregar.</div>';
+  }
+}
+
+// ── PRESENÇAS ──
+async function loadPresenca() {
+  document.getElementById('presencaTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const hoje = new Date().toISOString().slice(0,10);
+  try {
+    const [funcs, marc] = await Promise.all([
+      api('GET', '/api/funcionarios?estado=activo'),
+      api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}`)
+    ]);
+
+    const marcPorFunc = {};
+    (marc.dados||[]).forEach(m => {
+      if (!marcPorFunc[m.funcionario]) marcPorFunc[m.funcionario] = [];
+      marcPorFunc[m.funcionario].push(m);
+    });
+
+    const rows = (funcs.dados||[]).map(f => {
+      const ms     = marcPorFunc[f.nome_completo] || [];
+      const ultima = ms[0];
+      const estado = ms.length === 0 ? 'ausente'
+        : ultima?.tipo === 'saida' ? 'saiu'
+        : ultima?.tipo?.includes('intervalo') ? 'intervalo'
+        : 'presente';
+      const dotClass = estado === 'presente' ? 'in' : estado === 'intervalo' ? 'int' : 'out';
+      return `<tr>
+        <td><span class="presence ${dotClass}"></span></td>
+        <td><strong>${f.nome_completo}</strong><br><span style="font-size:11px;color:var(--muted2)">${f.numero_funcionario}</span></td>
+        <td>${f.departamento||'—'}</td>
+        <td><span class="badge badge-${estado==='presente'?'green':estado==='intervalo'?'blue':'gray'}">${estado}</span></td>
+        <td>${ultima ? ultima.data_hora.slice(11,16) + ' · ' + labelTipo(ultima.tipo) : '—'}</td>
+        <td>${ms.length}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('presencaTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>●</th><th>Funcionário</th><th>Departamento</th><th>Estado</th><th>Última marcação</th><th>Marcações</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Sem funcionários.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('presencaTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+// ── MARCAÇÕES ──
+async function loadMarcacoes() {
+  document.getElementById('marcacoesTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const data   = document.getElementById('marcData').value || new Date().toISOString().slice(0,10);
+  const fid    = document.getElementById('marcFunc').value;
+  const numero = document.getElementById('marcNumero')?.value?.trim();
+  let url = `/api/marcacoes?data_inicio=${data}&data_fim=${data}`;
+  if (fid)    url += `&funcionario_id=${fid}`;
+  if (numero) url += `&numero=${encodeURIComponent(numero)}`;
+  try {
+    const res = await api('GET', url);
+    const rows = (res.dados||[]).map(m => `<tr>
+      <td><span class="badge badge-${tipoCor(m.tipo)}">${labelTipo(m.tipo)}</span></td>
+      <td>${m.funcionario||'—'}</td>
+      <td><span style="font-family:var(--mono)">${m.data_hora.slice(11,16)}</span></td>
+      <td>${m.origem}</td>
+      <td>${m.editada ? '<span style="color:var(--warn)">✎ editada</span>' : '—'}</td>
+      <td>${m.bloqueada ? '<span style="color:var(--muted2)">bloqueada</span>' : `<button class="btn btn-sm" onclick="abrirEditMarcacao(${m.id},'${m.data_hora}')">Editar</button>`}</td>
+    </tr>`).join('');
+    document.getElementById('marcacoesTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>Tipo</th><th>Funcionário</th><th>Hora</th><th>Origem</th><th>Edição</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Sem marcações.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('marcacoesTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+function abrirEditMarcacao(id, dataHora) {
+  _editMarcacaoId = id;
+  document.getElementById('mDataHora').value = dataHora.replace(' ','T');
+  document.getElementById('mMotivo').value = '';
+  document.getElementById('modalMarcacao').classList.add('open');
+}
+
+async function submeterEdicaoMarcacao() {
+  const dh = document.getElementById('mDataHora').value;
+  const motivo = document.getElementById('mMotivo').value.trim();
+  if (!motivo) { toast('O motivo é obrigatório.','err'); return; }
+  try {
+    const res = await api('PUT', `/api/marcacoes/${_editMarcacaoId}`, { data_hora: dh.replace('T',' '), motivo_edicao: motivo });
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Marcação corrigida com sucesso.','ok');
+    fecharModal('modalMarcacao');
+    loadMarcacoes();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── FUNCIONÁRIOS ──
+async function loadFuncionarios() {
+  document.getElementById('funcionariosTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/funcionarios');
+    _funcionarios = res.dados || [];
+    filtrarFuncionarios();
+  } catch(e) { document.getElementById('funcionariosTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+function filtrarFuncionarios() {
+  const search = document.getElementById('funcSearch').value.toLowerCase();
+  const estado = document.getElementById('funcEstado').value;
+  const lista  = _funcionarios.filter(f =>
+    (!search || f.nome_completo.toLowerCase().includes(search) || f.numero_funcionario.includes(search) || (f.email||'').toLowerCase().includes(search)) &&
+    (!estado || f.estado === estado)
+  );
+  document.getElementById('funcCount').textContent = `${lista.length} funcionário(s)`;
+  const rows = lista.map(f => `<tr>
+    <td><span style="font-family:var(--mono);color:var(--muted2)">${f.numero_funcionario}</span></td>
+    <td><strong>${f.nome_completo}</strong>${f.email?`<br><span style="font-size:11px;color:var(--muted2)">${f.email}</span>`:''}</td>
+    <td>${f.departamento||'—'}</td>
+    <td>${f.cargo||'—'}</td>
+    <td>${fmtAOA(f.vencimento_base_aoa)}</td>
+    <td><span class="badge badge-${f.estado==='activo'?'green':f.estado==='suspenso'?'warn':'gray'}">${f.estado}</span></td>
+    <td>
+      <button class="btn btn-sm" onclick="editarFunc(${f.id})">Editar</button>
+      ${f.estado!=='desligado'?`<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>`:''}
+    </td>
+  </tr>`).join('');
+  document.getElementById('funcionariosTable').innerHTML = `<table class="tbl">
+    <thead><tr><th>Nº</th><th>Nome</th><th>Departamento</th><th>Cargo</th><th>Vencimento</th><th>Estado</th><th>Acções</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" class="empty">Nenhum resultado.</td></tr>'}</tbody>
+  </table>`;
+}
+
+function abrirModalFunc(id) {
+  _editFuncId = id || null;
+  document.getElementById('modalFuncTitle').textContent = id ? 'Editar funcionário' : 'Novo funcionário';
+  if (!id) {
+    ['fNome','fNif','fNiss','fEmail','fTelefone','fMorada'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('fAdmissao').value = new Date().toISOString().slice(0,10);
+    document.getElementById('fVencimento').value = '';
+    document.getElementById('fDependentes').value = '0';
+    document.getElementById('fFimContrato').value = '';
+    document.getElementById('fContrato').value = 'prazo_indeterminado';
+    document.getElementById('fGenero').value = '';
+  }
+  document.getElementById('modalFunc').classList.add('open');
+}
+
+function editarFunc(id) {
+  const f = _funcionarios.find(x => x.id === id);
+  if (!f) return;
+  _editFuncId = id;
+  document.getElementById('modalFuncTitle').textContent = 'Editar funcionário';
+  document.getElementById('btnAcessoPortal').style.display = 'inline-flex';
+  document.getElementById('fNome').value       = f.nome_completo || '';
+  document.getElementById('fAdmissao').value   = f.data_admissao || '';
+  document.getElementById('fContrato').value   = f.tipo_contrato || 'prazo_indeterminado';
+  document.getElementById('fFimContrato').value= f.data_fim_contrato || '';
+  document.getElementById('fVencimento').value = f.vencimento_base_aoa || '';
+  document.getElementById('fNif').value        = f.nif || '';
+  document.getElementById('fNiss').value       = f.niss || '';
+  document.getElementById('fDependentes').value= f.num_dependentes || '0';
+  document.getElementById('fGenero').value     = f.genero || '';
+  document.getElementById('fEmail').value      = f.email || '';
+  document.getElementById('fTelefone').value   = f.telefone || '';
+  document.getElementById('modalFunc').classList.add('open');
+}
+
+async function submeterFunc() {
+  const payload = {
+    nome_completo:       document.getElementById('fNome').value.trim(),
+    data_admissao:       document.getElementById('fAdmissao').value,
+    tipo_contrato:       document.getElementById('fContrato').value,
+    data_fim_contrato:   document.getElementById('fFimContrato').value || null,
+    vencimento_base_aoa: parseFloat(document.getElementById('fVencimento').value) || 0,
+    nif:                 document.getElementById('fNif').value || null,
+    niss:                document.getElementById('fNiss').value || null,
+    num_dependentes:     parseInt(document.getElementById('fDependentes').value) || 0,
+    genero:              document.getElementById('fGenero').value || null,
+    email:               document.getElementById('fEmail').value || null,
+    telefone:            document.getElementById('fTelefone').value || null,
+    morada:              document.getElementById('fMorada').value || null,
+    departamento_id:     document.getElementById('fDep').value || null,
+    horario_id:          document.getElementById('fHorario').value || null,
+  };
+  if (!payload.nome_completo || !payload.data_admissao) { toast('Nome e data de admissão são obrigatórios.','err'); return; }
+  try {
+    const res = _editFuncId
+      ? await api('PUT', `/api/funcionarios/${_editFuncId}`, payload)
+      : await api('POST', '/api/funcionarios', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Funcionário guardado.','ok');
+    fecharModal('modalFunc');
+    loadFuncionarios();
+    carregarSelectores();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function desligarFunc(id, nome) {
+  if (!confirm(`Confirma o desligamento de "${nome}"?\n\nEsta acção regista a data de saída mas mantém o histórico.`)) return;
+  try {
+    const res = await api('DELETE', `/api/funcionarios/${id}`, { motivo: 'Desligamento registado pelo gestor.' });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFuncionarios();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── FÉRIAS ──
+async function loadFerias() {
+  document.getElementById('feriasTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const estado = document.getElementById('feriasEstadoFiltro').value;
+  const url = '/api/ferias' + (estado ? `?estado=${estado}` : '');
+  try {
+    const res = await api('GET', url);
+    const rows = (res.dados||[]).map(p => `<tr>
+      <td><strong>${p.funcionario}</strong><br><span style="font-size:11px;color:var(--muted2)">${p.numero_funcionario}</span></td>
+      <td>${p.data_inicio} → ${p.data_fim}</td>
+      <td><span style="font-family:var(--mono)">${p.dias_uteis}</span> dias úteis</td>
+      <td>
+        <span style="font-size:11px;color:var(--muted2)">
+          Direito: ${p.dias_direito||'—'} · Gozados: ${p.dias_gozados||0} · Disponível: ${p.dias_pendentes||'—'}
+        </span>
+      </td>
+      <td><span class="badge badge-${estadoFeriasCor(p.estado)}">${labelEstadoFerias(p.estado)}</span></td>
+      <td>
+        ${p.estado === 'pendente' || p.estado === 'aprovado_supervisor' ? `
+          <button class="btn btn-sm btn-accent" onclick="acaoFerias(${p.id},'aprovar')">✓ Aprovar</button>
+          <button class="btn btn-sm btn-danger" onclick="acaoFerias(${p.id},'rejeitar')">✕ Rejeitar</button>
+        ` : '—'}
+      </td>
+    </tr>`).join('');
+    document.getElementById('feriasTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>Funcionário</th><th>Período</th><th>Duração</th><th>Saldo</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" class="empty">Sem pedidos.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('feriasTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+async function loadFeriasCount() {
+  try {
+    const res = await api('GET', '/api/ferias?estado=pendente');
+    const n = res.dados?.length || 0;
+    const badge = document.getElementById('feriasBadge');
+    badge.textContent = n;
+    badge.style.display = n > 0 ? 'inline' : 'none';
+  } catch(_) {}
+}
+
+async function acaoFerias(id, accao) {
+  const motivo = accao === 'rejeitar' ? prompt('Motivo da rejeição:') : null;
+  if (accao === 'rejeitar' && !motivo) return;
+  try {
+    const res = await api('PUT', `/api/ferias/${id}/aprovar`, { accao, motivo });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFerias();
+    loadFeriasCount();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── DEPARTAMENTOS ──
+async function loadDepartamentos() {
+  document.getElementById('depTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/departamentos');
+    const rows = (res.dados||[]).map(d => `<tr>
+      <td><strong>${d.nome}</strong></td>
+      <td><span style="font-family:var(--mono);color:var(--muted2)">${d.codigo||'—'}</span></td>
+      <td>${d.total_funcionarios}</td>
+      <td><span class="badge badge-${d.activo?'green':'gray'}">${d.activo?'Activo':'Inactivo'}</span></td>
+    </tr>`).join('');
+    document.getElementById('depTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>Nome</th><th>Código</th><th>Funcionários</th><th>Estado</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="4" class="empty">Sem departamentos.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('depTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+function abrirModalDep() { document.getElementById('dNome').value=''; document.getElementById('dCodigo').value=''; document.getElementById('modalDep').classList.add('open'); }
+
+async function submeterDep() {
+  const nome = document.getElementById('dNome').value.trim();
+  if (!nome) { toast('O nome é obrigatório.','err'); return; }
+  try {
+    const res = await api('POST', '/api/departamentos', { nome, codigo: document.getElementById('dCodigo').value||null });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok'); fecharModal('modalDep'); loadDepartamentos(); carregarSelectores();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── HORÁRIOS ──
+async function loadHorarios() {
+  document.getElementById('horariosTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/horarios');
+    const rows = (res.dados||[]).map(h => `<tr>
+      <td><strong>${h.nome}</strong></td>
+      <td>${h.tipo}</td>
+      <td><span style="font-family:var(--mono)">${h.horas_dia}h/dia · ${h.horas_semana}h/sem</span></td>
+      <td>${h.tolerancia_entrada_min}min</td>
+      <td>${h.intervalo_min}min</td>
+      <td>${h.funcionarios_afectos}</td>
+    </tr>`).join('');
+    document.getElementById('horariosTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Horas</th><th>Tolerância</th><th>Intervalo</th><th>Funcionários</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Sem horários.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('horariosTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+function abrirModalHorario() { document.getElementById('modalHorario').classList.add('open'); }
+
+async function submeterHorario() {
+  const payload = {
+    nome: document.getElementById('hNome').value.trim(),
+    tipo: document.getElementById('hTipo').value,
+    horas_dia:    parseFloat(document.getElementById('hDia').value),
+    horas_semana: parseFloat(document.getElementById('hSemana').value),
+    tolerancia_entrada_min: parseInt(document.getElementById('hTol').value),
+    intervalo_min: parseInt(document.getElementById('hInt').value),
+  };
+  if (!payload.nome) { toast('O nome é obrigatório.','err'); return; }
+  try {
+    const res = await api('POST', '/api/horarios', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok'); fecharModal('modalHorario'); loadHorarios(); carregarSelectores();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── PERÍODOS ──
+
+async function loadPeriodos() {
+  document.getElementById('periodosContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const ano = new Date().getFullYear();
+    const res = await api('GET', `/api/periodos?ano=${ano}`);
+    const periodos = res.periodos || [];
+    const meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const diaInicio = res.dia_inicio || 1;
+    const diaFim    = res.dia_fim || 31;
+    const mesActual = new Date().getMonth() + 1;
+
+    document.getElementById('periodosContent').innerHTML = `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-head"><div class="card-title">Configuração do período</div></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted2);margin-bottom:16px">Define o intervalo de dias que constitui um período mensal. Por exemplo, dia 21 ao dia 20 do mês seguinte.</p>
+          <div class="form-row">
+            <div class="form-group"><label>Dia de início do período</label><input type="number" id="perioDiaInicio" min="1" max="28" value="${diaInicio}"></div>
+            <div class="form-group"><label>Dia de fim do período</label><input type="number" id="perioDiaFim" min="1" max="31" value="${diaFim}"></div>
+          </div>
+          <button class="btn btn-accent" onclick="guardarConfigPeriodo()">Guardar configuração</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Períodos ${ano}</div></div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted2);margin-bottom:16px">O fecho de um período bloqueia a edição de todas as marcações desse intervalo.</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">
+            ${periodos.map(p => {
+              const fechado = p.estado === 'fechado';
+              const futuro  = p.mes > mesActual;
+              return `<div class="periodo-bar" style="flex-direction:column;align-items:flex-start;gap:8px;padding:12px;background:var(--s2);border-radius:8px">
+                <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+                  <strong style="font-size:13px">${meses[p.mes]} ${ano}</strong>
+                  <span class="badge badge-${fechado?'gray':futuro?'blue':'green'}">${fechado?'fechado':futuro?'futuro':'aberto'}</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted2)">${p.data_inicio||''} → ${p.data_fim||''}</div>
+                ${!futuro ? (fechado
+                  ? `<button class="btn btn-sm" onclick="abrirPeriodo(${ano},${p.mes},'${meses[p.mes]} ${ano}')">Reabrir</button>`
+                  : `<button class="btn btn-sm btn-danger" onclick="fecharPeriodo(${ano},${p.mes},'${meses[p.mes]} ${ano}')">Fechar período</button>`
+                ) : ''}
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`;
+  } catch(e) {
+    document.getElementById('periodosContent').innerHTML = `<div class="empty">Erro ao carregar períodos: ${e.message}</div>`;
+  }
+}
+
+async function guardarConfigPeriodo() {
+  const diaInicio = parseInt(document.getElementById('perioDiaInicio').value);
+  const diaFim    = parseInt(document.getElementById('perioDiaFim').value);
+  try {
+    const res = await api('POST', '/api/periodos/configurar', { dia_inicio: diaInicio, dia_fim: diaFim });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    loadPeriodos();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+
+async function fecharPeriodo(ano, mes, label) {
+  if (!confirm(`Fechar o período de ${label}?\n\nTodas as marcações deste mês ficarão bloqueadas para edição.\nEsta acção não pode ser revertida.`)) return;
+  try {
+    const res = await api('POST', '/api/periodos/fechar', { ano, mes });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    loadPeriodos();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function abrirPeriodo(ano, mes, label) {
+  if (!confirm(`Reabrir o período de ${label}?\n\nAs marcações deste mês voltarão a ser editáveis.`)) return;
+  try {
+    const res = await api('POST', '/api/periodos/abrir', { ano, mes });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    loadPeriodos();
+  } catch(e) { toast(e.message, 'err'); }
+}
+  
+  
+
+
+// ── CONFIGURAÇÕES ──
+let _configs = {};
+async function loadConfigs() {
+  document.getElementById('configsContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/configuracoes');
+    _configs = res.dados || {};
+    const c = _configs;
+    document.getElementById('configsContent').innerHTML = `
+      <div class="card">
+        <div class="card-head"><div class="card-title">Geofencing</div></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label>Geofencing activo</label><select id="cGeoActivo"><option value="0" ${!c.geofencing_activo?.valor?'selected':''}>Desactivado</option><option value="1" ${c.geofencing_activo?.valor?'selected':''}>Activado</option></select></div>
+            <div class="form-group"><label>Raio (metros)</label><input type="number" id="cRaio" value="${c.geofencing_raio_metros?.valor||200}"></div>
+            <div class="form-group"><label>Latitude do escritório</label><input id="cLat" value="${c.geofencing_lat?.valor||''}" placeholder="ex: -8.8368"></div>
+            <div class="form-group"><label>Longitude do escritório</label><input id="cLng" value="${c.geofencing_lng?.valor||''}" placeholder="ex: 13.2343"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Presenças</div></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label>Tolerância entrada (min)</label><input type="number" id="cTol" value="${c.tolerancia_entrada_min?.valor||10}"></div>
+            <div class="form-group"><label>Alerta ausência (horas)</label><input type="number" id="cAusencia" value="${c.notif_ausencia_horas?.valor||2}"></div>
+            <div class="form-group"><label>Dia fecho mensal</label><input type="number" id="cFecho" value="${c.fecho_mensal_dia?.valor||5}"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Email (SMTP)</div></div>
+        <div class="card-body">
+          <p style="font-size:12px;color:var(--muted2);margin-bottom:16px">Configure o servidor de email para envio de relatórios. Deixe em branco se não pretende usar esta funcionalidade.</p>
+          <div class="form-row">
+            <div class="form-group"><label>Servidor SMTP</label><input id="cSmtpHost" value="${c.smtp_host?.valor||''}" placeholder="smtp.empresa.ao"></div>
+            <div class="form-group"><label>Porta</label><input type="number" id="cSmtpPort" value="${c.smtp_port?.valor||587}" placeholder="587"></div>
+            <div class="form-group"><label>Utilizador SMTP</label><input id="cSmtpUser" value="${c.smtp_user?.valor||''}" placeholder="email@empresa.ao"></div>
+            <div class="form-group"><label>Password SMTP</label><input type="password" id="cSmtpPass" value="${c.smtp_pass?.valor||''}" placeholder="••••••••"></div>
+            <div class="form-group"><label>Email remetente</label><input type="email" id="cSmtpFrom" value="${c.smtp_from?.valor||''}" placeholder="noreply@empresa.ao"></div>
+            <div class="form-group"><label>Nome remetente</label><input id="cSmtpFromName" value="${c.smtp_from_name?.valor||''}" placeholder="PontoAO"></div>
+            <div class="form-group"><label>Encriptação</label>
+              <select id="cSmtpEncryption" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none">
+                <option value="tls" ${c.smtp_encryption?.valor==='tls'?'selected':''}>TLS (recomendado)</option>
+                <option value="ssl" ${c.smtp_encryption?.valor==='ssl'?'selected':''}>SSL</option>
+                <option value="" ${!c.smtp_encryption?.valor?'selected':''}>Nenhuma</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { document.getElementById('configsContent').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+async function guardarConfigs() {
+  const payload = {
+    geofencing_activo:       document.getElementById('cGeoActivo')?.value || '0',
+    geofencing_raio_metros:  document.getElementById('cRaio')?.value || '200',
+    geofencing_lat:          document.getElementById('cLat')?.value || null,
+    geofencing_lng:          document.getElementById('cLng')?.value || null,
+    tolerancia_entrada_min:  document.getElementById('cTol')?.value || '10',
+    notif_ausencia_horas:    document.getElementById('cAusencia')?.value || '2',
+    fecho_mensal_dia:        document.getElementById('cFecho')?.value || '5',
+    smtp_host:               document.getElementById('cSmtpHost')?.value || null,
+    smtp_port:               document.getElementById('cSmtpPort')?.value || '587',
+    smtp_user:               document.getElementById('cSmtpUser')?.value || null,
+    smtp_pass:               document.getElementById('cSmtpPass')?.value || null,
+    smtp_from:               document.getElementById('cSmtpFrom')?.value || null,
+    smtp_from_name:          document.getElementById('cSmtpFromName')?.value || null,
+    smtp_encryption:         document.getElementById('cSmtpEncryption')?.value || 'tls',
+  };
+  try {
+    const res = await api('PUT', '/api/configuracoes', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Configurações guardadas com sucesso.','ok');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── SELECTORES ──
+async function carregarSelectores() {
+  try {
+    const [deps, hors, funcs] = await Promise.all([
+      api('GET', '/api/departamentos'),
+      api('GET', '/api/horarios'),
+      api('GET', '/api/funcionarios?estado=activo'),
+    ]);
+
+    const depSel = document.getElementById('fDep');
+    depSel.innerHTML = '<option value="">— Nenhum —</option>' +
+      (deps.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
+
+    const horSel = document.getElementById('fHorario');
+    horSel.innerHTML = '<option value="">— Nenhum —</option>' +
+      (hors.dados||[]).map(h=>`<option value="${h.id}">${h.nome}</option>`).join('');
+
+    const funcSel = document.getElementById('marcFunc');
+    funcSel.innerHTML = '<option value="">Todos os funcionários</option>' +
+      (funcs.dados||[]).map(f=>`<option value="${f.id}">${f.nome_completo}</option>`).join('');
+
+    const relDepSel = document.getElementById('relDep');
+    if (relDepSel) {
+      relDepSel.innerHTML = '<option value="">Todos os departamentos</option>' +
+        (deps.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
+    }
+
+    document.getElementById('marcData').value = new Date().toISOString().slice(0,10);
+  document.getElementById('relInicio').value = new Date().toISOString().slice(0,8) + '01';
+  document.getElementById('relFim').value    = new Date().toISOString().slice(0,10);
+  } catch(_) {}
+}
+
+// ── MODAL ──
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
+
+// ── API ──
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+  if (TENANT) opts.headers['X-Tenant'] = TENANT;
+  if (body) opts.body = JSON.stringify(body);
+  const res  = await fetch(path, opts);
+  const data = await res.json();
+  if (res.status === 401 && REFRESH) {
+    try {
+      const r  = await fetch('/api/auth/refresh', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({refresh_token:REFRESH}) });
+      const rd = await r.json();
+      if (rd.access_token) { TOKEN = rd.access_token; localStorage.setItem('rh_token',TOKEN); return api(method,path,body); }
+    } catch(_) {}
+    doLogout();
+  }
+  return data;
+}
+
+// ── HELPERS ──
+function toast(msg, type='inf') {
+  const icons = {ok:'✓',err:'✕',inf:'ℹ'};
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${icons[type]}</span>${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function labelTipo(t) {
+  return {entrada:'Entrada',saida:'Saída',inicio_intervalo:'Iní. Intervalo',fim_intervalo:'Fim Intervalo',saida_servico:'Saída Serviço',regresso_servico:'Regresso'}[t]||t;
+}
+
+function tipoCor(t) {
+  return {entrada:'green',saida:'warn',inicio_intervalo:'blue',fim_intervalo:'blue',saida_servico:'red',regresso_servico:'green'}[t]||'gray';
+}
+
+function labelPerfil(p) {
+  return {super_admin_tenant:'Administrador',rh_manager:'Gestor de RH',supervisor:'Supervisor',funcionario:'Funcionário'}[p]||p;
+}
+
+function labelEstadoFerias(e) {
+  return {pendente:'Pendente',aprovado_supervisor:'Aguarda RH',aprovado_rh:'Aprovado',rejeitado:'Rejeitado',cancelado:'Cancelado'}[e]||e;
+}
+
+function estadoFeriasCor(e) {
+  return {pendente:'warn',aprovado_supervisor:'blue',aprovado_rh:'green',rejeitado:'red',cancelado:'gray'}[e]||'gray';
+}
+
+function fmtDate(d) {
+  const dias  = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${dias[d.getDay()]}, ${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function fmtAOA(v) {
+  if (!v) return '—';
+  return new Intl.NumberFormat('pt-AO',{style:'currency',currency:'AOA',minimumFractionDigits:0}).format(v);
+}
+
+
+// ── RELATÓRIOS ──
+async function gerarRelatorio() {
+  const tipo   = document.getElementById('relTipo').value;
+  const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
+  const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
+  const dep    = document.getElementById('relDep')?.value || '';
+  const search = document.getElementById('relSearch')?.value?.trim() || '';
+  const out    = document.getElementById('relatorioOutput');
+  out.innerHTML = '<div class="empty"><span class="spinner"></span> A gerar relatório...</div>';
+  let url = `/api/relatorios/${tipo}?data_inicio=${inicio}&data_fim=${fim}`;
+  if (dep)    url += `&departamento_id=${dep}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  try {
+    const res = await api('GET', url);
+    if (res.erro) throw new Error(res.mensagem);
+    const rows = (res.dados||[]).map(r => {
+      const s = r.resumo;
+      if (tipo === 'assiduidade') {
+        return `<tr>
+          <td><strong>${r.funcionario.nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero}</span></td>
+          <td>${r.funcionario.departamento||'—'}</td>
+          <td style="font-family:var(--mono);text-align:center">${s.dias_presente}</td>
+          <td style="font-family:var(--mono);text-align:center;color:var(--danger)">${s.dias_ausente}</td>
+          <td style="font-family:var(--mono);text-align:center;color:var(--blue)">${s.dias_justificados}</td>
+          <td style="font-family:var(--mono);text-align:center">${s.dias_feriado}</td>
+          <td style="text-align:center"><strong style="color:${s.taxa_presenca>=90?'var(--accent)':s.taxa_presenca>=75?'var(--warn)':'var(--danger)'}">${s.taxa_presenca}%</strong></td>
+        </tr>`;
+      } else {
+        return `<tr>
+          <td><strong>${r.funcionario.nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero}</span></td>
+          <td>${r.funcionario.departamento||'—'}</td>
+          <td style="font-family:var(--mono);text-align:center">${s.horas_efectivas}h</td>
+          <td style="font-family:var(--mono);text-align:center">${s.horas_esperadas}h</td>
+          <td style="font-family:var(--mono);text-align:center;color:${s.horas_extra>0?'var(--accent)':'var(--muted2)'}">${s.horas_extra}h</td>
+          <td style="font-family:var(--mono);text-align:center;color:${s.horas_deficit>0?'var(--danger)':'var(--muted2)'}">${s.horas_deficit}h</td>
+          <td style="font-family:var(--mono);text-align:center">${s.minutos_atraso_total}min</td>
+          <td style="text-align:center"><strong style="color:${s.saldo_horas>=0?'var(--accent)':'var(--danger)'}">${s.saldo_horas>=0?'+':''}${s.saldo_horas}h</strong></td>
+        </tr>`;
+      }
+    }).join('');
+
+    const headers = tipo === 'assiduidade'
+      ? '<tr><th>Funcionário</th><th>Departamento</th><th>Presentes</th><th>Ausentes</th><th>Justificados</th><th>Feriados</th><th>Taxa</th></tr>'
+      : '<tr><th>Funcionário</th><th>Departamento</th><th>H. Efectivas</th><th>H. Esperadas</th><th>H. Extra</th><th>H. Défice</th><th>Atrasos</th><th>Saldo</th></tr>';
+
+    out.innerHTML = `<div class="card">
+      <div class="card-head">
+        <div class="card-title">${tipo==='assiduidade'?'Assiduidade':'Horas trabalhadas'} · ${inicio} → ${fim}</div>
+        <span style="font-size:11px;color:var(--muted2)">Gerado ${res.gerado_em} · ${res.total_funcionarios} funcionário(s)</span>
+      </div>
+      <table class="tbl">
+        <thead>${headers}</thead>
+        <tbody>${rows||'<tr><td colspan="8" class="empty">Sem dados para o período.</td></tr>'}</tbody>
+      </table>
+      ${res.nota_legal ? `<div style="padding:12px 20px;font-size:11px;color:var(--muted2);border-top:1px solid var(--border)">${res.nota_legal}</div>` : ''}
+    </div>`;
+  } catch(e) {
+    out.innerHTML = `<div class="empty" style="color:var(--danger)">${e.message}</div>`;
+  }
+}
+
+
+// ── ROTAÇÕES ──
+let _fasesCount = 0;
+
+function tipoRotacaoChanged() {
+  const tipo = document.getElementById('rTipo').value;
+  document.getElementById('rCicloFields').style.display = tipo === 'ciclo_on_off' ? 'grid' : 'none';
+  if (tipo === 'ciclo_on_off' && document.getElementById('fasesContainer').children.length === 0) {
+    adicionarFase('On', 'trabalho', 28, '07:00', '19:00');
+    adicionarFase('Off', 'folga', 28);
+  } else if (tipo === 'turno_rotativo' && document.getElementById('fasesContainer').children.length === 0) {
+    adicionarFase('Manhã', 'trabalho', 7, '06:00', '14:00');
+    adicionarFase('Tarde', 'trabalho', 7, '14:00', '22:00');
+    adicionarFase('Noite', 'trabalho', 7, '22:00', '06:00');
+  }
+}
+
+function adicionarFase(nome='', tipo='trabalho', dias=1, entrada='08:00', saida='17:00') {
+  _fasesCount++;
+  const i = _fasesCount;
+  const div = document.createElement('div');
+  div.id = `fase_${i}`;
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:12px;background:var(--s2);border-radius:8px;border:1px solid var(--border)';
+  div.innerHTML = `
+    <div class="form-group" style="margin:0"><label style="font-size:9px">Nome da fase</label><input id="fn_${i}" value="${nome}" placeholder="Ex: On, Manhã, Semana" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--sans);font-size:12px;color:var(--text);outline:none"></div>
+    <div class="form-group" style="margin:0"><label style="font-size:9px">Tipo</label><select id="ft_${i}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--sans);font-size:12px;color:var(--text);outline:none"><option value="trabalho" ${tipo==='trabalho'?'selected':''}>Trabalho</option><option value="folga" ${tipo==='folga'?'selected':''}>Folga</option></select></div>
+    <div class="form-group" style="margin:0"><label style="font-size:9px">Dias</label><input type="number" id="fd_${i}" value="${dias}" min="1" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--sans);font-size:12px;color:var(--text);outline:none"></div>
+    <div class="form-group" style="margin:0"><label style="font-size:9px">Entrada</label><input type="time" id="fe_${i}" value="${entrada}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--sans);font-size:12px;color:var(--text);outline:none"></div>
+    <div class="form-group" style="margin:0"><label style="font-size:9px">Saída</label><input type="time" id="fs_${i}" value="${saida}" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--sans);font-size:12px;color:var(--text);outline:none"></div>
+    <button onclick="document.getElementById('fase_${i}').remove()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--muted2);cursor:pointer;margin-bottom:0">✕</button>
+  `;
+  document.getElementById('fasesContainer').appendChild(div);
+}
+
+async function abrirModalRotacao() {
+  _fasesCount = 0;
+  document.getElementById('fasesContainer').innerHTML = '';
+  document.getElementById('rNome').value = '';
+  document.getElementById('rTipo').value = 'ciclo_on_off';
+  document.getElementById('rDiasOn').value = '28';
+  document.getElementById('rDiasOff').value = '28';
+  document.getElementById('rDataCiclo').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rFds').value = '1';
+  document.getElementById('rFeriados').value = '1';
+  document.getElementById('rDiaAnt').value = '';
+  document.getElementById('rHoraAnt').value = '';
+
+  // Popular select de horários
+  try {
+    const res = await api('GET', '/api/horarios');
+    document.getElementById('rHorario').innerHTML = '<option value="">— Seleccionar —</option>' +
+      (res.dados||[]).map(h=>`<option value="${h.id}">${h.nome}</option>`).join('');
+  } catch(_) {}
+
+  tipoRotacaoChanged();
+  document.getElementById('modalRotacao').classList.add('open');
+}
+
+async function submeterRotacao() {
+  const nome = document.getElementById('rNome').value.trim();
+  const tipo = document.getElementById('rTipo').value;
+  const hid  = document.getElementById('rHorario').value;
+  if (!nome) { toast('O nome é obrigatório.','err'); return; }
+  if (!hid)  { toast('Seleccione um horário base.','err'); return; }
+
+  // Recolher fases
+  const fases = [];
+  let ordem = 1;
+  document.getElementById('fasesContainer').querySelectorAll('[id^="fn_"]').forEach(el => {
+    const i = el.id.split('_')[1];
+    fases.push({
+      ordem: ordem++,
+      nome: el.value,
+      tipo_fase: document.getElementById(`ft_${i}`)?.value || 'trabalho',
+      duracao_dias: parseInt(document.getElementById(`fd_${i}`)?.value || '1'),
+      hora_entrada: document.getElementById(`fe_${i}`)?.value || null,
+      hora_saida:   document.getElementById(`fs_${i}`)?.value || null,
+    });
+  });
+
+  const payload = {
+    nome, tipo, horario_id: parseInt(hid), fases,
+    dias_on: tipo === 'ciclo_on_off' ? parseInt(document.getElementById('rDiasOn').value) : null,
+    dias_off: tipo === 'ciclo_on_off' ? parseInt(document.getElementById('rDiasOff').value) : null,
+    data_inicio_ciclo: document.getElementById('rDataCiclo').value || null,
+    ignora_fds: parseInt(document.getElementById('rFds').value),
+    ignora_feriados: parseInt(document.getElementById('rFeriados').value),
+    dia_saida_antecipada: document.getElementById('rDiaAnt').value || null,
+    hora_saida_antecipada: document.getElementById('rHoraAnt').value || null,
+  };
+
+  try {
+    const res = await api('POST', '/api/rotacoes', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    fecharModal('modalRotacao');
+    loadRotacoes();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function loadRotacoes() {
+  document.getElementById('rotacoesTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/rotacoes');
+    const rows = (res.dados||[]).map(r => `<tr>
+      <td><strong>${r.nome}</strong></td>
+      <td><span class="badge badge-blue">${labelTipoRotacao(r.tipo)}</span></td>
+      <td>${r.horario_nome}</td>
+      <td>${r.fases?.map(f=>`<span class="badge badge-${f.tipo_fase==='trabalho'?'green':'gray'}" style="margin-right:4px">${f.nome} (${f.duracao_dias}d)</span>`).join('')||'—'}</td>
+      <td style="font-family:var(--mono)">${r.funcionarios_afectos}</td>
+      <td><span class="badge badge-${r.ignora_fds?'warn':'gray'}">${r.ignora_fds?'Inclui FDS':'Dias úteis'}</span></td>
+    </tr>`).join('');
+    document.getElementById('rotacoesTable').innerHTML = `<table class="tbl">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Horário base</th><th>Fases</th><th>Funcionários</th><th>Regime</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Sem rotações configuradas.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { document.getElementById('rotacoesTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+function labelTipoRotacao(t) {
+  return {ciclo_on_off:'Ciclo On/Off',turno_rotativo:'Turnos Rotativos',personalizado:'Personalizado'}[t]||t;
+}
+
+// ── EXPORTAÇÁO ──
+async function loadExportacao() {
+  document.getElementById('expMes').value = new Date().toISOString().slice(0,7);
+  try {
+    const res = await api('GET', '/api/departamentos');
+    document.getElementById('expDep').innerHTML = '<option value="">Todos</option>' +
+      (res.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
+  } catch(_) {}
+}
+
+function exportarPrimavera() {
+  const mes = document.getElementById('expMes').value;
+  const dep = document.getElementById('expDep').value;
+  if (!mes) { toast('Seleccione o mês.','err'); return; }
+  let url = `/api/exportacao/primavera?mes=${mes}`;
+  if (dep) url += `&departamento_id=${dep}`;
+  downloadApi(url, `primavera_${mes}.csv`);
+}
+
+function exportarFuncionarios() {
+  downloadApi('/api/exportacao/funcionarios', `funcionarios_${new Date().toISOString().slice(0,10)}.csv`);
+}
+
+function descarregarTemplate() {
+  downloadApi('/api/exportacao/template-importacao', 'template_importacao_funcionarios.csv');
+}
+
+async function downloadApi(path, filename) {
+  try {
+    const opts = { headers: { 'Authorization': 'Bearer ' + TOKEN } };
+    if (TENANT) opts.headers['X-Tenant'] = TENANT;
+    const res  = await fetch(path, opts);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { toast('Erro ao descarregar: ' + e.message,'err'); }
+}
+
+// ── IMPORTAÇÁO ──
+let _csvFile = null;
+
+function ficheiroCsvSelecionado(input) {
+  _csvFile = input.files[0];
+  if (_csvFile) {
+    document.getElementById('csvNome').textContent = `Ficheiro: ${_csvFile.name} (${(_csvFile.size/1024).toFixed(1)} KB)`;
+    document.getElementById('csvNome').style.display = 'block';
+    document.getElementById('btnValidar').disabled = false;
+    document.getElementById('btnImportar').disabled = false;
+    document.getElementById('importacaoResultado').innerHTML = '';
+  }
+}
+
+async function validarCSV() { await uploadCSV(true); }
+async function importarCSV() {
+  if (!confirm('Confirma a importação dos funcionários? Os registos válidos serão criados imediatamente.')) return;
+  await uploadCSV(false);
+}
+
+async function uploadCSV(dryRun) {
+  if (!_csvFile) { toast('Seleccione um ficheiro CSV.','err'); return; }
+  const fd = new FormData();
+  fd.append('ficheiro', _csvFile);
+  const out = document.getElementById('importacaoResultado');
+  out.innerHTML = '<div class="empty"><span class="spinner"></span> A processar...</div>';
+  try {
+    const path = dryRun ? '/api/importacao/validar' : '/api/importacao/funcionarios';
+    const opts = { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN, 'X-Tenant': TENANT }, body: fd };
+    const res  = await fetch(path, opts);
+    const data = await res.json();
+    renderImportacaoResultado(data, dryRun);
+  } catch(e) { out.innerHTML = `<div class="empty" style="color:var(--danger)">Erro: ${e.message}</div>`; }
+}
+
+function renderImportacaoResultado(data, dryRun) {
+  const out = document.getElementById('importacaoResultado');
+  if (data.erro) { out.innerHTML = `<div class="empty" style="color:var(--danger)">${data.mensagem}</div>`; return; }
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+    <div class="kpi"><div class="kpi-val ${data.importados>0?'green':''}">${data.importados}</div><div class="kpi-label">${dryRun?'Válidos':'Importados'}</div></div>
+    <div class="kpi"><div class="kpi-val ${data.ignorados>0?'red':''}">${data.ignorados}</div><div class="kpi-label">Ignorados</div></div>
+    <div class="kpi"><div class="kpi-val">${data.total}</div><div class="kpi-label">Total no CSV</div></div>
+  </div>`;
+
+  if (data.erros?.length) {
+    html += `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--danger);margin-bottom:8px">Erros (${data.erros.length})</div>
+      ${data.erros.map(e=>`<div style="font-size:12px;color:var(--danger);margin-bottom:4px">• ${e}</div>`).join('')}
+    </div>`;
+  }
+
+  if (data.avisos?.length) {
+    html += `<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:16px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--warn);margin-bottom:8px">Avisos (${data.avisos.length})</div>
+      ${data.avisos.map(a=>`<div style="font-size:12px;color:var(--warn);margin-bottom:4px">• ${a}</div>`).join('')}
+    </div>`;
+  }
+
+  if (dryRun && data.previa?.length) {
+    html += `<div class="card"><div class="card-head"><div class="card-title">Pré-visualização (${data.previa.length} registos)</div></div>
+      <table class="tbl"><thead><tr><th>Linha</th><th>Nº</th><th>Nome</th><th>Admissão</th><th>Departamento</th><th>Vencimento (AOA)</th></tr></thead>
+      <tbody>${data.previa.map(p=>`<tr><td style="color:var(--muted2)">${p.linha}</td><td style="font-family:var(--mono)">${p.numero}</td><td>${p.nome_completo}</td><td>${p.data_admissao}</td><td>${p.departamento||'—'}</td><td style="font-family:var(--mono)">${parseFloat(p.vencimento_base_aoa||0).toLocaleString('pt-AO')}</td></tr>`).join('')}</tbody>
+      </table></div>`;
+  }
+
+  if (!dryRun && data.importados > 0) {
+    toast(`${data.importados} funcionários importados com sucesso.`,'ok');
+    loadFuncionarios();
+  }
+
+  out.innerHTML = html;
+}
+
+
+
+// ── PDF RELATÓRIO ──
+async function exportarRelatorioPDF() {
+  const tipo   = document.getElementById('relTipo').value;
+  const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
+  const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
+  const dep    = document.getElementById('relDep')?.value || '';
+  const search = document.getElementById('relSearch')?.value?.trim() || '';
+
+  const out = document.getElementById('relatorioOutput');
+  if (!out || out.innerHTML.includes('spinner') || out.innerHTML.trim() === '') {
+    toast('Gere primeiro o relatório antes de exportar para PDF.','inf');
+    return;
+  }
+
+  // Usar window.print com estilos específicos para PDF
+  const titulo = tipo === 'assiduidade' ? 'Relatório de Assiduidade' : 'Relatório de Horas Trabalhadas';
+  const printContent = `
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+      <meta charset="UTF-8">
+      <title>${titulo} · ${inicio} → ${fim}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
+        h1 { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: #111; }
+        .meta { font-size: 10px; color: #666; margin-bottom: 16px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th { background: #1a1a1a; color: #fff; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
+        td { padding: 5px 8px; border-bottom: 1px solid #e5e5e5; font-size: 10px; }
+        tr:nth-child(even) td { background: #f9f9f9; }
+        .badge-green { color: #00a86b; font-weight: 700; }
+        .badge-red   { color: #cc0000; font-weight: 700; }
+        .badge-warn  { color: #cc7700; font-weight: 700; }
+        .footer { margin-top: 20px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
+        @media print {
+          body { padding: 10px; }
+          @page { margin: 15mm; size: A4 landscape; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>${titulo}</h1>
+      <div class="meta">Período: ${inicio} a ${fim} · Gerado em: ${new Date().toLocaleString('pt-PT')}</div>
+      ${out.querySelector('table') ? out.querySelector('table').outerHTML : out.innerHTML}
+      <div class="footer">PontoAO · Sistema de Controlo de Assiduidade · Lei n.º 12/23, de 27 de Dezembro</div>
+    </body>
+    </html>
+  `;
+
+  const win = window.open('', '_blank', 'width=1000,height=700');
+  win.document.write(printContent);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
+}
+
+// ── EMAIL RELATÓRIO ──
+async function enviarRelatorioEmail() {
+  const out = document.getElementById('relatorioOutput');
+  if (!out || out.innerHTML.includes('spinner') || out.innerHTML.trim() === '') {
+    toast('Gere primeiro o relatório antes de enviar por email.','inf');
+    return;
+  }
+
+  // Verificar se SMTP está configurado
+  try {
+    const configs = await api('GET', '/api/configuracoes');
+    const smtp = configs.dados?.smtp_host?.valor;
+    if (!smtp) {
+      toast('Configure o servidor SMTP nas Configurações antes de enviar emails.','inf');
+      nav('configs');
+      return;
+    }
+  } catch(_) {}
+
+  document.getElementById('emailDestino').value = '';
+  document.getElementById('emailAssunto').value = `Relatório de ${document.getElementById('relTipo').value === 'assiduidade' ? 'Assiduidade' : 'Horas Trabalhadas'} · ${document.getElementById('relInicio').value} a ${document.getElementById('relFim').value}`;
+  document.getElementById('modalEnviarEmail').classList.add('open');
+}
+
+async function submeterEnvioEmail() {
+  const destino  = document.getElementById('emailDestino').value.trim();
+  const assunto  = document.getElementById('emailAssunto').value.trim();
+
+  if (!destino) { toast('O email de destino é obrigatório.','err'); return; }
+
+  const tipo   = document.getElementById('relTipo').value;
+  const inicio = document.getElementById('relInicio').value;
+  const fim    = document.getElementById('relFim').value;
+  const dep    = document.getElementById('relDep')?.value || '';
+  const search = document.getElementById('relSearch')?.value?.trim() || '';
+
+  let url = `/api/relatorios/${tipo}/enviar-email?data_inicio=${inicio}&data_fim=${fim}`;
+  if (dep)    url += `&departamento_id=${dep}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+
+  try {
+    const res = await api('POST', url, { destino, assunto });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Email enviado com sucesso.','ok');
+    fecharModal('modalEnviarEmail');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── EXPORTAÇÃO DE RELATÓRIOS ──
+async function exportarRelatorio(formato) {
+  const tipo   = document.getElementById('relTipo').value;
+  const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
+  const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
+  const dep    = document.getElementById('relDep')?.value || '';
+  const search = document.getElementById('relSearch')?.value?.trim() || '';
+  let url = `/api/relatorios/${tipo}/exportar?formato=${formato}&data_inicio=${inicio}&data_fim=${fim}`;
+  if (dep)    url += `&departamento_id=${dep}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  downloadApi(url, `relatorio_${tipo}_${inicio}_${fim}.${formato}`);
+}
+
+// ── ACESSO AO PORTAL ──
+let _acessoPortalFuncId = null;
+
+async function abrirAcessoPortal() {
+  if (!_editFuncId) return;
+  _acessoPortalFuncId = _editFuncId;
+
+  // Verificar estado actual
+  try {
+    const res = await api('GET', `/api/funcionarios/${_editFuncId}/acesso-portal`);
+    if (res.tem_acesso && res.dados) {
+      document.getElementById('apEmail').value  = res.dados.email || '';
+      document.getElementById('apActivo').value = res.dados.activo ? '1' : '0';
+	document.getElementById('apPerfil').value = res.dados.perfil || 'funcionario';      
+	document.getElementById('apPassword').value = '';
+      document.getElementById('apUltimoLogin').textContent = res.dados.ultimo_login
+        ? 'Último login: ' + res.dados.ultimo_login.slice(0,16)
+        : 'Nunca acedeu ao portal';
+    } else {
+      document.getElementById('apEmail').value  = '';
+      document.getElementById('apPassword').value = '';
+      document.getElementById('apActivo').value = '1';
+      document.getElementById('apUltimoLogin').textContent = 'Sem acesso configurado';
+    }
+  } catch(_) {}
+
+  document.getElementById('modalAcessoPortal').classList.add('open');
+}
+
+async function submeterAcessoPortal() {
+  const email = document.getElementById('apEmail').value.trim();
+  const pass  = document.getElementById('apPassword').value;
+  const activo = document.getElementById('apActivo').value;
+
+  if (!email) { toast('O email é obrigatório.','err'); return; }
+
+  try {
+	const perfil = document.getElementById('apPerfil').value;
+	const payload = { email, activo: parseInt(activo), perfil };
+
+    if (pass) payload.password = pass;
+
+    const res = await api('POST', `/api/funcionarios/${_acessoPortalFuncId}/acesso-portal`, payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    fecharModal('modalAcessoPortal');
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function togglePortalFromList(id, activo) {
+  try {
+    const res = await api('PUT', `/api/funcionarios/${id}/acesso-portal/toggle`, { activo });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFuncionarios();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+document.getElementById('lPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

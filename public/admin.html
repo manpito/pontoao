@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PontoAO — Painel Central</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN SYSTEM — PontoAO Super Admin
+   Austero, denso, angular — built for operators not users
+   ============================================================ */
+:root {
+  --bg-void:      #080a0e;
+  --bg-base:      #0d1117;
+  --bg-surface:   #111720;
+  --bg-raised:    #161d2b;
+  --bg-hover:     #1c2538;
+  --border:       #1e2d42;
+  --border-light: #253347;
+  --accent:       #e8501a;
+  --accent-dim:   rgba(232,80,26,.15);
+  --accent-glow:  rgba(232,80,26,.35);
+  --gold:         #c9a84c;
+  --gold-dim:     rgba(201,168,76,.12);
+  --green:        #22c55e;
+  --green-dim:    rgba(34,197,94,.12);
+  --yellow:       #eab308;
+  --yellow-dim:   rgba(234,179,8,.12);
+  --red:          #ef4444;
+  --red-dim:      rgba(239,68,68,.12);
+  --blue:         #3b82f6;
+  --blue-dim:     rgba(59,130,246,.12);
+  --text-primary: #e8edf5;
+  --text-secondary: #7a8ea8;
+  --text-muted:   #3f5068;
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
+  --radius:       4px;
+  --radius-lg:    8px;
+  --shadow:       0 4px 24px rgba(0,0,0,.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 14px; }
+
+body {
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  display: flex;
+  overflow-x: hidden;
+}
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+/* === SIDEBAR === */
+.sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: var(--bg-base);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transition: transform .25s ease;
+}
+
+.sidebar-brand {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  color: white;
+  letter-spacing: -0.5px;
+  clip-path: polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%);
+}
+
+.brand-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: .5px;
+  color: var(--text-primary);
+}
+.brand-text span {
+  color: var(--accent);
+}
+.brand-sub {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+.sidebar-section {
+  padding: 16px 12px 6px;
+}
+.sidebar-section-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 0 6px;
+  margin-bottom: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all .15s;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  text-decoration: none;
+  margin-bottom: 1px;
+}
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.nav-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(232,80,26,.3);
+}
+.nav-item svg { width: 15px; height: 15px; opacity: .7; flex-shrink: 0; }
+.nav-item.active svg { opacity: 1; }
+
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: white;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  padding: 1px 5px;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+.admin-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+}
+.admin-avatar {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  color: white;
+  flex-shrink: 0;
+}
+.admin-info { flex: 1; min-width: 0; }
+.admin-name { font-size: 12px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.admin-role { font-size: 10px; color: var(--accent); font-family: var(--font-mono); }
+
+/* === MAIN CONTENT === */
+.main {
+  margin-left: 220px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  height: 52px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.topbar-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: .3px;
+}
+.topbar-path {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.topbar-spacer { flex: 1; }
+
+.topbar-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all .15s;
+}
+.topbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+.topbar-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.topbar-btn.primary:hover { background: #d4461a; }
+.topbar-btn svg { width: 13px; height: 13px; }
+
+.content { padding: 24px; flex: 1; }
+
+/* === KPI GRID === */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--kpi-color, var(--border));
+}
+.kpi-card:hover { border-color: var(--kpi-color, var(--accent)); }
+
+.kpi-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+}
+.kpi-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.kpi-icon {
+  position: absolute;
+  top: 14px; right: 16px;
+  width: 32px; height: 32px;
+  background: var(--kpi-bg, var(--bg-raised));
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--kpi-color, var(--text-muted));
+}
+.kpi-icon svg { width: 16px; height: 16px; }
+
+.kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 2px;
+  margin-top: 4px;
+}
+.kpi-trend.up { background: var(--green-dim); color: var(--green); }
+.kpi-trend.down { background: var(--red-dim); color: var(--red); }
+.kpi-trend.warn { background: var(--yellow-dim); color: var(--yellow); }
+
+/* === PANELS === */
+.panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: .3px;
+  flex: 1;
+}
+.panel-action {
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  background: none; border: none;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  transition: background .15s;
+}
+.panel-action:hover { background: var(--accent-dim); }
+
+/* === TABLE === */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th {
+  text-align: left;
+  padding: 10px 18px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 11px 18px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: var(--bg-hover); }
+.data-table .col-primary { color: var(--text-primary); font-weight: 500; }
+.data-table .col-mono { font-family: var(--font-mono); font-size: 11px; }
+
+/* === STATUS BADGES === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; }
+.badge-activo  { background: var(--green-dim);  color: var(--green);  } .badge-activo::before  { background: var(--green);  }
+.badge-trial   { background: var(--blue-dim);   color: var(--blue);   } .badge-trial::before   { background: var(--blue);   }
+.badge-suspenso{ background: var(--yellow-dim); color: var(--yellow); } .badge-suspenso::before{ background: var(--yellow); }
+.badge-cancelado{ background: var(--red-dim);   color: var(--red);    } .badge-cancelado::before{ background: var(--red);   }
+
+/* === PLAN CHIPS === */
+.plan-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.plan-basico      { background: var(--bg-raised); color: var(--text-secondary); border: 1px solid var(--border-light); }
+.plan-profissional{ background: var(--blue-dim);  color: var(--blue);  border: 1px solid rgba(59,130,246,.2); }
+.plan-enterprise  { background: var(--gold-dim);  color: var(--gold);  border: 1px solid rgba(201,168,76,.2); }
+
+/* === FORM / MODAL === */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.75);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+  transform: translateY(12px);
+  transition: transform .25s;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-header {
+  display: flex; align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  flex: 1;
+}
+.modal-close {
+  background: none; border: none;
+  color: var(--text-muted); cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius);
+  transition: all .15s;
+}
+.modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.modal-body { padding: 22px; }
+
+.form-section {
+  margin-bottom: 20px;
+}
+.form-section-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-col { display: flex; flex-direction: column; gap: 5px; }
+.form-col.full { grid-column: 1 / -1; }
+
+label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: .3px;
+}
+
+input, select, textarea {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 10px;
+  width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+input::placeholder { color: var(--text-muted); }
+select option { background: var(--bg-raised); }
+
+.form-hint { font-size: 10px; color: var(--text-muted); }
+.form-error { font-size: 10px; color: var(--red); }
+
+.modal-footer {
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 10px;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text-secondary); }
+.btn-ghost:hover { border-color: var(--border-light); color: var(--text-primary); }
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+.btn-primary:hover { background: #d4461a; }
+.btn-danger { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,.3); }
+.btn-danger:hover { background: var(--red); color: white; }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+.btn svg { width: 13px; height: 13px; }
+
+/* === ACTIONS DROPDOWN === */
+.actions-cell { display: flex; gap: 6px; }
+
+/* === AUDIT LOG FEED === */
+.audit-feed { padding: 4px 0; }
+.audit-item {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+.audit-item:hover { background: var(--bg-hover); }
+.audit-item:last-child { border-bottom: none; }
+.audit-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+.audit-dot.info  { background: var(--blue); }
+.audit-dot.warn  { background: var(--yellow); }
+.audit-dot.danger{ background: var(--red); }
+.audit-dot.ok    { background: var(--green); }
+.audit-info { flex: 1; min-width: 0; }
+.audit-action { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+.audit-meta { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
+
+/* === PLAN DISTRIBUTION BARS === */
+.plan-bars { padding: 16px 18px; }
+.plan-bar-row { margin-bottom: 14px; }
+.plan-bar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+.plan-bar-name { font-size: 12px; color: var(--text-secondary); }
+.plan-bar-count { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.plan-bar-track {
+  height: 5px;
+  background: var(--bg-raised);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.plan-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* === ALERTS === */
+.alert-list { padding: 8px 0; }
+.alert-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-icon {
+  width: 28px; height: 28px;
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.alert-icon svg { width: 13px; height: 13px; }
+.alert-icon.warn { background: var(--yellow-dim); color: var(--yellow); }
+.alert-icon.danger { background: var(--red-dim); color: var(--red); }
+.alert-text { flex: 1; }
+.alert-title { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+.alert-sub { font-size: 11px; color: var(--text-muted); }
+
+/* === SEARCH BAR === */
+.search-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.search-input-wrap {
+  position: relative; flex: 1;
+}
+.search-input-wrap svg {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 13px; height: 13px; color: var(--text-muted);
+}
+.search-input {
+  padding-left: 32px;
+  background: var(--bg-raised);
+  font-size: 12px;
+}
+
+/* === FILTER TABS === */
+.filter-tabs {
+  display: flex; gap: 2px;
+  padding: 10px 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.filter-tab {
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  font-family: var(--font-mono);
+  background: none; border-top: none; border-left: none; border-right: none;
+  border-radius: 0;
+}
+.filter-tab:hover { color: var(--text-secondary); }
+.filter-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* === TOAST === */
+.toast-container {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  z-index: 300;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  min-width: 280px;
+  max-width: 360px;
+  animation: toastIn .25s ease;
+}
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.warn    { border-left: 3px solid var(--yellow); }
+@keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+
+/* === SKELETON === */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-hover) 50%, var(--bg-raised) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius);
+}
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* === EMPTY STATE === */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+.empty-state svg { width: 40px; height: 40px; margin: 0 auto 12px; display: block; opacity: .3; }
+.empty-state p { font-size: 13px; }
+
+/* === LOADING OVERLAY === */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg-void);
+  z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+}
+.loading-logo {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -1px;
+}
+.loading-bar {
+  width: 200px; height: 2px;
+  background: var(--bg-raised);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.loading-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+  animation: loadBar 1.2s ease-in-out infinite;
+}
+@keyframes loadBar { 0% { width: 0; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 0; margin-left: 100%; } }
+
+/* === RESPONSIVE === */
+@media (max-width: 1100px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .panel-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: none; }
+  .main { margin-left: 0; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-logo">PontoAO</div>
+  <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:2px">SUPER ADMIN</div>
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+</div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-mark">P</div>
+    <div>
+      <div class="brand-text">Ponto<span>AO</span></div>
+      <div class="brand-sub">Super Admin</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Visão Geral</div>
+    <a class="nav-item active" onclick="showView('dashboard')" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-item" onclick="showView('tenants')" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+      Empresas
+      <span class="nav-badge" id="navBadgeTenants">—</span>
+    </a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Sistema</div>
+    <a class="nav-item" onclick="showView('planos')" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+      Planos
+    </a>
+    <a class="nav-item" onclick="showView('auditoria')" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Auditoria
+    </a>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="admin-chip">
+      <div class="admin-avatar" id="adminInitials">—</div>
+      <div class="admin-info">
+        <div class="admin-name" id="adminName">Carregando...</div>
+        <div class="admin-role">super_admin</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="logout()" style="width:100%;margin-top:8px;justify-content:center;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Terminar Sessão
+    </button>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main" id="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="topbarTitle">Dashboard</div>
+      <div class="topbar-path" id="topbarPath">super-admin / overview</div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <button class="topbar-btn" onclick="refreshView()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23,4 23,10 17,10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+      Actualizar
+    </button>
+    <button class="topbar-btn primary" onclick="openModal('modalNovoTenant')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Nova Empresa
+    </button>
+  </div>
+
+  <!-- VIEWS -->
+  <div class="content">
+
+    <!-- === DASHBOARD VIEW === -->
+    <div id="view-dashboard">
+      <div class="kpi-grid" id="kpiGrid">
+        <!-- Populated by JS -->
+      </div>
+      <div class="panel-grid">
+        <!-- Tenants recentes -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Empresas Recentes</div>
+            <button class="panel-action" onclick="showView('tenants')">Ver todas →</button>
+          </div>
+          <table class="data-table" id="dashboardTenantsTable">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Plano</th>
+                <th>Estado</th>
+                <th>Criada em</th>
+              </tr>
+            </thead>
+            <tbody id="dashboardTenantsList">
+              <tr><td colspan="4"><div class="skeleton" style="height:36px;margin:4px 0"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Right column -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <!-- Alertas -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Alertas</div>
+            </div>
+            <div class="alert-list" id="alertList">
+              <div style="padding:16px 18px"><div class="skeleton" style="height:28px;margin-bottom:8px"></div><div class="skeleton" style="height:28px"></div></div>
+            </div>
+          </div>
+          <!-- Distribuição de planos -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Distribuição de Planos</div>
+            </div>
+            <div class="plan-bars" id="planBars">
+              <div class="skeleton" style="height:40px;margin-bottom:10px"></div>
+              <div class="skeleton" style="height:40px;margin-bottom:10px"></div>
+              <div class="skeleton" style="height:40px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- === TENANTS VIEW === -->
+    <div id="view-tenants" style="display:none">
+      <div class="panel">
+        <div class="filter-tabs">
+          <button class="filter-tab active" onclick="filterTenants('todos',this)">Todos</button>
+          <button class="filter-tab" onclick="filterTenants('activo',this)">Activos</button>
+          <button class="filter-tab" onclick="filterTenants('trial',this)">Trial</button>
+          <button class="filter-tab" onclick="filterTenants('suspenso',this)">Suspensos</button>
+          <button class="filter-tab" onclick="filterTenants('cancelado',this)">Cancelados</button>
+        </div>
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" class="search-input" id="tenantSearch" placeholder="Pesquisar por nome, subdomínio ou email..." oninput="applySearch()">
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Empresa</th>
+                <th>Subdomínio</th>
+                <th>Plano</th>
+                <th>Estado</th>
+                <th>Expira</th>
+                <th>Criada</th>
+                <th>Acções</th>
+              </tr>
+            </thead>
+            <tbody id="tenantTableBody">
+              <tr><td colspan="8" style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- === PLANOS VIEW === -->
+    <div id="view-planos" style="display:none">
+      <div class="kpi-grid" id="planosGrid" style="margin-bottom:24px"></div>
+    </div>
+
+    <!-- === AUDITORIA VIEW === -->
+    <div id="view-auditoria" style="display:none">
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Log de Auditoria Central</div>
+        </div>
+        <div class="audit-feed" id="auditFeed">
+          <div style="padding:32px;text-align:center;color:var(--text-muted)">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+
+<!-- === MODAL: NOVO TENANT === -->
+<div class="modal-overlay" id="modalNovoTenant">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="brand-mark" style="width:26px;height:26px;font-size:11px">P</div>
+      <div class="modal-title">Criar Nova Empresa</div>
+      <button class="modal-close" onclick="closeModal('modalNovoTenant')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section">
+        <div class="form-section-title">Dados da Empresa</div>
+        <div class="form-row">
+          <div class="form-col full">
+            <label>Nome da Empresa *</label>
+            <input type="text" id="f_nome_empresa" placeholder="Ex: Tecno Distribuidora Lda">
+          </div>
+          <div class="form-col">
+            <label>NIF *</label>
+            <input type="text" id="f_nif" placeholder="000000000">
+          </div>
+          <div class="form-col">
+            <label>Subdomínio *</label>
+            <input type="text" id="f_subdominio" placeholder="tecno" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')">
+            <span class="form-hint" id="subdominioPreview">→ tecno.tuaplataforma.ao</span>
+          </div>
+          <div class="form-col">
+            <label>Email de Contacto *</label>
+            <input type="email" id="f_email_contacto" placeholder="admin@empresa.ao">
+          </div>
+          <div class="form-col">
+            <label>Telefone</label>
+            <input type="tel" id="f_telefone" placeholder="+244 9XX XXX XXX">
+          </div>
+          <div class="form-col">
+            <label>Plano *</label>
+            <select id="f_plano_id">
+              <option value="">Seleccione...</option>
+              <option value="1">Básico — 25.000 Kz/mês</option>
+              <option value="2">Profissional — 65.000 Kz/mês</option>
+              <option value="3">Enterprise — 150.000 Kz/mês</option>
+            </select>
+          </div>
+          <div class="form-col">
+            <label>Município</label>
+            <input type="text" id="f_municipio" placeholder="Luanda">
+          </div>
+          <div class="form-col">
+            <label>Província</label>
+            <select id="f_provincia">
+              <option value="">Seleccione...</option>
+              <option>Bengo</option><option>Benguela</option><option>Bié</option>
+              <option>Cabinda</option><option>Cuando Cubango</option><option>Cuanza Norte</option>
+              <option>Cuanza Sul</option><option>Cunene</option><option>Huambo</option>
+              <option>Huíla</option><option>Luanda</option><option>Lunda Norte</option>
+              <option>Lunda Sul</option><option>Malanje</option><option>Moxico</option>
+              <option>Namibe</option><option>Uíge</option><option>Zaire</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Administrador Inicial</div>
+        <div class="form-row">
+          <div class="form-col">
+            <label>Nome Completo *</label>
+            <input type="text" id="f_admin_nome" placeholder="Nome do administrador">
+          </div>
+          <div class="form-col">
+            <label>Email *</label>
+            <input type="email" id="f_admin_email" placeholder="admin@empresa.ao">
+          </div>
+          <div class="form-col full">
+            <label>Password *</label>
+            <input type="password" id="f_admin_password" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+            <span class="form-hint">O administrador deverá alterar a password no primeiro acesso.</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="formErrors" style="display:none;background:var(--red-dim);border:1px solid rgba(239,68,68,.3);border-radius:var(--radius);padding:10px 12px;font-size:12px;color:var(--red);margin-top:8px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalNovoTenant')">Cancelar</button>
+      <button class="btn btn-primary" id="btnCriarTenant" onclick="criarTenant()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
+        Criar Empresa
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- === MODAL: CONFIRMAR SUSPENDER === -->
+<div class="modal-overlay" id="modalSuspender">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--yellow)">Suspender Empresa</div>
+      <button class="modal-close" onclick="closeModal('modalSuspender')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);line-height:1.6">
+        A empresa <strong id="suspenderNome" style="color:var(--text-primary)"></strong> ficará suspensa. Todos os utilizadores perderão acesso imediatamente. Esta acção é reversível.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalSuspender')">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmarSuspender()">Suspender</button>
+    </div>
+  </div>
+</div>
+
+<!-- === TOAST CONTAINER === -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- === LOGIN VIEW (mostrado se não autenticado) === -->
+<div class="modal-overlay" id="loginOverlay" style="z-index:500">
+  <div class="modal" style="width:380px">
+    <div class="modal-header" style="justify-content:center;flex-direction:column;gap:6px;text-align:center;padding:28px 22px 18px">
+      <div class="brand-mark" style="width:40px;height:40px;font-size:17px;margin:0 auto 8px">P</div>
+      <div class="modal-title" style="font-size:18px">PontoAO</div>
+      <div style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:2px">SUPER ADMIN</div>
+    </div>
+    <div class="modal-body">
+      <div class="form-col" style="margin-bottom:12px">
+        <label>Email</label>
+        <input type="email" id="loginEmail" placeholder="admin@tuaplataforma.ao" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="form-col" style="margin-bottom:16px">
+        <label>Password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div id="loginError" style="display:none;color:var(--red);font-size:12px;margin-bottom:12px;padding:8px 10px;background:var(--red-dim);border-radius:var(--radius)"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" id="loginBtn" onclick="doLogin()">
+        Entrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// PontoAO Super Admin — Client JS
+// ============================================================
+
+const API_BASE = '/super-admin';
+let authToken = localStorage.getItem('sa_token');
+let authAdmin = JSON.parse(localStorage.getItem('sa_admin') || 'null');
+let allTenants = [];
+let activeFilter = 'todos';
+let suspendTargetId = null;
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Preview subdomínio
+  document.getElementById('f_subdominio').addEventListener('input', function() {
+    document.getElementById('subdominioPreview').textContent =
+      this.value ? `→ ${this.value}.tuaplataforma.ao` : '→ subdominio.tuaplataforma.ao';
+  });
+
+  setTimeout(() => {
+    document.getElementById('loadingOverlay').style.display = 'none';
+    if (!authToken) {
+      document.getElementById('loginOverlay').classList.add('open');
+    } else {
+      initDashboard();
+    }
+  }, 800);
+});
+
+// ============================================================
+// AUTH
+// ============================================================
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  const btn   = document.getElementById('loginBtn');
+
+  if (!email || !pass) { errEl.textContent = 'Preencha email e password.'; errEl.style.display = 'block'; return; }
+
+  btn.textContent = 'A entrar...'; btn.disabled = true;
+
+  try {
+    const res = await apiCall('POST', '/auth/login', { email, password: pass });
+    if (res.access_token) {
+      authToken = res.access_token;
+      authAdmin = res.admin;
+      localStorage.setItem('sa_token', authToken);
+      localStorage.setItem('sa_admin', JSON.stringify(authAdmin));
+      document.getElementById('loginOverlay').classList.remove('open');
+      initDashboard();
+    } else {
+      errEl.textContent = res.mensagem || 'Erro de autenticação.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro de ligação.';
+    errEl.style.display = 'block';
+  }
+
+  btn.textContent = 'Entrar'; btn.disabled = false;
+}
+
+function logout() {
+  localStorage.removeItem('sa_token');
+  localStorage.removeItem('sa_admin');
+  location.reload();
+}
+
+// ============================================================
+// INIT DASHBOARD
+// ============================================================
+function initDashboard() {
+  if (authAdmin) {
+    document.getElementById('adminName').textContent = authAdmin.nome;
+    document.getElementById('adminInitials').textContent = authAdmin.nome.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  }
+  showView('dashboard');
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showView(view) {
+  ['dashboard','tenants','planos','auditoria'].forEach(v => {
+    document.getElementById(`view-${v}`).style.display = v === view ? 'block' : 'none';
+  });
+
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+
+  const titles = { dashboard: ['Dashboard', 'super-admin / overview'], tenants: ['Empresas', 'super-admin / tenants'], planos: ['Planos', 'super-admin / planos'], auditoria: ['Auditoria', 'super-admin / auditoria'] };
+  const [t, p] = titles[view] || ['—','—'];
+  document.getElementById('topbarTitle').textContent = t;
+  document.getElementById('topbarPath').textContent = p;
+
+  if (view === 'dashboard') { loadDashboard(); document.querySelectorAll('.nav-item')[0].classList.add('active'); }
+  if (view === 'tenants')   { loadTenants();   document.querySelectorAll('.nav-item')[1].classList.add('active'); }
+  if (view === 'planos')    { loadPlanos();    document.querySelectorAll('.nav-item')[2].classList.add('active'); }
+  if (view === 'auditoria') { loadAuditoria(); document.querySelectorAll('.nav-item')[3].classList.add('active'); }
+}
+
+function refreshView() {
+  const active = document.querySelector('.nav-item.active');
+  if (active) active.click();
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function loadDashboard() {
+  try {
+    const data = await apiCall('GET', '/dashboard');
+    renderKPIs(data.metricas);
+    renderAlerts(data.metricas);
+    renderPlanBars(data.metricas.planos);
+  } catch(e) { toast('Erro ao carregar dashboard: ' + e.message, 'error'); }
+
+  loadTenantsRecent();
+}
+
+function renderKPIs(m) {
+  const kpis = [
+    { label: 'Empresas Activas', value: m.tenants_activos, sub: m.tenants_trial + ' em trial', color: 'var(--green)', bg: 'var(--green-dim)',
+      icon: '<path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/>',
+      trend: null },
+    { label: 'Receita Mensal', value: 'Kz ' + Number(m.receita_mensal_aoa).toLocaleString('pt-AO'), sub: 'Empresas activas', color: 'var(--gold)', bg: 'var(--gold-dim)',
+      icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>',
+      trend: null },
+    { label: 'Trial a Expirar', value: m.trial_a_expirar_7d, sub: 'Próximos 7 dias', color: 'var(--yellow)', bg: 'var(--yellow-dim)',
+      icon: '<circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/>',
+      trend: m.trial_a_expirar_7d > 0 ? 'warn' : null },
+    { label: 'Empresas Suspensas', value: m.tenants_suspensos, sub: 'Requerem atenção', color: 'var(--red)', bg: 'var(--red-dim)',
+      icon: '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+      trend: m.tenants_suspensos > 0 ? 'down' : null },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+    <div class="kpi-card" style="--kpi-color:${k.color};--kpi-bg:${k.bg}">
+      <div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${k.icon}</svg></div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+      ${k.trend ? `<div class="kpi-trend ${k.trend}">${k.trend === 'warn' ? '⚠ Atenção' : k.trend === 'down' ? '↓ Alerta' : '↑ Ok'}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderAlerts(m) {
+  const alerts = [];
+  if (m.trial_a_expirar_7d > 0) alerts.push({ type:'warn', title: `${m.trial_a_expirar_7d} trial(s) a expirar`, sub: 'Nos próximos 7 dias' });
+  if (m.tenants_suspensos > 0) alerts.push({ type:'danger', title: `${m.tenants_suspensos} empresa(s) suspensa(s)`, sub: 'Verificar situação' });
+  if (m.contratos_a_expirar_30d > 0) alerts.push({ type:'warn', title: `${m.contratos_a_expirar_30d} contrato(s) a expirar`, sub: 'Próximos 30 dias' });
+  if (!alerts.length) alerts.push({ type:'ok', title: 'Sem alertas activos', sub: 'Sistema a funcionar normalmente' });
+
+  document.getElementById('alertList').innerHTML = alerts.map(a => `
+    <div class="alert-item">
+      <div class="alert-icon ${a.type}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          ${a.type === 'warn' ? '<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'
+          : a.type === 'danger' ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+          : '<polyline points="20,6 9,17 4,12"/>'}
+        </svg>
+      </div>
+      <div class="alert-text">
+        <div class="alert-title">${a.title}</div>
+        <div class="alert-sub">${a.sub}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderPlanBars(planos) {
+  const total = planos.reduce((s,p) => s + Number(p.total), 0) || 1;
+  const colors = { basico: 'var(--text-muted)', profissional: 'var(--blue)', enterprise: 'var(--gold)' };
+
+  document.getElementById('planBars').innerHTML = planos.map(p => `
+    <div class="plan-bar-row">
+      <div class="plan-bar-header">
+        <span class="plan-bar-name">${p.nome}</span>
+        <span class="plan-bar-count">${p.total} empresa${p.total != 1 ? 's' : ''}</span>
+      </div>
+      <div class="plan-bar-track">
+        <div class="plan-bar-fill" style="width:${Math.round(p.total/total*100)}%;background:${colors[p.slug]||'var(--accent)'}"></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadTenantsRecent() {
+  try {
+    const data = await apiCall('GET', '/tenants');
+    const recent = data.tenants.slice(0, 6);
+    document.getElementById('dashboardTenantsList').innerHTML = recent.length ? recent.map(renderTenantRow).join('') :
+      '<tr><td colspan="4" class="empty-state">Sem empresas registadas.</td></tr>';
+    document.getElementById('navBadgeTenants').textContent = data.total;
+  } catch(e) {}
+}
+
+// ============================================================
+// TENANTS LIST
+// ============================================================
+async function loadTenants() {
+  try {
+    const data = await apiCall('GET', '/tenants');
+    allTenants = data.tenants;
+    renderTenantTable(allTenants);
+    document.getElementById('navBadgeTenants').textContent = data.total;
+  } catch(e) { toast('Erro ao carregar empresas.', 'error'); }
+}
+
+function renderTenantRow(t) {
+  const dataFmt = d => d ? new Date(d).toLocaleDateString('pt-PT') : '—';
+  const expira = t.estado === 'trial' ? t.trial_ate : t.data_fim_plano;
+  return `
+    <tr>
+      <td class="col-mono">${String(t.id).padStart(3,'0')}</td>
+      <td><div class="col-primary">${t.nome_empresa}</div><div style="font-size:11px;color:var(--text-muted)">${t.email_contacto||''}</div></td>
+      <td class="col-mono">${t.subdominio}</td>
+      <td><span class="plan-chip plan-${t.plano_slug}">${t.plano_nome}</span></td>
+      <td><span class="badge badge-${t.estado}">${t.estado}</span></td>
+      <td class="col-mono" style="font-size:11px">${dataFmt(expira)}</td>
+      <td class="col-mono" style="font-size:11px">${dataFmt(t.criado_em)}</td>
+    </tr>
+  `;
+}
+
+function renderTenantTableFull(tenants) {
+  const dataFmt = d => d ? new Date(d).toLocaleDateString('pt-PT') : '—';
+  document.getElementById('tenantTableBody').innerHTML = tenants.length ? tenants.map(t => {
+    const expira = t.estado === 'trial' ? t.trial_ate : t.data_fim_plano;
+    return `
+      <tr>
+        <td class="col-mono">${String(t.id).padStart(3,'0')}</td>
+        <td><div class="col-primary">${t.nome_empresa}</div><div style="font-size:11px;color:var(--text-muted)">${t.email_contacto||''}</div></td>
+        <td class="col-mono"><a href="https://${t.subdominio}.tuaplataforma.ao" target="_blank" style="color:var(--accent);text-decoration:none">${t.subdominio} ↗</a></td>
+        <td><span class="plan-chip plan-${t.plano_slug}">${t.plano_nome}</span></td>
+        <td><span class="badge badge-${t.estado}">${t.estado}</span></td>
+        <td class="col-mono" style="font-size:11px">${dataFmt(expira)}</td>
+        <td class="col-mono" style="font-size:11px">${dataFmt(t.criado_em)}</td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn btn-ghost btn-sm" onclick="editarTenant(${t.id})">Editar</button>
+            ${t.estado !== 'suspenso' && t.estado !== 'cancelado' ?
+              `<button class="btn btn-ghost btn-sm" onclick="suspender(${t.id},'${t.nome_empresa.replace(/'/g,"\\'")}')">Suspender</button>` : ''}
+            ${t.estado === 'suspenso' ?
+              `<button class="btn btn-primary btn-sm" onclick="activar(${t.id})">Activar</button>` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('') : `<tr><td colspan="8"><div class="empty-state"><p>Nenhuma empresa encontrada.</p></div></td></tr>`;
+}
+
+function renderTenantTable(tenants) {
+  renderTenantTableFull(tenants);
+}
+
+function filterTenants(estado, btn) {
+  activeFilter = estado;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  applySearch();
+}
+
+function applySearch() {
+  const q = document.getElementById('tenantSearch')?.value.toLowerCase() || '';
+  let filtered = allTenants;
+  if (activeFilter !== 'todos') filtered = filtered.filter(t => t.estado === activeFilter);
+  if (q) filtered = filtered.filter(t =>
+    t.nome_empresa.toLowerCase().includes(q) ||
+    t.subdominio.toLowerCase().includes(q) ||
+    (t.email_contacto||'').toLowerCase().includes(q)
+  );
+  renderTenantTable(filtered);
+}
+
+// ============================================================
+// PLANOS
+// ============================================================
+async function loadPlanos() {
+  try {
+    const data = await apiCall('GET', '/planos');
+    const colors = ['var(--text-secondary)', 'var(--blue)', 'var(--gold)'];
+    document.getElementById('planosGrid').innerHTML = data.planos.map((p,i) => `
+      <div class="kpi-card" style="--kpi-color:${colors[i]};--kpi-bg:${colors[i].replace(')','-dim)').replace('var(--','var(--')}">
+        <div class="kpi-label">${p.nome}</div>
+        <div class="kpi-value">Kz ${Number(p.preco_mensal_aoa).toLocaleString('pt-AO')}</div>
+        <div class="kpi-sub">por mês · ${p.max_funcionarios} funcionários · ${p.max_relogios} relógio${p.max_relogios>1?'s':''}</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-muted);font-family:var(--font-mono)">
+          ${p.permite_face_recog?'✓ Face Recog':'✗ Face Recog'} &nbsp;
+          ${p.permite_api?'✓ API':'✗ API'} &nbsp;
+          ${p.permite_geofencing?'✓ Geofencing':'✗ Geofencing'}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) { toast('Erro ao carregar planos.', 'error'); }
+}
+
+// ============================================================
+// AUDITORIA
+// ============================================================
+async function loadAuditoria() {
+  try {
+    const data = await apiCall('GET', '/audit-log');
+    const typeMap = { 'tenant.criado': 'ok', 'tenant.suspenso': 'warn', 'tenant.activado': 'ok', 'tenant.eliminado': 'danger' };
+    document.getElementById('auditFeed').innerHTML = data.dados.length ? data.dados.map(l => `
+      <div class="audit-item">
+        <div class="audit-dot ${typeMap[l.accao]||'info'}"></div>
+        <div class="audit-info">
+          <div class="audit-action">${l.accao} ${l.nome_empresa ? `· <span style="color:var(--text-muted)">${l.nome_empresa}</span>` : ''}</div>
+          <div class="audit-meta">${l.criado_em} · IP ${l.ip||'—'} ${l.admin_nome ? '· por '+l.admin_nome : ''}</div>
+        </div>
+      </div>
+    `).join('') : '<div style="padding:32px;text-align:center;color:var(--text-muted)">Sem registos de auditoria.</div>';
+  } catch(e) { toast('Erro ao carregar auditoria.', 'error'); }
+}
+
+// ============================================================
+// CRIAR TENANT
+// ============================================================
+async function criarTenant() {
+  const campos = ['f_nome_empresa','f_nif','f_subdominio','f_email_contacto','f_plano_id','f_admin_nome','f_admin_email','f_admin_password'];
+  const errEl = document.getElementById('formErrors');
+  errEl.style.display = 'none';
+
+  const body = {
+    nome_empresa:   document.getElementById('f_nome_empresa').value.trim(),
+    nif:            document.getElementById('f_nif').value.trim(),
+    subdominio:     document.getElementById('f_subdominio').value.trim(),
+    email_contacto: document.getElementById('f_email_contacto').value.trim(),
+    telefone:       document.getElementById('f_telefone').value.trim(),
+    plano_id:       document.getElementById('f_plano_id').value,
+    municipio:      document.getElementById('f_municipio').value.trim(),
+    provincia:      document.getElementById('f_provincia').value,
+    admin_nome:     document.getElementById('f_admin_nome').value.trim(),
+    admin_email:    document.getElementById('f_admin_email').value.trim(),
+    admin_password: document.getElementById('f_admin_password').value,
+  };
+
+  // Verificar password antes de enviar
+  if (!body.admin_password || body.admin_password.length < 8) {
+    errEl.textContent = 'A password do administrador deve ter no mínimo 8 caracteres.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  if (!body.admin_password || body.admin_password.length < 8) {
+    errEl.textContent = 'A password do administrador deve ter no minimo 8 caracteres.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('btnCriarTenant');
+  btn.textContent = 'A criar...'; btn.disabled = true;
+
+  try {
+    const res = await apiCall('POST', '/tenants', body);
+    if (res.erro) {
+      errEl.textContent = res.mensagem || JSON.stringify(res.erros);
+      errEl.style.display = 'block';
+    } else {
+      closeModal('modalNovoTenant');
+      toast(`Empresa "${body.nome_empresa}" criada com sucesso!`, 'success');
+      campos.forEach(id => document.getElementById(id).value = '');
+      loadTenants();
+      if (document.getElementById('view-dashboard').style.display !== 'none') loadDashboard();
+    }
+  } catch(e) {
+    errEl.textContent = 'Erro: ' + e.message;
+    errEl.style.display = 'block';
+  }
+
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="20,6 9,17 4,12"/></svg> Criar Empresa';
+  btn.disabled = false;
+}
+
+// ============================================================
+// SUSPENDER / ACTIVAR
+// ============================================================
+
+async function editarTenant(id) {
+  try {
+    const data = await apiCall('GET', '/tenants/' + id);
+    const t = data.tenant || data;
+    document.getElementById('e_tenant_id').value      = t.id;
+    document.getElementById('e_nome_empresa').value   = t.nome_empresa || '';
+    document.getElementById('e_nif').value            = t.nif || '';
+    document.getElementById('e_email_contacto').value = t.email_contacto || '';
+    document.getElementById('e_telefone').value       = t.telefone || '';
+    document.getElementById('e_morada').value         = t.morada || '';
+    document.getElementById('e_municipio').value      = t.municipio || '';
+    document.getElementById('e_provincia').value      = t.provincia || '';
+    document.getElementById('e_estado').value         = t.estado || 'trial';
+    document.getElementById('e_data_fim_plano').value = t.data_fim_plano ? t.data_fim_plano.slice(0,10) : '';
+    document.getElementById('e_admin_password').value = '';
+    const planos = await apiCall('GET', '/planos');
+    document.getElementById('e_plano_id').innerHTML = (planos.planos || []).map(function(p) {
+      return '<option value="' + p.id + '"' + (p.id == t.plano_id ? ' selected' : '') + '>' + p.nome + '</option>';
+    }).join('');
+    document.getElementById('editFormErrors').style.display = 'none';
+    openModal('modalEditarTenant');
+  } catch(e) { toast('Erro ao carregar dados da empresa.', 'error'); }
+}
+
+async function guardarEdicaoTenant() {
+  const id = document.getElementById('e_tenant_id').value;
+  const errEl = document.getElementById('editFormErrors');
+  errEl.style.display = 'none';
+  const body = {
+    nome_empresa:   document.getElementById('e_nome_empresa').value.trim(),
+    nif:            document.getElementById('e_nif').value.trim(),
+    email_contacto: document.getElementById('e_email_contacto').value.trim(),
+    telefone:       document.getElementById('e_telefone').value.trim(),
+    morada:         document.getElementById('e_morada').value.trim(),
+    municipio:      document.getElementById('e_municipio').value.trim(),
+    provincia:      document.getElementById('e_provincia').value,
+    plano_id:       document.getElementById('e_plano_id').value,
+    estado:         document.getElementById('e_estado').value,
+    data_fim_plano: document.getElementById('e_data_fim_plano').value || null,
+  };
+  var novaPassword = document.getElementById('e_admin_password').value;
+  if (novaPassword) {
+    if (novaPassword.length < 8) { errEl.textContent = 'A password deve ter no minimo 8 caracteres.'; errEl.style.display = 'block'; return; }
+    body.admin_password = novaPassword;
+  }
+  if (!body.nome_empresa || !body.email_contacto) { errEl.textContent = 'Nome e email sao obrigatorios.'; errEl.style.display = 'block'; return; }
+  try {
+    const res = await apiCall('PUT', '/tenants/' + id, body);
+    if (res.erro) { errEl.textContent = res.mensagem; errEl.style.display = 'block'; return; }
+    closeModal('modalEditarTenant');
+    toast('Empresa actualizada com sucesso.', 'success');
+    loadTenants();
+  } catch(e) { errEl.textContent = 'Erro ao guardar.'; errEl.style.display = 'block'; }
+}
+
+function suspender(id, nome) {
+  suspendTargetId = id;
+  document.getElementById('suspenderNome').textContent = nome;
+  openModal('modalSuspender');
+}
+
+async function confirmarSuspender() {
+  try {
+    await apiCall('POST', `/tenants/${suspendTargetId}/suspend`, {});
+    closeModal('modalSuspender');
+    toast('Empresa suspensa.', 'warn');
+    loadTenants();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function activar(id) {
+  try {
+    await apiCall('POST', `/tenants/${id}/activate`, {});
+    toast('Empresa reactivada.', 'success');
+    loadTenants();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ============================================================
+// API HELPER
+// ============================================================
+async function apiCall(method, path, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    }
+  };
+
+  if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  if (body && method !== 'GET') opts.body = JSON.stringify(body);
+
+  const res = await fetch(API_BASE + path, opts);
+
+  if (res.status === 401 && path !== '/auth/login') {
+    localStorage.removeItem('sa_token');
+    location.reload();
+  }
+
+  const data = await res.json();
+  if (!res.ok && res.status !== 422 && data.mensagem) throw new Error(data.mensagem);
+  return data;
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay && overlay.id !== 'loginOverlay') closeModal(overlay.id); });
+});
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0;color:${type==='success'?'var(--green)':type==='error'?'var(--red)':'var(--yellow)'}">
+      ${type==='success'?'<polyline points="20,6 9,17 4,12"/>'
+      :type==='error'?'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+      :'<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/>'}
+    </svg>
+    <span style="flex:1">${msg}</span>
+  `;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateX(16px)'; el.style.transition='.3s'; setTimeout(()=>el.remove(),300); }, 3500);
+}
+</script>
+
+<div class="modal-overlay" id="modalEditarTenant">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <h2 class="modal-title">Editar Empresa</h2>
+      <button class="modal-close" onclick="closeModal('modalEditarTenant')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="e_tenant_id">
+      <div class="form-grid">
+        <div class="form-group form-full"><label class="form-label">Nome da Empresa *</label><input type="text" class="form-input" id="e_nome_empresa"></div>
+        <div class="form-group"><label class="form-label">NIF</label><input type="text" class="form-input" id="e_nif"></div>
+        <div class="form-group"><label class="form-label">Email de Contacto *</label><input type="email" class="form-input" id="e_email_contacto"></div>
+        <div class="form-group"><label class="form-label">Telefone</label><input type="text" class="form-input" id="e_telefone"></div>
+        <div class="form-group"><label class="form-label">Plano</label><select class="form-input" id="e_plano_id"></select></div>
+        <div class="form-group form-full"><label class="form-label">Morada</label><input type="text" class="form-input" id="e_morada"></div>
+        <div class="form-group"><label class="form-label">Municipio</label><input type="text" class="form-input" id="e_municipio"></div>
+        <div class="form-group"><label class="form-label">Provincia</label>
+          <select class="form-input" id="e_provincia">
+            <option value="">-- Seleccionar --</option>
+            <option>Luanda</option><option>Benguela</option><option>Huambo</option><option>Huila</option>
+            <option>Cabinda</option><option>Zaire</option><option>Uige</option><option>Cuanza Norte</option>
+            <option>Cuanza Sul</option><option>Malanje</option><option>Lunda Norte</option><option>Lunda Sul</option>
+            <option>Bie</option><option>Moxico</option><option>Cuando Cubango</option><option>Cunene</option>
+            <option>Namibe</option><option>Bengo</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Estado</label>
+          <select class="form-input" id="e_estado">
+            <option value="trial">Trial</option><option value="activo">Activo</option><option value="suspenso">Suspenso</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Data fim plano</label><input type="date" class="form-input" id="e_data_fim_plano"></div>
+      </div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+        <p style="font-size:12px;color:#888;margin-bottom:12px">REDEFINIR PASSWORD DO ADMINISTRADOR (opcional)</p>
+        <div class="form-group"><label class="form-label">Nova password</label><input type="password" class="form-input" id="e_admin_password" autocomplete="new-password" placeholder="Deixe em branco para nao alterar"></div>
+      </div>
+      <div id="editFormErrors" class="form-errors" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEditarTenant')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarEdicaoTenant()">Guardar</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

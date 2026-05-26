@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ponto — Portal de Assiduidade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0a0e14;
+  --surface:   #111720;
+  --surface2:  #1a2233;
+  --border:    #1e2d42;
+  --accent:    #00e5a0;
+  --accent2:   #0095ff;
+  --warn:      #ff6b35;
+  --danger:    #ff3b5c;
+  --text:      #e8edf5;
+  --muted:     #5a6a80;
+  --mono:      'DM Mono', monospace;
+  --sans:      'Sora', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── BACKGROUND GRID ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glow {
+  position: fixed;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+  z-index: 0;
+}
+.glow-1 { top: -200px; left: -200px; background: rgba(0,229,160,.07); }
+.glow-2 { bottom: -200px; right: -200px; background: rgba(0,149,255,.06); }
+
+/* ── LAYOUT ── */
+#app { position: relative; z-index: 1; }
+
+/* ── LOGIN ── */
+#loginScreen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.login-logo .dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .6; transform: scale(.85); }
+}
+
+.login-logo span {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.login-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 8px;
+}
+
+.login-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 36px;
+}
+
+.field { margin-bottom: 20px; }
+
+.field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.field input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .2s;
+}
+
+.field input:focus { border-color: var(--accent); }
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 8px;
+  border: none;
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0a0e14;
+}
+
+.btn-primary:hover { background: #00ffb2; transform: translateY(-1px); }
+.btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+.login-error {
+  background: rgba(255,59,92,.1);
+  border: 1px solid rgba(255,59,92,.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--danger);
+  margin-bottom: 20px;
+  display: none;
+}
+
+/* ── PORTAL PRINCIPAL ── */
+#portal { display: none; min-height: 100vh; }
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 60px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.header-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-name {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.header-name strong { color: var(--text); font-weight: 600; }
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: all .2s;
+}
+
+.btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+/* MAIN */
+.main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: grid;
+  gap: 24px;
+}
+
+/* CLOCK */
+.clock-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.clock-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,229,160,.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.clock-time {
+  font-family: var(--mono);
+  font-size: clamp(48px, 10vw, 80px);
+  font-weight: 500;
+  letter-spacing: -.02em;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.clock-date {
+  font-size: 14px;
+  color: var(--muted);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: 40px;
+}
+
+/* MARCAÇÃO BUTTONS */
+.marca-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.marca-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .03em;
+}
+
+.marca-btn:hover { transform: translateY(-2px); }
+.marca-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+.marca-btn .icon {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.marca-btn.entrada .icon { background: rgba(0,229,160,.15); }
+.marca-btn.entrada:hover { border-color: var(--accent); }
+.marca-btn.saida .icon { background: rgba(255,107,53,.15); }
+.marca-btn.saida:hover { border-color: var(--warn); }
+.marca-btn.ini-int .icon { background: rgba(0,149,255,.15); }
+.marca-btn.ini-int:hover { border-color: var(--accent2); }
+.marca-btn.fim-int .icon { background: rgba(0,149,255,.15); }
+.marca-btn.fim-int:hover { border-color: var(--accent2); }
+
+/* STATUS BAR */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 16px;
+}
+
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.status-dot.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.warn { background: var(--warn); }
+.status-dot.err { background: var(--danger); }
+
+/* CARDS GRID */
+.cards-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 600px) { .cards-grid { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title::before {
+  content: '';
+  width: 3px; height: 12px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* HISTÓRICO */
+.marcacao-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.marcacao-row:last-child { border-bottom: none; }
+
+.marcacao-tipo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tipo-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.tipo-entrada  { background: rgba(0,229,160,.12); color: var(--accent); }
+.tipo-saida    { background: rgba(255,107,53,.12); color: var(--warn); }
+.tipo-ini_int  { background: rgba(0,149,255,.12); color: var(--accent2); }
+.tipo-fim_int  { background: rgba(0,149,255,.12); color: var(--accent2); }
+.tipo-saida_servico    { background: rgba(255,59,92,.12); color: var(--danger); }
+.tipo-regresso_servico { background: rgba(0,229,160,.12); color: var(--accent); }
+
+.marcacao-hora {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.marcacao-editada { font-size: 10px; color: var(--warn); margin-left: 4px; }
+
+/* SALDO FÉRIAS */
+.ferias-saldo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.saldo-item {
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.saldo-num {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 500;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.saldo-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.btn-sm {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all .2s;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+/* QR MODAL */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,14,20,.85);
+  backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s;
+}
+
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 400px;
+  width: 100%;
+  position: relative;
+  transform: translateY(20px);
+  transition: transform .3s;
+  text-align: center;
+}
+
+.modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-close {
+  position: absolute;
+  top: 16px; right: 16px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px;
+}
+
+.modal-close:hover { color: var(--text); }
+
+.modal h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.modal p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+#qrCanvas {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0 auto 24px;
+  display: block;
+}
+
+.qr-token {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  background: var(--bg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+/* GEOFENCE */
+.geo-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface2);
+  margin-top: 12px;
+}
+
+/* TOAST */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 260px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: slideIn .3s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+
+.toast.success { border-color: rgba(0,229,160,.3); }
+.toast.error   { border-color: rgba(255,59,92,.3); }
+.toast.info    { border-color: rgba(0,149,255,.3); }
+
+.toast-icon { font-size: 16px; }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* EMPTY */
+.empty {
+  text-align: center;
+  padding: 32px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="glow glow-1"></div>
+<div class="glow glow-2"></div>
+<div id="app">
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo"><div class="dot"></div><span>Ponto AO</span></div>
+    <h1 class="login-title">Bem-vindo</h1>
+    <p class="login-sub">Aceda ao portal de assiduidade da sua empresa.</p>
+    <div class="login-error" id="loginError"></div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="utilizador@empresa.ao" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- PORTAL -->
+<div id="portal">
+  <header class="header">
+    <div class="header-logo"><div class="dot"></div><span>Ponto AO</span></div>
+    <div class="header-user">
+      <div class="header-name">Olá, <strong id="headerName">—</strong></div>
+      <button class="btn-logout" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- RELÓGIO + MARCAÇÃO -->
+    <div class="clock-card">
+      <div class="clock-time" id="clockTime">00:00:00</div>
+      <div class="clock-date" id="clockDate">—</div>
+
+      <div class="marca-grid">
+        <button class="marca-btn entrada" onclick="marcar('entrada')" id="btnEntrada">
+          <div class="icon">▶</div>Entrada
+        </button>
+        <button class="marca-btn ini-int" onclick="marcar('inicio_intervalo')" id="btnIniInt">
+          <div class="icon">⏸</div>Início Intervalo
+        </button>
+        <button class="marca-btn fim-int" onclick="marcar('fim_intervalo')" id="btnFimInt">
+          <div class="icon">▶▶</div>Fim Intervalo
+        </button>
+        <button class="marca-btn saida" onclick="marcar('saida')" id="btnSaida">
+          <div class="icon">⏹</div>Saída
+        </button>
+      </div>
+
+      <div class="status-bar">
+        <div class="status-dot" id="geoDot"></div>
+        <span id="geoText">A verificar localização...</span>
+        <span style="margin-left:auto">
+          <button class="btn-sm" onclick="abrirQR()" style="padding:6px 12px;font-size:11px">📱 QR</button>
+        </span>
+      </div>
+    </div>
+
+    <div class="cards-grid">
+
+      <!-- HISTÓRICO HOJE -->
+      <div class="card">
+        <div class="card-title">Marcações de hoje</div>
+        <div id="historicoHoje"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+
+      <!-- FÉRIAS -->
+      <div class="card">
+        <div class="card-title">Saldo de férias</div>
+        <div class="ferias-saldo" id="feriasSaldo">
+          <div class="saldo-item"><div class="saldo-num" id="feriasDireito">—</div><div class="saldo-label">Direito</div></div>
+          <div class="saldo-item"><div class="saldo-num" id="feriasGozados">—</div><div class="saldo-label">Gozados</div></div>
+          <div class="saldo-item"><div class="saldo-num" id="feriasPendentes">—</div><div class="saldo-label">Disponível</div></div>
+        </div>
+        <button class="btn-sm" onclick="abrirPedidoFerias()">Pedir férias</button>
+      </div>
+
+    </div>
+
+    <!-- HISTÓRICO SEMANA -->
+    <div class="card">
+      <div class="card-title">Últimas marcações</div>
+      <div id="historicoSemana"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- MODAL QR -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal">
+    <button class="modal-close" onclick="fecharQR()">✕</button>
+    <h3>Marcação por QR Code</h3>
+    <p>Apresente este código ao leitor ou digitalize com o seu telemóvel.</p>
+    <canvas id="qrCanvas" width="200" height="200"></canvas>
+    <div class="qr-token" id="qrTokenText">A gerar...</div>
+    <p style="font-size:11px;color:var(--muted)">Válido por 60 segundos. Actualiza automaticamente.</p>
+  </div>
+</div>
+
+<!-- MODAL FÉRIAS -->
+<div class="modal-overlay" id="feriasModal">
+  <div class="modal">
+    <button class="modal-close" onclick="fecharFerias()">✕</button>
+    <h3>Pedido de Férias</h3>
+    <p>Seleccione o período de férias pretendido.</p>
+    <div class="field" style="text-align:left">
+      <label>Data de início</label>
+      <input type="date" id="feriasInicio" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none">
+    </div>
+    <div class="field" style="text-align:left">
+      <label>Data de fim</label>
+      <input type="date" id="feriasFim" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none">
+    </div>
+    <button class="btn btn-primary" onclick="submeterFerias()">Submeter pedido</button>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+
+// ── HELPERS DE DATA/HORA LOCAL (Angola UTC+1) ──
+function localDateTime(d) {
+  const dt = d || new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+}
+
+function localDate(d) {
+  const dt = d || new Date();
+  const pad = n => String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+}
+
+// ── CONFIG ──
+const API = '';
+let accessToken  = localStorage.getItem('pt_token') || '';
+let refreshToken = localStorage.getItem('pt_refresh') || '';
+let currentUser  = JSON.parse(localStorage.getItem('pt_user') || 'null');
+let geoPos       = null;
+let geofencingActivo = false;
+let geofencingLat    = null;
+let geofencingLng    = null;
+let geofencingRaio   = 200;
+let qrInterval   = null;
+
+// ── INIT ──
+(async function init() {
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  if (accessToken && currentUser) {
+    // Garantir funcionario_id correcto a partir do token JWT
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      if (payload.funcionario_id) currentUser.funcionario_id = payload.funcionario_id;
+      currentUser.nome = payload.nome || currentUser.nome;
+      localStorage.setItem('pt_user', JSON.stringify(currentUser));
+    } catch(_) {}
+    mostrarPortal();
+  }
+})();
+
+// ── CLOCK ──
+function tickClock() {
+  const now  = new Date();
+  const pad  = n => String(n).padStart(2,'0');
+  document.getElementById('clockTime').textContent =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  const dias  = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('clockDate').textContent =
+    `${dias[now.getDay()]}, ${now.getDate()} de ${meses[now.getMonth()]} de ${now.getFullYear()}`;
+}
+
+// ── AUTH ──
+async function doLogin() {
+  const email    = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl    = document.getElementById('loginError');
+  const btn      = document.getElementById('loginBtn');
+
+  errEl.style.display = 'none';
+  if (!email || !password) { errEl.textContent = 'Preencha email e password.'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+
+  try {
+    const res = await api('POST', '/api/auth/login', { email, password });
+    if (res.erro) throw new Error(res.mensagem);
+
+    accessToken  = res.access_token;
+    refreshToken = res.refresh_token;
+    currentUser  = res.utilizador;
+
+    // Extrair funcionario_id do token JWT
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      if (payload.funcionario_id) currentUser.funcionario_id = payload.funcionario_id;
+    } catch(_) {}
+
+    localStorage.setItem('pt_token',   accessToken);
+    localStorage.setItem('pt_refresh', refreshToken);
+    localStorage.setItem('pt_user',    JSON.stringify(currentUser));
+
+    mostrarPortal();
+  } catch(e) {
+    errEl.textContent = e.message || 'Erro de autenticação.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Entrar';
+  }
+}
+
+async function doLogout() {
+  try { await api('POST', '/api/auth/logout', { refresh_token: refreshToken }); } catch(_) {}
+  localStorage.clear();
+  accessToken = refreshToken = '';
+  currentUser = null;
+  document.getElementById('portal').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+// ── PORTAL ──
+async function mostrarPortal() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('portal').style.display = 'block';
+  document.getElementById('headerName').textContent = currentUser.nome.split(' ')[0];
+
+  await carregarConfigs();
+  iniciarGeo();
+  await carregarHistorico();
+  await carregarFerias();
+}
+
+async function carregarConfigs() {
+  try {
+    const res = await api('GET', '/api/configuracoes');
+    if (res.dados) {
+      geofencingActivo = res.dados.geofencing_activo?.valor === true;
+      geofencingLat    = parseFloat(res.dados.geofencing_lat?.valor) || null;
+      geofencingLng    = parseFloat(res.dados.geofencing_lng?.valor) || null;
+      geofencingRaio   = parseInt(res.dados.geofencing_raio_metros?.valor) || 200;
+    }
+  } catch(_) {}
+}
+
+// ── GEOLOCALIZAÇÃO ──
+function iniciarGeo() {
+  const dot  = document.getElementById('geoDot');
+  const text = document.getElementById('geoText');
+
+  if (!geofencingActivo) {
+    dot.className = 'status-dot ok';
+    text.textContent = 'Geofencing desactivado — marcação livre';
+    return;
+  }
+
+  if (!navigator.geolocation) {
+    dot.className = 'status-dot err';
+    text.textContent = 'GPS não disponível neste dispositivo';
+    return;
+  }
+
+  dot.className = 'status-dot';
+  text.textContent = 'A obter localização...';
+
+  navigator.geolocation.watchPosition(pos => {
+    geoPos = pos;
+    const dentro = dentroGeofence(pos.coords.latitude, pos.coords.longitude);
+    if (dentro) {
+      dot.className = 'status-dot ok';
+      text.textContent = `Dentro da área (±${pos.coords.accuracy.toFixed(0)}m)`;
+    } else {
+      dot.className = 'status-dot err';
+      text.textContent = 'Fora da área permitida';
+    }
+  }, () => {
+    dot.className = 'status-dot warn';
+    text.textContent = 'Não foi possível obter localização';
+  }, { enableHighAccuracy: true, maximumAge: 10000 });
+}
+
+function dentroGeofence(lat, lng) {
+  if (!geofencingLat || !geofencingLng) return true;
+  const R = 6371000;
+  const dLat = (lat - geofencingLat) * Math.PI / 180;
+  const dLng = (lng - geofencingLng) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(geofencingLat*Math.PI/180) * Math.cos(lat*Math.PI/180) * Math.sin(dLng/2)**2;
+  const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return dist <= geofencingRaio;
+}
+
+// ── MARCAÇÃO ──
+async function marcar(tipo) {
+  if (geofencingActivo && geofencingLat) {
+    if (!geoPos) { toast('Aguarde a obtenção de localização.', 'error'); return; }
+    if (!dentroGeofence(geoPos.coords.latitude, geoPos.coords.longitude)) {
+      toast('Fora da área permitida. Não é possível marcar ponto.', 'error'); return;
+    }
+  }
+
+  const payload = {
+    funcionario_id: currentUser.funcionario_id || currentUser.id,
+    tipo,
+    origem:   'web_pin',
+    data_hora: localDateTime(),
+  };
+
+  if (geoPos) {
+    payload.latitude        = geoPos.coords.latitude;
+    payload.longitude       = geoPos.coords.longitude;
+    payload.dentro_geofence = dentroGeofence(geoPos.coords.latitude, geoPos.coords.longitude) ? 1 : 0;
+  }
+
+  const tipoLabel = { entrada:'Entrada', saida:'Saída', inicio_intervalo:'Início de intervalo', fim_intervalo:'Fim de intervalo' };
+
+  try {
+    const res = await api('POST', '/api/marcacoes', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(`${tipoLabel[tipo] || tipo} registada com sucesso!`, 'success');
+    await carregarHistorico();
+  } catch(e) {
+    toast(e.message || 'Erro ao registar marcação.', 'error');
+  }
+}
+
+// ── HISTÓRICO ──
+async function carregarHistorico() {
+  const hoje = localDate();
+
+  try {
+    const res = await api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    renderHistoricoHoje(res.dados || []);
+  } catch(e) {
+    document.getElementById('historicoHoje').innerHTML = '<div class="empty">Erro ao carregar.</div>';
+  }
+
+  try {
+    const d7 = new Date(); d7.setDate(d7.getDate() - 7);
+    const res = await api('GET', `/api/marcacoes?data_inicio=${localDate(d7)}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    renderHistoricoSemana(res.dados || []);
+  } catch(e) {
+    document.getElementById('historicoSemana').innerHTML = '<div class="empty">Erro ao carregar.</div>';
+  }
+}
+
+function renderHistoricoHoje(marcacoes) {
+  const el = document.getElementById('historicoHoje');
+  if (!marcacoes.length) { el.innerHTML = '<div class="empty">Sem marcações hoje.</div>'; return; }
+
+  el.innerHTML = marcacoes.map(m => `
+    <div class="marcacao-row">
+      <div class="marcacao-tipo">
+        <span class="tipo-badge tipo-${m.tipo.replace('_','')}">${labelTipo(m.tipo)}</span>
+        ${m.editada ? '<span class="marcacao-editada">✎ editada</span>' : ''}
+      </div>
+      <span class="marcacao-hora">${m.data_hora.slice(11,16)}</span>
+    </div>
+  `).join('');
+}
+
+function renderHistoricoSemana(marcacoes) {
+  const el = document.getElementById('historicoSemana');
+  if (!marcacoes.length) { el.innerHTML = '<div class="empty">Sem marcações nos últimos 7 dias.</div>'; return; }
+
+  el.innerHTML = marcacoes.map(m => `
+    <div class="marcacao-row">
+      <div class="marcacao-tipo">
+        <span class="tipo-badge tipo-${m.tipo.replace('_','')}">${labelTipo(m.tipo)}</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:6px">${m.data_hora.slice(0,10)}</span>
+      </div>
+      <span class="marcacao-hora">${m.data_hora.slice(11,16)}</span>
+    </div>
+  `).join('');
+}
+
+function labelTipo(tipo) {
+  return { entrada:'Entrada', saida:'Saída', inicio_intervalo:'Iní. Intervalo',
+           fim_intervalo:'Fim Intervalo', saida_servico:'Saída Serviço',
+           regresso_servico:'Regresso' }[tipo] || tipo;
+}
+
+// ── FÉRIAS ──
+async function carregarFerias() {
+  try {
+    const ano = new Date().getFullYear();
+    const res = await api('GET', `/api/ferias?funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    const dados = res.dados?.[0];
+    if (dados) {
+      document.getElementById('feriasDireito').textContent   = dados.dias_direito   ?? '—';
+      document.getElementById('feriasGozados').textContent   = dados.dias_gozados   ?? '—';
+      document.getElementById('feriasPendentes').textContent = dados.dias_pendentes ?? '—';
+    }
+  } catch(_) {}
+}
+
+function abrirPedidoFerias() {
+  const hoje = localDate();
+  document.getElementById('feriasInicio').value = hoje;
+  document.getElementById('feriasFim').value    = hoje;
+  document.getElementById('feriasModal').classList.add('open');
+}
+
+function fecharFerias() {
+  document.getElementById('feriasModal').classList.remove('open');
+}
+
+async function submeterFerias() {
+  const inicio = document.getElementById('feriasInicio').value;
+  const fim    = document.getElementById('feriasFim').value;
+  if (!inicio || !fim) { toast('Seleccione as datas.', 'error'); return; }
+
+  try {
+    const res = await api('POST', '/api/ferias', {
+      funcionario_id: currentUser.funcionario_id || currentUser.id,
+      data_inicio: inicio,
+      data_fim:    fim,
+    });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(`Pedido submetido — ${res.dias_uteis} dias úteis.`, 'success');
+    fecharFerias();
+    await carregarFerias();
+  } catch(e) {
+    toast(e.message || 'Erro ao submeter pedido.', 'error');
+  }
+}
+
+// ── QR CODE ──
+function abrirQR() {
+  document.getElementById('qrModal').classList.add('open');
+  gerarQR();
+  qrInterval = setInterval(gerarQR, 55000);
+}
+
+function fecharQR() {
+  document.getElementById('qrModal').classList.remove('open');
+  clearInterval(qrInterval);
+}
+
+function gerarQR() {
+  const token   = btoa(JSON.stringify({ uid: currentUser.id, ts: Date.now(), exp: Date.now() + 60000 }));
+  const qrText  = `PONTO:${token}`;
+  document.getElementById('qrTokenText').textContent = token.slice(0, 32) + '...';
+  desenharQR(document.getElementById('qrCanvas'), qrText);
+}
+
+// QR renderer simples (matriz de módulos)
+function desenharQR(canvas, text) {
+  const modules = qrMatrix(text);
+  const size    = modules.length;
+  const ctx     = canvas.getContext('2d');
+  const scale   = canvas.width / size;
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000000';
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (modules[r][c]) {
+        ctx.fillRect(c * scale, r * scale, scale, scale);
+      }
+    }
+  }
+}
+
+// Micro QR generator (versão simplificada para demo visual)
+function qrMatrix(text) {
+  const size = 25;
+  const m    = Array.from({length:size}, () => new Array(size).fill(false));
+
+  // Finder patterns
+  [[0,0],[0,size-7],[size-7,0]].forEach(([r,c]) => {
+    for (let i=0;i<7;i++) for (let j=0;j<7;j++) {
+      m[r+i][c+j] = (i===0||i===6||j===0||j===6||(i>=2&&i<=4&&j>=2&&j<=4));
+    }
+  });
+
+  // Timing
+  for (let i=8;i<size-8;i++) {
+    m[6][i] = m[i][6] = (i%2===0);
+  }
+
+  // Data modules (determinístico baseado no texto)
+  let hash = 0;
+  for (let i=0;i<text.length;i++) hash = ((hash<<5)-hash)+text.charCodeAt(i);
+
+  for (let r=9;r<size;r++) {
+    for (let c=9;c<size;c++) {
+      if (!m[r][c]) {
+        m[r][c] = ((hash ^ (r*31+c*17)) & 1) === 1;
+      }
+    }
+  }
+
+  return m;
+}
+
+// ── API HELPER ──
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' }
+  };
+
+  if (accessToken) opts.headers['Authorization'] = 'Bearer ' + accessToken;
+
+  // Header tenant para ambiente local
+  const tenant = new URLSearchParams(location.search).get('tenant');
+  if (tenant) opts.headers['X-Tenant'] = tenant;
+
+  if (body) opts.body = JSON.stringify(body);
+
+  const res  = await fetch(API + path, opts);
+  const data = await res.json();
+
+  // Auto-refresh token expirado
+  if (res.status === 401 && refreshToken) {
+    try {
+      const r = await fetch(API + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken })
+      });
+      const rd = await r.json();
+      if (rd.access_token) {
+        accessToken = rd.access_token;
+        localStorage.setItem('pt_token', accessToken);
+        return api(method, path, body);
+      }
+    } catch(_) {}
+    doLogout();
+  }
+
+  return data;
+}
+
+// ── TOAST ──
+function toast(msg, type = 'info') {
+  const icons = { success:'✓', error:'✕', info:'ℹ' };
+  const el    = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]}</span>${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Fechar modais ao clicar fora
+document.getElementById('qrModal').addEventListener('click', e => { if(e.target===e.currentTarget) fecharQR(); });
+document.getElementById('feriasModal').addEventListener('click', e => { if(e.target===e.currentTarget) fecharFerias(); });
+
+// Enter no login
+document.getElementById('loginPassword').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>
