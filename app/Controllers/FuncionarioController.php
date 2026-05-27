@@ -34,8 +34,17 @@ class FuncionarioController
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $params = $request->getQueryParams();
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+
         $where  = ['f.estado != "desligado"'];
         $bind   = [];
+
+        // Filtro supervisor: apenas a sua equipa
+        if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
+            $where[] = 'f.supervisor_id = :sid';
+            $bind[':sid'] = (int) $user->funcionario_id;
+        }
 
         if (!empty($params['estado'])) {
             $where[] = 'f.estado = :estado';
@@ -68,10 +77,19 @@ class FuncionarioController
             ORDER BY f.nome_completo ASC
         ");
         $stmt->execute($bind);
+        $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Omitir vencimento para rh_colaborador e supervisor
+        if ($perfil === 'rh_colaborador' || $perfil === 'supervisor') {
+            $dados = array_map(function($f) {
+                $f['vencimento_base_aoa'] = 0;
+                return $f;
+            }, $dados);
+        }
 
         return $this->json(200, [
-            'dados' => $stmt->fetchAll(PDO::FETCH_ASSOC),
-            'total' => $stmt->rowCount(),
+            'dados' => $dados,
+            'total' => count($dados),
         ]);
     }
 
@@ -80,7 +98,8 @@ class FuncionarioController
      */
     public function show(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $id   = (int) $args['id'];
+        $id     = (int) $args['id'];
+        $perfil = $request->getAttribute('auth_perfil');
         $stmt = $this->db()->prepare("
             SELECT
                 f.*,
@@ -100,6 +119,11 @@ class FuncionarioController
 
         if (!$funcionario) {
             return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+
+        // Omitir vencimento para rh_colaborador e supervisor
+        if ($perfil === 'rh_colaborador' || $perfil === 'supervisor') {
+            $funcionario['vencimento_base_aoa'] = 0;
         }
 
         return $this->json(200, ['dados' => $funcionario]);
@@ -375,9 +399,9 @@ class FuncionarioController
         if ($check->fetch()) {
             return $this->json(409, ['erro' => true, 'mensagem' => 'Este email já está em uso por outro utilizador.']);
         }
-	$perfil = in_array($body['perfil'] ?? '', ['funcionario', 'supervisor', 'rh_manager'])
-    	? $body['perfil']
-    	: 'funcionario';
+	$perfil = in_array($body['perfil'] ?? '', ['funcionario', 'supervisor', 'rh_manager', 'rh_colaborador'])
+	? $body['perfil']
+	: 'funcionario';
         $hash   = password_hash($body['password'], PASSWORD_BCRYPT, ['cost' => 12]);
         $activo = $func['estado'] === 'activo' ? 1 : 0;
 

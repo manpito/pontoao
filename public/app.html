@@ -299,6 +299,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .periodo-info { flex: 1; font-size: 13px; }
 .periodo-info strong { display: block; margin-bottom: 2px; }
 .periodo-info span { font-size: 11px; color: var(--muted2); }
+.rh-colaborador .col-vencimento, .supervisor .col-vencimento { display: none !important; }
 </style>
 </head>
 <body>
@@ -601,7 +602,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalFunc')">Cancelar</button>
       <button class="btn" onclick="abrirAcessoPortal()" id="btnAcessoPortal" style="display:none">🔑 Acesso Portal</button>
-      <button class="btn btn-accent" onclick="submeterFunc()">Guardar</button>
+      <button class="btn btn-accent" id="btnGuardarFunc" onclick="submeterFunc()">Guardar</button>
     </div>
   </div>
 </div>
@@ -784,7 +785,7 @@ async function doLogin() {
   try {
     const res = await api('POST', '/api/auth/login', { email, password: pass });
     if (res.erro) throw new Error(res.mensagem);
-    if (!['super_admin_tenant','rh_manager','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
+    if (!['super_admin_tenant','rh_manager','rh_colaborador','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
     TOKEN = res.access_token; REFRESH = res.refresh_token; USER = res.utilizador;
     localStorage.setItem('rh_token', TOKEN);
     localStorage.setItem('rh_refresh', REFRESH);
@@ -808,6 +809,7 @@ async function doLogout() {
 function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
+  if (['rh_colaborador', 'supervisor'].includes(USER.perfil)) document.getElementById('app').classList.add(USER.perfil.replace('_', '-'));
   // Garantir nome correcto a partir do token JWT
   try {
     const payload = JSON.parse(atob(TOKEN.split('.')[1]));
@@ -821,9 +823,63 @@ function showApp() {
   loadDashboard();
   loadFeriasCount();
   carregarSelectores();
+  applyPermissions();
+
 }
 
 // ── NAV ──
+function applyPermissions() {
+  const p = USER.perfil;
+  const hide = (id, cond) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = cond ? 'none' : '';
+  };
+
+  const sections = document.querySelectorAll('.sb-section');
+  const dividers = document.querySelectorAll('.sb-divider');
+
+  // Sidebar items visibility according to matrix
+  hide('nav-dashboard', false);
+  hide('nav-presenca', false);
+  hide('nav-marcacoes', false);
+
+  hide('nav-funcionarios', p === 'supervisor');
+  hide('nav-ferias', false);
+  hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('nav-horarios', p === 'supervisor');
+
+  hide('nav-relatorios', p === 'supervisor');
+  hide('nav-exportacao', p === 'supervisor');
+  hide('nav-importacao', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('nav-rotacoes', p === 'supervisor');
+
+  hide('nav-periodos', p === 'supervisor'); // rh_colaborador can see periods
+  hide('nav-configs', p !== 'super_admin_tenant');
+
+  // Action buttons visibility
+  hide('btnNovoFunc', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovoDep', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovoHorario', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovaRotacao', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnGuardarConfigs', p !== 'super_admin_tenant');
+
+  // Hide sections/dividers for supervisor
+  if (p === 'supervisor') {
+      sections[1].style.display = ''; // Keep RH for Férias
+      hide('nav-funcionarios', true);
+      hide('nav-departamentos', true);
+      hide('nav-horarios', true);
+
+      sections[2].style.display = 'none'; // Relatórios e Dados
+      dividers[1].style.display = 'none';
+
+      sections[3].style.display = 'none'; // Horários Avançados
+      dividers[2].style.display = 'none';
+
+      sections[4].style.display = 'none'; // Sistema
+      dividers[3].style.display = 'none';
+  }
+}
 function nav(page) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -976,6 +1032,9 @@ async function loadFuncionarios() {
 function filtrarFuncionarios() {
   const search = document.getElementById('funcSearch').value.toLowerCase();
   const estado = document.getElementById('funcEstado').value;
+  const p = USER.perfil;
+  const isRestricted = ['rh_colaborador', 'supervisor'].includes(p);
+
   const lista  = _funcionarios.filter(f =>
     (!search || f.nome_completo.toLowerCase().includes(search) || f.numero_funcionario.includes(search) || (f.email||'').toLowerCase().includes(search)) &&
     (!estado || f.estado === estado)
@@ -986,22 +1045,27 @@ function filtrarFuncionarios() {
     <td><strong>${f.nome_completo}</strong>${f.email?`<br><span style="font-size:11px;color:var(--muted2)">${f.email}</span>`:''}</td>
     <td>${f.departamento||'—'}</td>
     <td>${f.cargo||'—'}</td>
-    <td>${fmtAOA(f.vencimento_base_aoa)}</td>
+    <td class="col-vencimento">${isRestricted ? '---' : fmtAOA(f.vencimento_base_aoa)}</td>
     <td><span class="badge badge-${f.estado==='activo'?'green':f.estado==='suspenso'?'warn':'gray'}">${f.estado}</span></td>
     <td>
-      <button class="btn btn-sm" onclick="editarFunc(${f.id})">Editar</button>
-      ${f.estado!=='desligado'?`<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>`:''}
+      ${p === 'supervisor' ? '' : `<button class="btn btn-sm" onclick="editarFunc(${f.id})">${p === 'rh_colaborador' ? 'Ver' : 'Editar'}</button>`}
+      ${p === 'super_admin_tenant' || p === 'rh_manager' ? (f.estado!=='desligado' ? `<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>` : '') : ''}
     </td>
   </tr>`).join('');
   document.getElementById('funcionariosTable').innerHTML = `<table class="tbl">
-    <thead><tr><th>Nº</th><th>Nome</th><th>Departamento</th><th>Cargo</th><th>Vencimento</th><th>Estado</th><th>Acções</th></tr></thead>
+    <thead><tr><th>Nº</th><th>Nome</th><th>Departamento</th><th>Cargo</th><th class="col-vencimento">Vencimento</th><th>Estado</th><th>Acções</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" class="empty">Nenhum resultado.</td></tr>'}</tbody>
   </table>`;
 }
-
 function abrirModalFunc(id) {
+  const isRestricted = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
+  const vencGrp = document.getElementById('fVencimento').closest('.form-group');
+  if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
+  hide('btnAcessoPortal', isRestricted);
+  hide('btnGuardarFunc', isRestricted);
+
   _editFuncId = id || null;
-  document.getElementById('modalFuncTitle').textContent = id ? 'Editar funcionário' : 'Novo funcionário';
+  document.getElementById('modalFuncTitle').textContent = id ? (isRestricted ? 'Ver funcionário' : 'Editar funcionário') : 'Novo funcionário';
   if (!id) {
     ['fNome','fNif','fNiss','fEmail','fTelefone','fMorada'].forEach(i => document.getElementById(i).value = '');
     document.getElementById('fAdmissao').value = new Date().toISOString().slice(0,10);
@@ -1018,8 +1082,15 @@ function editarFunc(id) {
   const f = _funcionarios.find(x => x.id === id);
   if (!f) return;
   _editFuncId = id;
-  document.getElementById('modalFuncTitle').textContent = 'Editar funcionário';
-  document.getElementById('btnAcessoPortal').style.display = 'inline-flex';
+  const isRestricted = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
+  document.getElementById('modalFuncTitle').textContent = isRestricted ? 'Ver funcionário' : 'Editar funcionário';
+
+  const vencGrp = document.getElementById('fVencimento').closest('.form-group');
+  if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
+  hide('btnAcessoPortal', isRestricted);
+  hide('btnGuardarFunc', isRestricted);
+  if (!isRestricted) document.getElementById('btnAcessoPortal').style.display = 'inline-flex';
+
   document.getElementById('fNome').value       = f.nome_completo || '';
   document.getElementById('fAdmissao').value   = f.data_admissao || '';
   document.getElementById('fContrato').value   = f.tipo_contrato || 'prazo_indeterminado';
@@ -1033,7 +1104,6 @@ function editarFunc(id) {
   document.getElementById('fTelefone').value   = f.telefone || '';
   document.getElementById('modalFunc').classList.add('open');
 }
-
 async function submeterFunc() {
   const payload = {
     nome_completo:       document.getElementById('fNome').value.trim(),
@@ -1061,6 +1131,8 @@ async function submeterFunc() {
     fecharModal('modalFunc');
     loadFuncionarios();
     carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1092,7 +1164,7 @@ async function loadFerias() {
       </td>
       <td><span class="badge badge-${estadoFeriasCor(p.estado)}">${labelEstadoFerias(p.estado)}</span></td>
       <td>
-        ${p.estado === 'pendente' || p.estado === 'aprovado_supervisor' ? `
+        ${(p.estado === 'pendente' || p.estado === 'aprovado_supervisor') && USER.perfil !== 'rh_colaborador' ? `
           <button class="btn btn-sm btn-accent" onclick="acaoFerias(${p.id},'aprovar')">✓ Aprovar</button>
           <button class="btn btn-sm btn-danger" onclick="acaoFerias(${p.id},'rejeitar')">✕ Rejeitar</button>
         ` : '—'}
@@ -1154,6 +1226,8 @@ async function submeterDep() {
     const res = await api('POST', '/api/departamentos', { nome, codigo: document.getElementById('dCodigo').value||null });
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok'); fecharModal('modalDep'); loadDepartamentos(); carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1193,6 +1267,8 @@ async function submeterHorario() {
     const res = await api('POST', '/api/horarios', payload);
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok'); fecharModal('modalHorario'); loadHorarios(); carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1437,7 +1513,7 @@ function tipoCor(t) {
 }
 
 function labelPerfil(p) {
-  return {super_admin_tenant:'Administrador',rh_manager:'Gestor de RH',supervisor:'Supervisor',funcionario:'Funcionário'}[p]||p;
+  return {super_admin_tenant:'Administrador',rh_manager:'Gestor de RH',rh_colaborador:'Colaborador RH',supervisor:'Supervisor',funcionario:'Funcionário'}[p]||p;
 }
 
 function labelEstadoFerias(e) {
@@ -1799,6 +1875,7 @@ async function exportarRelatorioPDF() {
           body { padding: 10px; }
           @page { margin: 15mm; size: A4 landscape; }
         }
+.rh-colaborador .col-vencimento, .supervisor .col-vencimento { display: none !important; }
       </style>
     </head>
     <body>

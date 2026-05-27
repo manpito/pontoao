@@ -8,7 +8,7 @@ CREATE TABLE `utilizadores` (
     `nome`                  VARCHAR(120)    NOT NULL,
     `email`                 VARCHAR(150)    NOT NULL UNIQUE,
     `password_hash`         VARCHAR(255)    NOT NULL,
-    `perfil`                ENUM('super_admin_tenant','rh_manager','supervisor','funcionario') NOT NULL DEFAULT 'funcionario',
+    `perfil`                ENUM('super_admin_tenant','rh_manager','rh_colaborador','supervisor','funcionario') NOT NULL DEFAULT 'funcionario',
     `totp_secret`           VARCHAR(64)     NULL,
     `totp_activo`           TINYINT(1)      NOT NULL DEFAULT 0,
     `funcionario_id`        INT UNSIGNED    NULL COMMENT 'FK para tabela funcionarios (pode ser NULL para admins externos)',

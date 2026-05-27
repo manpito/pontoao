@@ -56,6 +56,12 @@ class RelatorioController
         // 1. Buscar funcionários
         $whereFuncs = ["f.estado = 'activo'"];
         $bindFuncs  = [];
+        // Filtro supervisor: apenas a sua equipa
+        if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
+            $whereFuncs[] = 'f.supervisor_id = :sid';
+            $bindFuncs[':sid'] = (int) $user->funcionario_id;
+        }
+
         if ($funcId)     { $whereFuncs[] = 'f.id = :fid'; $bindFuncs[':fid'] = $funcId; }
         if ($depId)      { $whereFuncs[] = 'f.departamento_id = :did'; $bindFuncs[':did'] = $depId; }
         if ($numFunc)    { $whereFuncs[] = 'f.numero_funcionario LIKE :num'; $bindFuncs[':num'] = '%'.$numFunc.'%'; }
@@ -228,6 +234,12 @@ class RelatorioController
         $bindFuncs  = [];
         $numFuncH    = !empty($params['numero'])  ? $params['numero']  : null;
         $nomeSearchH = !empty($params['search'])  ? $params['search']  : null;
+        // Filtro supervisor: apenas a sua equipa
+        if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
+            $whereFuncs[] = 'f.supervisor_id = :sid';
+            $bindFuncs[':sid'] = (int) $user->funcionario_id;
+        }
+
         if ($funcId)      { $whereFuncs[] = 'f.id = :fid'; $bindFuncs[':fid'] = $funcId; }
         if (!empty($params['departamento_id'])) { $whereFuncs[] = 'f.departamento_id = :did'; $bindFuncs[':did'] = (int)$params['departamento_id']; }
         if ($numFuncH)    { $whereFuncs[] = 'f.numero_funcionario LIKE :num'; $bindFuncs[':num'] = '%'.$numFuncH.'%'; }
