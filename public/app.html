@@ -509,6 +509,19 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     </div>
 
 
+
+    <!-- CARGOS -->
+    <div class="page" id="page-cargos">
+      <div class="page-header">
+        <div><div class="page-title">Cargos</div></div>
+        <button class="btn btn-accent" id="btnNovoCargo" onclick="abrirModalCargo()">+ Novo cargo</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Lista</div></div>
+        <div id="cargoTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
     <!-- ROTAÇÕES -->
     <div class="page" id="page-rotacoes">
       <div class="page-header">
@@ -572,19 +585,6 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           </div>
           <div id="importacaoResultado" style="margin-top:20px"></div>
         </div>
-      </div>
-    </div>
-
-
-    <!-- CARGOS -->
-    <div class="page" id="page-cargos">
-      <div class="page-header">
-        <div><div class="page-title">Cargos</div></div>
-        <button class="btn btn-accent" id="btnNovoCargo" onclick="abrirModalCargo()">+ Novo cargo</button>
-      </div>
-      <div class="card">
-        <div class="card-head"><div class="card-title">Lista</div></div>
-        <div id="cargoTable"><div class="empty"><span class="spinner"></span></div></div>
       </div>
     </div>
 
@@ -747,11 +747,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="form-group"><label>Email de acesso *</label><input type="email" id="apEmail" placeholder="funcionario@empresa.ao"></div>
       <div class="form-group"><label>Password <span style="color:var(--muted2)">(deixe em branco para não alterar)</span></label><input type="password" id="apPassword" placeholder="mínimo 6 caracteres"></div>
       	<div class="form-group"><label>Perfil de acesso</label>
-  	<select id="apPerfil">
-    	<option value="funcionario">Funcionário — apenas portal de ponto</option>
-    	<option value="supervisor">Supervisor — visualização e aprovações</option>
-    	<option value="rh_manager">Gestor RH — acesso completo ao painel RH</option>
-  	</select>
+	<select id="apPerfil">
+        <option value="funcionario">Funcionário — apenas portal de ponto</option>
+        <option value="supervisor">Supervisor — visualização e aprovações</option>
+        <option value="rh_colaborador">Colaborador RH — alterações mensais</option>
+        <option value="rh_manager">Gestor RH — acesso completo ao painel RH</option>
+      </select>
 	</div>
 	<div class="form-group"><label>Estado do acesso</label>
         <select id="apActivo">
@@ -800,7 +801,7 @@ async function doLogin() {
   try {
     const res = await api('POST', '/api/auth/login', { email, password: pass });
     if (res.erro) throw new Error(res.mensagem);
-    if (!['super_admin_tenant','rh_manager','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
+    if (!['super_admin_tenant','rh_manager','rh_colaborador','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
     TOKEN = res.access_token; REFRESH = res.refresh_token; USER = res.utilizador;
     localStorage.setItem('rh_token', TOKEN);
     localStorage.setItem('rh_refresh', REFRESH);
@@ -825,6 +826,7 @@ function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   if (['rh_colaborador', 'supervisor'].includes(USER.perfil)) document.getElementById('app').classList.add(USER.perfil.replace('_', '-'));
+  // Garantir nome correcto a partir do token JWT
   try {
     const payload = JSON.parse(atob(TOKEN.split('.')[1]));
     USER.nome   = payload.nome  || USER.nome;
@@ -838,54 +840,10 @@ function showApp() {
   loadFeriasCount();
   carregarSelectores();
   applyPermissions();
+
 }
 
 // ── NAV ──
-
-function applyPermissions() {
-  const p = USER.perfil;
-  const hide = (id, cond) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = cond ? 'none' : '';
-  };
-
-  hide('nav-dashboard', false);
-  hide('nav-presenca', false);
-  hide('nav-marcacoes', false);
-  hide('nav-funcionarios', p === 'supervisor');
-  hide('nav-ferias', false);
-  hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('nav-horarios', p === 'supervisor');
-  hide('nav-relatorios', p === 'supervisor');
-  hide('nav-exportacao', p === 'supervisor');
-  hide('nav-importacao', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('nav-rotacoes', p === 'supervisor');
-  hide('nav-periodos', p === 'supervisor');
-  hide('nav-configs', p !== 'super_admin_tenant');
-
-  hide('btnNovoFunc', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('btnNovoDep', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('btnNovoCargo', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('btnNovoHorario', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('btnNovaRotacao', ['rh_colaborador', 'supervisor'].includes(p));
-  hide('btnGuardarConfigs', p !== 'super_admin_tenant');
-
-  if (p === 'supervisor') {
-      const sections = document.querySelectorAll('.sb-section');
-      const dividers = document.querySelectorAll('.sb-divider');
-      // Hide section labels and dividers that only contain hidden items
-      if (sections[2]) sections[2].style.display = 'none'; // Relatorios
-      if (dividers[1]) dividers[1].style.display = 'none';
-      if (sections[3]) sections[3].style.display = 'none'; // Horarios Avancados
-      if (dividers[2]) dividers[2].style.display = 'none';
-      if (sections[4]) sections[4].style.display = 'none'; // Sistema
-      if (dividers[3]) dividers[3].style.display = 'none';
-  }
-  if (p === 'rh_colaborador') {
-      // Hide sections or items specifically for rh_colaborador if needed
-  }
-}
 
 // ── CARGOS ──
 let _cargos = [];
@@ -952,6 +910,48 @@ async function eliminarCargo(id, nome) {
   } catch(e) { toast(e.message,'err'); }
 }
 
+function applyPermissions() {
+  const p = USER.perfil;
+  const sections = document.querySelectorAll('.sb-section');
+  const dividers = document.querySelectorAll('.sb-divider');
+
+  // Sidebar items
+  hide('nav-dashboard', false);
+  hide('nav-presenca', false);
+  hide('nav-marcacoes', false);
+  hide('nav-funcionarios', p === 'supervisor');
+  hide('nav-ferias', false);
+  hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('nav-horarios', p === 'supervisor');
+  hide('nav-relatorios', p === 'supervisor');
+  hide('nav-exportacao', p === 'supervisor');
+  hide('nav-importacao', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('nav-rotacoes', p === 'supervisor');
+  hide('nav-periodos', p === 'supervisor');
+  hide('nav-configs', p !== 'super_admin_tenant');
+  hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
+
+  // Action buttons
+  hide('btnNovoFunc', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovoDep', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovoHorario', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovaRotacao', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnGuardarConfigs', p !== 'super_admin_tenant');
+  hide('btnNovoCargo', ['rh_colaborador', 'supervisor'].includes(p));
+
+  if (p === 'supervisor') {
+      sections.forEach((s, i) => { if (i >= 2) s.style.display = 'none'; });
+      dividers.forEach((d, i) => { if (i >= 1) d.style.display = 'none'; });
+      ['nav-departamentos', 'nav-horarios', 'nav-relatorios', 'nav-exportacao', 'nav-importacao', 'nav-rotacoes', 'nav-periodos', 'nav-configs', 'nav-cargos'].forEach(id => hide(id, true));
+  }
+
+  if (p === 'rh_colaborador') {
+      hide('nav-departamentos', true);
+      hide('nav-importacao', true);
+      hide('nav-configs', true);
+      hide('nav-cargos', true);
+  }
+}
 function nav(page) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1106,11 +1106,12 @@ function filtrarFuncionarios() {
   const estado = document.getElementById('funcEstado').value;
   const p = USER.perfil;
   const isRestricted = ['rh_colaborador', 'supervisor'].includes(p);
+
   const lista  = _funcionarios.filter(f =>
     (!search || f.nome_completo.toLowerCase().includes(search) || f.numero_funcionario.includes(search) || (f.email||'').toLowerCase().includes(search)) &&
     (!estado || f.estado === estado)
   );
-  document.getElementById('funcCount').textContent = `${lista.length} funcionario(s)`;
+  document.getElementById('funcCount').textContent = `${lista.length} funcionário(s)`;
   const rows = lista.map(f => `<tr>
     <td><span style="font-family:var(--mono);color:var(--muted2)">${f.numero_funcionario}</span></td>
     <td><strong>${f.nome_completo}</strong>${f.email?`<br><span style="font-size:11px;color:var(--muted2)">${f.email}</span>`:''}</td>
@@ -1120,22 +1121,21 @@ function filtrarFuncionarios() {
     <td><span class="badge badge-${f.estado==='activo'?'green':f.estado==='suspenso'?'warn':'gray'}">${f.estado}</span></td>
     <td>
       ${p === 'supervisor' ? '' : `<button class="btn btn-sm" onclick="editarFunc(${f.id})">${p === 'rh_colaborador' ? 'Ver' : 'Editar'}</button>`}
-      ${(p === 'super_admin_tenant' || p === 'rh_manager') && f.estado!=='desligado' ? `<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>` : ''}
+      ${p === 'super_admin_tenant' || p === 'rh_manager' ? (f.estado!=='desligado' ? `<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>` : '') : ''}
     </td>
   </tr>`).join('');
   document.getElementById('funcionariosTable').innerHTML = `<table class="tbl">
-    <thead><tr><th>Nº</th><th>Nome</th><th>Departamento</th><th>Cargo</th><th class="col-vencimento">Vencimento</th><th>Estado</th><th>Accoes</th></tr></thead>
+    <thead><tr><th>Nº</th><th>Nome</th><th>Departamento</th><th>Cargo</th><th class="col-vencimento">Vencimento</th><th>Estado</th><th>Acções</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" class="empty">Nenhum resultado.</td></tr>'}</tbody>
   </table>`;
 }
-
 function abrirModalFunc(id) {
   const isRestricted = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
-  const hide = (id, cond) => { const el = document.getElementById(id); if (el) el.style.display = cond ? 'none' : ''; };
   const vencGrp = document.getElementById('fVencimento').closest('.form-group');
   if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
   hide('btnAcessoPortal', isRestricted);
   hide('btnGuardarFunc', isRestricted);
+
   _editFuncId = id || null;
   document.getElementById('modalFuncTitle').textContent = id ? (isRestricted ? 'Ver funcionario' : 'Editar funcionario') : 'Novo funcionario';
   if (!id) {
@@ -1157,13 +1157,14 @@ function editarFunc(id) {
   if (!f) return;
   _editFuncId = id;
   const isRestricted = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
-  const hide = (id, cond) => { const el = document.getElementById(id); if (el) el.style.display = cond ? 'none' : ''; };
   document.getElementById('modalFuncTitle').textContent = isRestricted ? 'Ver funcionario' : 'Editar funcionario';
+
   const vencGrp = document.getElementById('fVencimento').closest('.form-group');
   if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
   hide('btnAcessoPortal', isRestricted);
   hide('btnGuardarFunc', isRestricted);
   if (!isRestricted) document.getElementById('btnAcessoPortal').style.display = 'inline-flex';
+
   document.getElementById('fNome').value       = f.nome_completo || '';
   document.getElementById('fAdmissao').value   = f.data_admissao || '';
   document.getElementById('fContrato').value   = f.tipo_contrato || 'prazo_indeterminado';
@@ -1179,7 +1180,6 @@ function editarFunc(id) {
   document.getElementById('fCargo').value      = f.cargo_id || '';
   document.getElementById('modalFunc').classList.add('open');
 }
-
 async function submeterFunc() {
   const payload = {
     nome_completo:       document.getElementById('fNome').value.trim(),
@@ -1208,6 +1208,8 @@ async function submeterFunc() {
     fecharModal('modalFunc');
     loadFuncionarios();
     carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1301,6 +1303,8 @@ async function submeterDep() {
     const res = await api('POST', '/api/departamentos', { nome, codigo: document.getElementById('dCodigo').value||null });
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok'); fecharModal('modalDep'); loadDepartamentos(); carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1340,6 +1344,8 @@ async function submeterHorario() {
     const res = await api('POST', '/api/horarios', payload);
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok'); fecharModal('modalHorario'); loadHorarios(); carregarSelectores();
+  applyPermissions();
+
   } catch(e) { toast(e.message,'err'); }
 }
 
@@ -1525,13 +1531,13 @@ async function carregarSelectores() {
     if (cDepSel) cDepSel.innerHTML = '<option value="">— Nenhum —</option>' +
       (deps.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
     const depSel = document.getElementById('fDep');
-    depSel.innerHTML = '<option value="">— Nenhum —</option>' +
+    if (depSel) depSel.innerHTML = '<option value="">— Nenhum —</option>' +
       (deps.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
     const horSel = document.getElementById('fHorario');
-    horSel.innerHTML = '<option value="">— Nenhum —</option>' +
+    if (horSel) horSel.innerHTML = '<option value="">— Nenhum —</option>' +
       (hors.dados||[]).map(h=>`<option value="${h.id}">${h.nome}</option>`).join('');
     const funcSel = document.getElementById('marcFunc');
-    funcSel.innerHTML = '<option value="">Todos os funcionarios</option>' +
+    if (funcSel) funcSel.innerHTML = '<option value="">Todos os funcionarios</option>' +
       (funcs.dados||[]).map(f=>`<option value="${f.id}">${f.nome_completo}</option>`).join('');
     const relDepSel = document.getElementById('relDep');
     if (relDepSel) {
@@ -1545,6 +1551,7 @@ async function carregarSelectores() {
 }
 
 // ── MODAL ──
+function hide(id, cond) { const el = document.getElementById(id); if (el) el.style.display = cond ? "none" : ""; }
 function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); }));
 
@@ -2086,6 +2093,7 @@ async function togglePortalFromList(id, activo) {
 
 document.getElementById('lPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 </script>
+
 
 <!-- MODAL CARGO -->
 <div class="overlay" id="modalCargo">

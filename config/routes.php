@@ -96,19 +96,6 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->delete('/funcionarios/{id}',[\App\Controllers\FuncionarioController::class, 'destroy'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));
 
-    // --- Cargos ---
-    $group->get('/cargos',            [\App\Controllers\CargoController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
-
-    $group->post('/cargos',           [\App\Controllers\CargoController::class, 'store'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
-    $group->put('/cargos/{id}',       [\App\Controllers\CargoController::class, 'update'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
-    $group->delete('/cargos/{id}',    [\App\Controllers\CargoController::class, 'destroy'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
     // --- Departamentos ---
     $group->get('/departamentos',       [\App\Controllers\DepartamentoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));

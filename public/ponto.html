@@ -944,7 +944,7 @@ async function marcar(tipo) {
   }
 
   const payload = {
-    funcionario_id: currentUser.funcionario_id || currentUser.id,
+    funcionario_id: currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id,
     tipo,
     origem:   'web_pin',
     data_hora: localDateTime(),
@@ -973,7 +973,7 @@ async function carregarHistorico() {
   const hoje = localDate();
 
   try {
-    const res = await api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    const res = await api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id}`);
     renderHistoricoHoje(res.dados || []);
   } catch(e) {
     document.getElementById('historicoHoje').innerHTML = '<div class="empty">Erro ao carregar.</div>';
@@ -981,7 +981,7 @@ async function carregarHistorico() {
 
   try {
     const d7 = new Date(); d7.setDate(d7.getDate() - 7);
-    const res = await api('GET', `/api/marcacoes?data_inicio=${localDate(d7)}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    const res = await api('GET', `/api/marcacoes?data_inicio=${localDate(d7)}&data_fim=${hoje}&funcionario_id=${currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id}`);
     renderHistoricoSemana(res.dados || []);
   } catch(e) {
     document.getElementById('historicoSemana').innerHTML = '<div class="empty">Erro ao carregar.</div>';
@@ -1028,7 +1028,7 @@ function labelTipo(tipo) {
 async function carregarFerias() {
   try {
     const ano = new Date().getFullYear();
-    const res = await api('GET', `/api/ferias?funcionario_id=${currentUser.funcionario_id || currentUser.id}`);
+    const res = await api('GET', `/api/ferias?funcionario_id=${currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id}`);
     const dados = res.dados?.[0];
     if (dados) {
       document.getElementById('feriasDireito').textContent   = dados.dias_direito   ?? '—';
@@ -1056,7 +1056,7 @@ async function submeterFerias() {
 
   try {
     const res = await api('POST', '/api/ferias', {
-      funcionario_id: currentUser.funcionario_id || currentUser.id,
+      funcionario_id: currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id,
       data_inicio: inicio,
       data_fim:    fim,
     });
