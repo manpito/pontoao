@@ -82,13 +82,13 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     // --- Funcionários ---
     $group->get('/funcionarios',        [\App\Controllers\FuncionarioController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
     $group->post('/funcionarios',       [\App\Controllers\FuncionarioController::class, 'store'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     $group->get('/funcionarios/{id}',   [\App\Controllers\FuncionarioController::class, 'show'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->put('/funcionarios/{id}',   [\App\Controllers\FuncionarioController::class, 'update'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
@@ -98,7 +98,7 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     // --- Departamentos ---
     $group->get('/departamentos',       [\App\Controllers\DepartamentoController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->post('/departamentos',      [\App\Controllers\DepartamentoController::class, 'store'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
@@ -111,7 +111,7 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     // --- Horários ---
     $group->get('/horarios',            [\App\Controllers\HorarioController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->post('/horarios',           [\App\Controllers\HorarioController::class, 'store'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
@@ -121,7 +121,7 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     // --- Marcações ---
     $group->get('/marcacoes',           [\App\Controllers\MarcacaoController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
     $group->post('/marcacoes',          [\App\Controllers\MarcacaoController::class, 'store'])
           ->add(AuthMiddleware::class);
@@ -143,14 +143,14 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
 
     // --- Relatórios ---
     $group->get('/relatorios/assiduidade',  [\App\Controllers\RelatorioController::class, 'assiduidade'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->get('/relatorios/horas',        [\App\Controllers\RelatorioController::class, 'horas'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     // --- Férias ---
     $group->get('/ferias',              [\App\Controllers\FeriasController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
     $group->post('/ferias',             [\App\Controllers\FeriasController::class, 'store'])
           ->add(AuthMiddleware::class);
@@ -160,7 +160,7 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
 
     // --- Feriados ---
     $group->get('/feriados',            [\App\Controllers\FeriadoController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 $group->post('/feriados', [\App\Controllers\FeriadoController::class, 'store'])
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
@@ -183,13 +183,13 @@ $group->delete('/feriados/{id}', [\App\Controllers\FeriadoController::class, 'de
 
     // --- Rotações ---
     $group->get('/rotacoes',                    [\App\Controllers\RotacaoController::class, 'index'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->post('/rotacoes',                   [\App\Controllers\RotacaoController::class, 'store'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     $group->get('/rotacoes/{id}',               [\App\Controllers\RotacaoController::class, 'show'])
-          ->add(AuthMiddleware::class);
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->put('/rotacoes/{id}',               [\App\Controllers\RotacaoController::class, 'update'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
@@ -202,13 +202,13 @@ $group->delete('/feriados/{id}', [\App\Controllers\FeriadoController::class, 'de
 
     // --- Exportação ---
     $group->get('/exportacao/primavera',        [\App\Controllers\ExportacaoController::class, 'primavera'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->get('/exportacao/funcionarios',     [\App\Controllers\ExportacaoController::class, 'funcionarios'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     $group->get('/exportacao/template-importacao', [\App\Controllers\ExportacaoController::class, 'templateImportacao'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     // --- Importação ---
     $group->post('/importacao/validar',         [\App\Controllers\ImportacaoController::class, 'validar'])
@@ -216,7 +216,7 @@ $group->delete('/feriados/{id}', [\App\Controllers\FeriadoController::class, 'de
 
     $group->post('/importacao/funcionarios',    [\App\Controllers\ImportacaoController::class, 'funcionarios'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-      
+
 // --- Acesso Portal ---
 $group->get('/funcionarios/{id}/acesso-portal',        [\App\Controllers\FuncionarioController::class, 'estadoAcessoPortal'])
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
@@ -229,21 +229,21 @@ $group->put('/funcionarios/{id}/acesso-portal/toggle', [\App\Controllers\Funcion
 
 // --- Saldo Férias ---
 $group->get('/ferias/saldo/{funcionario_id}',          [\App\Controllers\FeriasController::class, 'saldo'])
-      ->add(AuthMiddleware::class);
+      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
 $group->put('/ferias/{funcionario_id}/ajustar',        [\App\Controllers\FeriasController::class, 'ajustarPorFaltas'])
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
 // --- Exportação Relatórios ---
 $group->get('/relatorios/assiduidade/exportar',        [\App\Controllers\RelatorioController::class, 'exportarAssiduidade'])
-      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
 $group->get('/relatorios/horas/exportar',              [\App\Controllers\RelatorioController::class, 'exportarHoras'])
-      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     // Períodos mensais
     $group->get('/periodos',                    [\App\Controllers\PeriodoController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
     $group->post('/periodos/fechar',              [\App\Controllers\PeriodoController::class, 'fechar'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
     $group->post('/periodos/abrir',               [\App\Controllers\PeriodoController::class, 'abrir'])

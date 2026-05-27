@@ -39,6 +39,11 @@ class FeriasController
         $where = [];
         $bind  = [];
 
+        // Filtro supervisor: apenas a sua equipa
+        if ($user && $user->perfil === 'supervisor' && !empty($user->funcionario_id)) {
+            $where[] = 'f.supervisor_id = :sid';
+            $bind[':sid'] = (int) $user->funcionario_id;
+        } else
         if ($user && $user->perfil === 'funcionario') {
             $where[]        = 'fp.funcionario_id = :fid';
             $bind[':fid']   = (int) $user->sub;
