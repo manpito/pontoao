@@ -163,7 +163,7 @@ class AuthController
 
         $db   = Database::tenant($sub);
         $stmt = $db->prepare("
-            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`
+            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`, u.`funcionario_id`
             FROM `utilizador_tokens` t
             JOIN `utilizadores` u ON t.`utilizador_id` = u.`id`
             WHERE t.`token_hash` = :hash AND t.`revogado` = 0 AND t.`expira_em` > NOW()
@@ -177,11 +177,12 @@ class AuthController
         }
 
         $accessToken = $this->auth->generateAccessToken([
-            'id'     => $row['utilizador_id'],
-            'uuid'   => $row['uuid'],
-            'nome'   => $row['nome'],
-            'email'  => $row['email'],
-            'perfil' => $row['perfil'],
+            'id'             => $row['utilizador_id'],
+            'uuid'           => $row['uuid'],
+            'nome'           => $row['nome'],
+            'email'          => $row['email'],
+            'perfil'         => $row['perfil'],
+            'funcionario_id' => $row['funcionario_id'] ? (int) $row['funcionario_id'] : null,
         ], $sub);
 
         return $this->json(200, ['access_token' => $accessToken, 'expires_in' => (int) ($_ENV['JWT_ACCESS_TTL'] ?? 3600)]);

@@ -58,7 +58,7 @@ class RelatorioController
         $bindFuncs  = [];
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $whereFuncs[] = 'f.supervisor_id = :sid';
+            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid)';
             $bindFuncs[':sid'] = (int) $user->funcionario_id;
         }
 
@@ -236,7 +236,7 @@ class RelatorioController
         $nomeSearchH = !empty($params['search'])  ? $params['search']  : null;
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $whereFuncs[] = 'f.supervisor_id = :sid';
+            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid)';
             $bindFuncs[':sid'] = (int) $user->funcionario_id;
         }
 
