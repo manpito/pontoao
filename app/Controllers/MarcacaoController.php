@@ -37,8 +37,9 @@ class MarcacaoController
         // Funcionários sem perfil de gestão só vêem as suas próprias marcações
         // Filtro supervisor: apenas a sua equipa
         if ($user && $user->perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $where[] = '(f.supervisor_id = :sid OR f.id = :sid)';
+            $where[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
             $bind[':sid'] = (int) $user->funcionario_id;
+            $bind[':sid_self'] = (int) $user->funcionario_id;
         } else
         if ($user && in_array($user->perfil, ['funcionario'])) {
             $where[]            = 'f.id = :func_id';
