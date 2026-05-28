@@ -42,7 +42,7 @@ class FuncionarioController
 
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $where[] = 'f.supervisor_id = :sid';
+            $where[] = '(f.supervisor_id = :sid OR f.id = :sid)';
             $bind[':sid'] = (int) $user->funcionario_id;
         }
 
