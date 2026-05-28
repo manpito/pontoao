@@ -894,12 +894,15 @@ async function submeterCargo() {
     categoria_profissional: document.getElementById('cCategoria').value.trim(),
     departamento_id: document.getElementById('cDepSel').value || null
   };
-  if (!payload.nome) { toast('O nome é obrigatório.','err'); return; }
+  if (!payload.nome) { toast('O nome é obrigat\xc3\xb3rio.','err'); return; }
   try {
     const res = _editCargoId ? await api('PUT', `/api/cargos/${_editCargoId}`, payload) : await api('POST', '/api/cargos', payload);
-    if (res.erro) throw new Error(res.mensagem);
-    toast(res.mensagem,'ok'); fecharModal('modalCargo'); loadCargos(); carregarSelectores();
-  } catch(e) { toast(e.message,'err'); }
+    if (res.erro) throw new Error(res.mensagem || 'Erro desconhecido ao guardar cargo.');
+    toast(res.mensagem || 'Cargo guardado com sucesso.','ok');
+    fecharModal('modalCargo'); loadCargos(); carregarSelectores();
+  } catch(e) {
+    toast(e.message || 'Erro de rede ou servidor ao guardar cargo.','err');
+  }
 }
 async function eliminarCargo(id, nome) {
   if (!confirm(`Eliminar o cargo "${nome}"?`)) return;

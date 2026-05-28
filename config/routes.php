@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Controllers\Admin\SuperAdminController;
 use App\Controllers\Admin\TenantController;
 use App\Controllers\Auth\AuthController;
+use App\Controllers\CargoController;
 use App\Controllers\Auth\SuperAdminAuthController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\SuperAdminMiddleware;
@@ -95,6 +96,20 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     $group->delete('/funcionarios/{id}',[\App\Controllers\FuncionarioController::class, 'destroy'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+
+    // --- Cargos ---
+    $group->get('/cargos',            [CargoController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->post('/cargos',           [CargoController::class, 'store'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->put('/cargos/{id}',       [CargoController::class, 'update'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->delete('/cargos/{id}',    [CargoController::class, 'destroy'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     // --- Departamentos ---
     $group->get('/departamentos',       [\App\Controllers\DepartamentoController::class, 'index'])
