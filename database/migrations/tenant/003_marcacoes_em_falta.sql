@@ -5,7 +5,7 @@ CREATE TABLE marcacoes_em_falta (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     funcionario_id INT UNSIGNED NOT NULL,
     data DATE NOT NULL,
-    marcacao_entrada_id INT UNSIGNED NULL,
+    marcacao_entrada_id BIGINT UNSIGNED NULL,
     estado ENUM(
         'pendente',
         'justificada_trabalho',
