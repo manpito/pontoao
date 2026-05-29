@@ -3,3 +3,4 @@ logs/
 storage/uploads/
 vendor/
 *.log
+/.phpunit.cache/
