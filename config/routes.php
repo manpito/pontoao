@@ -176,11 +176,15 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     // --- Feriados ---
     $group->get('/feriados',            [\App\Controllers\FeriadoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
-$group->post('/feriados', [\App\Controllers\FeriadoController::class, 'store'])
-      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
-$group->delete('/feriados/{id}', [\App\Controllers\FeriadoController::class, 'destroy'])
-      ->add(AuthMiddleware::role(['super_admin_tenant']));
+    $group->post('/feriados',           [\App\Controllers\FeriadoController::class, 'store'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->put('/feriados/{id}',        [\App\Controllers\FeriadoController::class, 'update'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->delete('/feriados/{id}',     [\App\Controllers\FeriadoController::class, 'destroy'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     // --- Configurações ---
     $group->get('/configuracoes',       [\App\Controllers\ConfiguracaoController::class, 'index'])
