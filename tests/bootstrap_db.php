@@ -18,45 +18,73 @@ function bootstrap_db(): PDO
             nome TEXT NOT NULL
         );
 
-        CREATE TABLE horarios (
+        CREATE TABLE departamentos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL
         );
 
-        CREATE TABLE rotacoes (
+        CREATE TABLE utilizadores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            horario_id INTEGER NOT NULL,
-            nome TEXT NOT NULL,
-            tipo TEXT NOT NULL DEFAULT 'ciclo_on_off',
-            ignora_fds INTEGER NOT NULL DEFAULT 0,
-            ignora_feriados INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY (horario_id) REFERENCES horarios(id)
+            nome TEXT NOT NULL
         );
 
-        CREATE TABLE rotacao_fases (
+        CREATE TABLE turnos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            rotacao_id INTEGER NOT NULL,
-            ordem INTEGER NOT NULL,
             nome TEXT NOT NULL,
-            tipo_fase TEXT NOT NULL DEFAULT 'trabalho',
-            duracao_dias INTEGER NOT NULL DEFAULT 1,
+            tipo TEXT NOT NULL DEFAULT 'trabalho',
             hora_entrada TEXT,
             hora_saida TEXT,
             hora_inicio_intervalo TEXT,
             hora_fim_intervalo TEXT,
-            horas_dia REAL,
-            FOREIGN KEY (rotacao_id) REFERENCES rotacoes(id)
+            horas_efectivas REAL,
+            atravessa_dia_civil INTEGER NOT NULL DEFAULT 0,
+            classificacao_legal TEXT NOT NULL DEFAULT 'nao_aplicavel',
+            activo INTEGER NOT NULL DEFAULT 1
         );
 
-        CREATE TABLE funcionario_rotacao (
+        CREATE TABLE escalas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            descricao TEXT,
+            departamento_id INTEGER,
+            tamanho_ciclo INTEGER NOT NULL,
+            activo INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (departamento_id) REFERENCES departamentos(id)
+        );
+
+        CREATE TABLE escala_turnos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            escala_id INTEGER NOT NULL,
+            posicao INTEGER NOT NULL,
+            turno_id INTEGER NOT NULL,
+            FOREIGN KEY (escala_id) REFERENCES escalas(id),
+            FOREIGN KEY (turno_id) REFERENCES turnos(id)
+        );
+
+        CREATE TABLE funcionario_escala (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             funcionario_id INTEGER NOT NULL,
-            rotacao_id INTEGER NOT NULL,
+            escala_id INTEGER NOT NULL,
             data_inicio TEXT NOT NULL,
             data_fim TEXT,
-            fase_inicial INTEGER NOT NULL DEFAULT 1,
+            posicao_inicial INTEGER NOT NULL,
             FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id),
-            FOREIGN KEY (rotacao_id) REFERENCES rotacoes(id)
+            FOREIGN KEY (escala_id) REFERENCES escalas(id)
+        );
+
+        CREATE TABLE escala_excepcoes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT NOT NULL,
+            funcionario_ausente_id INTEGER NOT NULL,
+            funcionario_substituto_id INTEGER,
+            turno_id INTEGER NOT NULL,
+            motivo TEXT NOT NULL,
+            descricao TEXT,
+            criado_por INTEGER NOT NULL,
+            FOREIGN KEY (funcionario_ausente_id) REFERENCES funcionarios(id),
+            FOREIGN KEY (funcionario_substituto_id) REFERENCES funcionarios(id),
+            FOREIGN KEY (turno_id) REFERENCES turnos(id),
+            FOREIGN KEY (criado_por) REFERENCES utilizadores(id)
         );
     ");
 
