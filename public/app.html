@@ -352,6 +352,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="sb-section">Sistema</div>
     <button class="nav-item" onclick="nav('periodos')" id="nav-periodos"><span class="ni">◰</span> Períodos mensais</button>
     <button class="nav-item" onclick="nav('terminais')" id="nav-terminais"><span class="ni">⊙</span> Terminais</button>
+    <button class="nav-item" onclick="nav('logs-auditoria')" id="nav-logs-auditoria"><span class="ni">📋</span> Auditoria</button>
     <button class="nav-item" onclick="nav('configs')" id="nav-configs"><span class="ni">◎</span> Configurações</button>
 
     <div class="sb-user">
@@ -539,6 +540,29 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       </div>
     </div>
 
+    <!-- PÁGINA AUDITORIA -->
+    <div class="page" id="page-logs-auditoria">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Log de Auditoria</div>
+          <div class="page-sub">Registo de todas as acções no sistema</div>
+        </div>
+        <button class="btn" onclick="exportarLogsCSV()">↓ CSV</button>
+      </div>
+      <div class="toolbar">
+        <input class="search-input" type="date" id="logInicio" style="flex:0;width:150px">
+        <input class="search-input" type="date" id="logFim" style="flex:0;width:150px">
+        <select class="select-input" id="logAccao"><option value="">Todas as acções</option></select>
+        <input class="search-input" placeholder="Entidade (ex: ferias)" id="logEntidade" style="flex:0;width:150px">
+        <input class="search-input" placeholder="IP" id="logIp" style="flex:0;width:130px">
+        <button class="btn btn-accent" onclick="carregarLogs()">Filtrar</button>
+      </div>
+      <div class="card">
+        <div id="logsTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+      <div id="logsPaginacao" style="display:flex;justify-content:center;gap:8px;margin-top:16px"></div>
+    </div>
+
     <!-- CONFIGURAÇÕES -->
     <div class="page" id="page-configs">
       <div class="page-header">
@@ -723,6 +747,31 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <button class="btn" onclick="fecharModal('modalFunc')">Cancelar</button>
       <button class="btn" onclick="abrirAcessoPortal()" id="btnAcessoPortal" style="display:none">🔑 Acesso Portal</button>
       <button class="btn btn-accent" id="btnGuardarFunc" onclick="submeterFunc()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE LOG -->
+<div class="overlay" id="modalLogDetalhe">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-head">
+      <h3>Detalhe do registo</h3>
+      <button class="modal-close" onclick="fecharModal('modalLogDetalhe')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--muted2);margin-bottom:8px">ANTES</div>
+          <pre id="logDadosAntes" style="font-size:11px;background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:300px"></pre>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--muted2);margin-bottom:8px">DEPOIS</div>
+          <pre id="logDadosDepois" style="font-size:11px;background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:300px"></pre>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
+      <button class="btn" onclick="fecharModal('modalLogDetalhe')">Fechar</button>
     </div>
   </div>
 </div>
@@ -1199,6 +1248,7 @@ function applyPermissions() {
   hide('nav-escalas', p === 'supervisor');
   hide('nav-periodos', p === 'supervisor');
   hide('nav-terminais', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
+  hide('nav-logs-auditoria', p !== 'super_admin_tenant');
   hide('nav-configs', p !== 'super_admin_tenant');
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
 
@@ -1233,7 +1283,9 @@ function nav(page) {
     dashboard: loadDashboard, presenca: loadPresenca,
     marcacoes: loadMarcacoes, 'marcacoes-falta': carregarMarcacoesFalta, funcionarios: loadFuncionarios,
     ferias: loadFerias, departamentos: loadDepartamentos,
-    horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais, configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
+    horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
+    'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
+    configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
   };
   loaders[page]?.();
 }
@@ -1879,6 +1931,137 @@ async function guardarConfigs() {
 
 // ── TERMINAIS ──
 let _terminais = [];
+async function carregarLogs(page = 1) {
+  const el = document.getElementById('logsTable');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+
+  const inicio   = document.getElementById('logInicio').value;
+  const fim      = document.getElementById('logFim').value;
+  const accao    = document.getElementById('logAccao').value;
+  const entidade = document.getElementById('logEntidade').value.trim();
+  const ip       = document.getElementById('logIp').value.trim();
+
+  let url = `/api/logs/auditoria?page=${page}&data_inicio=${inicio}&data_fim=${fim}`;
+  if (accao)    url += `&accao=${encodeURIComponent(accao)}`;
+  if (entidade) url += `&entidade=${encodeURIComponent(entidade)}`;
+  if (ip)       url += `&ip=${encodeURIComponent(ip)}`;
+
+  try {
+    const res = await api('GET', url);
+    const logs = res.dados || [];
+
+    let rows = logs.map(l => {
+      const dataStr = l.criado_em.replace(' ', '<br><small>') + '</small>';
+      const utilStr = l.utilizador_nome + (l.utilizador_email ? `<br><small style="color:var(--muted2)">${l.utilizador_email}</small>` : '');
+      const dAntes  = l.dados_antes ? JSON.stringify(l.dados_antes).replace(/'/g, "\\'") : 'null';
+      const dDepois = l.dados_depois ? JSON.stringify(l.dados_depois).replace(/'/g, "\\'") : 'null';
+
+      return `<tr>
+        <td>${dataStr}</td>
+        <td>${utilStr}</td>
+        <td><span class="badge badge-blue">${l.accao}</span></td>
+        <td><strong>${l.entidade || '—'}</strong><br><small style="color:var(--muted2)">ID: ${l.entidade_id || '—'}</small></td>
+        <td><span style="font-family:var(--mono);font-size:11px">${l.ip || '—'}</span></td>
+        <td><button class="btn btn-sm" onclick="verDetalheLog('${dAntes}', '${dDepois}')">Ver detalhe</button></td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Data/Hora</th><th>Utilizador</th><th>Acção</th><th>Entidade</th><th>IP</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="empty">Nenhum registo encontrado.</td></tr>'}</tbody>
+    </table>`;
+
+    // Paginação
+    renderPaginacaoLogs(res.page, res.total_pages);
+  } catch(e) { el.innerHTML = `<div class="empty" style="color:var(--danger)">Erro ao carregar logs: ${e.message}</div>`; }
+}
+
+function renderPaginacaoLogs(current, total) {
+  const el = document.getElementById('logsPaginacao');
+  if (!el) return;
+  if (total <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  const start = Math.max(1, current - 2);
+  const end = Math.min(total, current + 2);
+
+  if (start > 1) html += `<button class="btn btn-sm" onclick="carregarLogs(1)">1</button>${start > 2 ? '...' : ''}`;
+  for (let i = start; i <= end; i++) {
+    html += `<button class="btn btn-sm ${i === current ? 'btn-accent' : ''}" onclick="carregarLogs(${i})">${i}</button>`;
+  }
+  if (end < total) html += `${end < total - 1 ? '...' : ''}<button class="btn btn-sm" onclick="carregarLogs(${total})">${total}</button>`;
+
+  el.innerHTML = html;
+}
+
+async function carregarFiltrosLogs() {
+  const sel = document.getElementById('logAccao');
+  if (!sel) return;
+  try {
+    const res = await api('GET', '/api/logs/auditoria/acoes');
+    const acoes = res.dados || [];
+    sel.innerHTML = '<option value="">Todas as acções</option>' + acoes.map(a => `<option value="${a}">${a}</option>`).join('');
+  } catch(e) {}
+}
+
+function verDetalheLog(antes, depois) {
+  try {
+    const jsonAntes  = antes !== 'null' ? JSON.parse(antes) : null;
+    const jsonDepois = depois !== 'null' ? JSON.parse(depois) : null;
+
+    document.getElementById('logDadosAntes').textContent = jsonAntes ? JSON.stringify(jsonAntes, null, 2) : '—';
+    document.getElementById('logDadosDepois').textContent = jsonDepois ? JSON.stringify(jsonDepois, null, 2) : '—';
+    document.getElementById('modalLogDetalhe').classList.add('open');
+  } catch(e) {
+    console.error('Erro ao processar JSON do log:', e);
+    toast('Erro ao abrir detalhe do log', 'err');
+  }
+}
+
+async function exportarLogsCSV() {
+  const inicio   = document.getElementById('logInicio').value;
+  const fim      = document.getElementById('logFim').value;
+  const accao    = document.getElementById('logAccao').value;
+  const entidade = document.getElementById('logEntidade').value.trim();
+  const ip       = document.getElementById('logIp').value.trim();
+
+  let url = `/api/logs/auditoria?per_page=9999&data_inicio=${inicio}&data_fim=${fim}`;
+  if (accao)    url += `&accao=${encodeURIComponent(accao)}`;
+  if (entidade) url += `&entidade=${encodeURIComponent(entidade)}`;
+  if (ip)       url += `&ip=${encodeURIComponent(ip)}`;
+
+  try {
+    const res = await api('GET', url);
+    const logs = res.dados || [];
+    if (!logs.length) { toast('Nenhum dado para exportar.', 'inf'); return; }
+
+    const headers = ['Data/Hora', 'Utilizador', 'Email', 'Acção', 'Entidade', 'Entidade ID', 'IP', 'Dados Antes', 'Dados Depois'];
+    const rows = logs.map(l => [
+      l.criado_em,
+      l.utilizador_nome,
+      l.utilizador_email,
+      l.accao,
+      l.entidade,
+      l.entidade_id,
+      l.ip,
+      JSON.stringify(l.dados_antes || {}),
+      JSON.stringify(l.dados_depois || {})
+    ]);
+
+    let csvContent = headers.join(';') + '\n';
+    rows.forEach(row => {
+      csvContent += row.map(v => `"${(v || '').toString().replace(/"/g, '""')}"`).join(';') + '\n';
+    });
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', `auditoria_${inicio}_${fim}.csv`);
+    link.click();
+  } catch(e) { toast('Erro ao exportar CSV: ' + e.message, 'err'); }
+}
+
 async function carregarTerminais() {
   const el = document.getElementById('terminaisTable');
   if (!el) return;
@@ -2075,6 +2258,14 @@ async function carregarSelectores() {
     document.getElementById('marcData').value = new Date().toISOString().slice(0,10);
     document.getElementById('relInicio').value = new Date().toISOString().slice(0,8) + '01';
     document.getElementById('relFim').value    = new Date().toISOString().slice(0,10);
+
+    if (document.getElementById('logInicio')) {
+        const hoje = new Date();
+        const trintaDiasAgosto = new Date();
+        trintaDiasAgosto.setDate(hoje.getDate() - 30);
+        document.getElementById('logInicio').value = trintaDiasAgosto.toISOString().slice(0, 10);
+        document.getElementById('logFim').value    = hoje.toISOString().slice(0, 10);
+    }
   } catch(_) {}
 }
 
