@@ -675,6 +675,230 @@ class RelatorioController
     }
 
     /**
+     * GET /api/relatorios/departamento/{departamento_id}
+     */
+    public function porDepartamento(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $depId = (int) $args['departamento_id'];
+        $params = $request->getQueryParams();
+        $inicio = $params['inicio'] ?? date('Y-m-01');
+        $fim    = $params['fim']    ?? date('Y-m-t');
+        $formato = $params['formato'] ?? 'json';
+
+        $user = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+
+        $db = $this->db();
+        $stmt = $db->prepare("SELECT nome FROM departamentos WHERE id = :id");
+        $stmt->execute([':id' => $depId]);
+        $depNome = $stmt->fetchColumn();
+
+        if (!$depNome) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Departamento não encontrado.']);
+        }
+
+        // RBAC: Supervisor só pode aceder ao departamento dos funcionários da sua equipa.
+        if ($perfil === 'supervisor') {
+            $stmtCheck = $db->prepare("SELECT 1 FROM funcionarios WHERE departamento_id = :did AND (supervisor_id = :sid OR id = :sid_self) LIMIT 1");
+            $stmtCheck->execute([':did' => $depId, ':sid' => $user->funcionario_id, ':sid_self' => $user->funcionario_id]);
+            if (!$stmtCheck->fetch()) {
+                return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para aceder ao relatório deste departamento.']);
+            }
+        }
+
+        // Reutilizar a lógica de assiduidade
+        $queryParams = [
+            'data_inicio' => $inicio,
+            'data_fim' => $fim,
+            'departamento_id' => $depId
+        ];
+        $newRequest = $request->withQueryParams($queryParams);
+        $resAssiduidade = $this->assiduidade($newRequest, new Response());
+        $dataAssiduidade = json_decode((string)$resAssiduidade->getBody(), true);
+
+        if ($resAssiduidade->getStatusCode() !== 200) {
+            return $resAssiduidade;
+        }
+
+        // Agregados
+        $totalPresencas = 0;
+        $totalFaltas = 0;
+        $totalFM = 0;
+
+        foreach ($dataAssiduidade['dados'] as $func) {
+            $totalPresencas += $func['resumo']['dias_presente'];
+            $totalFaltas += $func['resumo']['dias_ausente'];
+            foreach ($func['dias'] as $dia) {
+                if ($dia['tem_falta_marcacao']) $totalFM++;
+            }
+        }
+
+        $dados = [
+            'cabecalho' => [
+                'departamento' => $depNome,
+                'periodo' => ['inicio' => $inicio, 'fim' => $fim],
+                'totais' => [
+                    'total_funcionarios' => count($dataAssiduidade['dados']),
+                    'total_presencas' => $totalPresencas,
+                    'total_faltas' => $totalFaltas,
+                    'total_fm' => $totalFM
+                ]
+            ],
+            'dados' => $dataAssiduidade['dados'],
+            'periodo' => $dataAssiduidade['periodo']
+        ];
+
+        if ($formato === 'xlsx') {
+            return $this->exportarExcel($dados, 'departamento', "relatorio_departamento_{$depId}", $response);
+        }
+
+        return $this->json(200, $dados);
+    }
+
+    /**
+     * GET /api/relatorios/escala/{escala_id}
+     */
+    public function porEscala(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $escalaId = (int) $args['escala_id'];
+        $params = $request->getQueryParams();
+        $inicio = $params['inicio'] ?? date('Y-m-01');
+        $fim    = $params['fim']    ?? date('Y-m-t');
+        $formato = $params['formato'] ?? 'json';
+
+        $db = $this->db();
+        $user = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+
+        $stmtE = $db->prepare("SELECT nome FROM escalas WHERE id = :id AND activo = 1");
+        $stmtE->execute([':id' => $escalaId]);
+        $escalaNome = $stmtE->fetchColumn();
+
+        if (!$escalaNome) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Escala não encontrada.']);
+        }
+
+        $sqlFuncs = "
+            SELECT f.id, f.nome_completo, f.numero_funcionario, f.data_admissao,
+                   d.nome AS departamento
+            FROM funcionario_escala fe
+            JOIN funcionarios f ON fe.funcionario_id = f.id
+            LEFT JOIN departamentos d ON f.departamento_id = d.id
+            WHERE fe.escala_id = :eid
+              AND fe.data_inicio <= :fim
+              AND (fe.data_fim IS NULL OR fe.data_fim >= :ini)
+        ";
+        $bindFuncs = [':eid' => $escalaId, ':ini' => $inicio, ':fim' => $fim];
+
+        if ($perfil === 'supervisor') {
+            $sqlFuncs .= " AND (f.supervisor_id = :sid OR f.id = :sid_self)";
+            $bindFuncs[':sid'] = (int) $user->funcionario_id;
+            $bindFuncs[':sid_self'] = (int) $user->funcionario_id;
+        }
+
+        $stmtF = $db->prepare($sqlFuncs . " ORDER BY f.nome_completo ASC");
+        $stmtF->execute($bindFuncs);
+        $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($funcionarios)) {
+            return $this->json(200, [
+                'cabecalho' => ['escala' => $escalaNome, 'periodo' => ['inicio' => $inicio, 'fim' => $fim]],
+                'dados' => []
+            ]);
+        }
+
+        $escalaService = new \App\Services\EscalaService($db);
+        $ids = array_column($funcionarios, 'id');
+        $inStr = implode(',', $ids);
+
+        $stmtM = $db->prepare("
+            SELECT funcionario_id, tipo, data_hora
+            FROM marcacoes
+            WHERE funcionario_id IN ($inStr)
+              AND data_hora BETWEEN :ini AND :fim
+            ORDER BY data_hora ASC
+        ");
+        $stmtM->execute([':ini' => $inicio . ' 00:00:00', ':fim' => $fim . ' 23:59:59']);
+        $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtMF = $db->prepare("
+            SELECT funcionario_id, data, nota_classificacao
+            FROM marcacoes_em_falta
+            WHERE funcionario_id IN ($inStr)
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtMF->execute([':ini' => $inicio, ':fim' => $fim]);
+        $todasMF = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+
+        $resultado = [];
+        foreach ($funcionarios as $func) {
+            $dias = [];
+            $totalPresente = 0;
+            $totalAusente = 0;
+            $totalFM = 0;
+
+            $atual = strtotime($inicio);
+            $fimTs = strtotime($fim);
+
+            while ($atual <= $fimTs) {
+                $dataStr = date('Y-m-d', $atual);
+                if ($dataStr < $func['data_admissao']) {
+                    $atual = strtotime('+1 day', $atual);
+                    continue;
+                }
+
+                $turnoEsperado = $escalaService->calcularTurnoEm($func['id'], $dataStr);
+                $marcacoesDia = array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id'] && str_starts_with($m['data_hora'], $dataStr));
+                $mfDia = array_filter($todasMF, fn($mf) => $mf['funcionario_id'] == $func['id'] && $mf['data'] == $dataStr);
+
+                $diaInfo = [
+                    'data' => $dataStr,
+                    'turno_esperado' => $turnoEsperado ? $turnoEsperado['turno_nome'] : 'Sem escala',
+                    'tipo_esperado' => $turnoEsperado ? $turnoEsperado['tipo'] : 'folga',
+                    'presenca' => !empty($marcacoesDia) ? 'presente' : 'ausente',
+                    'falta_marcacao' => !empty($mfDia)
+                ];
+
+                if ($diaInfo['presenca'] === 'presente') {
+                    $totalPresente++;
+                } elseif ($diaInfo['tipo_esperado'] === 'trabalho') {
+                    $totalAusente++;
+                }
+                if ($diaInfo['falta_marcacao']) {
+                    $totalFM++;
+                }
+
+                $dias[] = $diaInfo;
+                $atual = strtotime('+1 day', $atual);
+            }
+
+            $resultado[] = [
+                'funcionario' => $func,
+                'resumo' => [
+                    'presencas' => $totalPresente,
+                    'faltas' => $totalAusente,
+                    'fm' => $totalFM
+                ],
+                'dias' => $dias
+            ];
+        }
+
+        $dados = [
+            'cabecalho' => [
+                'escala' => $escalaNome,
+                'periodo' => ['inicio' => $inicio, 'fim' => $fim]
+            ],
+            'dados' => $resultado
+        ];
+
+        if ($formato === 'xlsx') {
+            return $this->exportarExcel($dados, 'escala', "relatorio_escala_{$escalaId}", $response);
+        }
+
+        return $this->json(200, $dados);
+    }
+
+    /**
      * Devolve feriados do período como array indexado por data
      */
     private function getFeriados(PDO $db, string $inicio, string $fim): array
@@ -754,11 +978,24 @@ class RelatorioController
             ]
         ];
 
-        if ($tipo === 'assiduidade') {
-            $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'Dias Úteis', 'Presentes', 'Ausentes', 'Justificados', 'Feriados', 'Taxa Presença (%)'], NULL, 'A1');
-            $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
+        if ($tipo === 'assiduidade' || $tipo === 'departamento') {
+            $startRow = 1;
+            if ($tipo === 'departamento') {
+                $sheet->setCellValue('A1', 'Relatório de Assiduidade por Departamento');
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+                $sheet->setCellValue('A2', 'Departamento: ' . $dados['cabecalho']['departamento']);
+                $sheet->setCellValue('A3', 'Período: ' . $dados['cabecalho']['periodo']['inicio'] . ' a ' . $dados['cabecalho']['periodo']['fim']);
+                $sheet->setCellValue('A4', 'Total Funcionários: ' . $dados['cabecalho']['totais']['total_funcionarios']);
+                $sheet->setCellValue('C4', 'Total Presenças: ' . $dados['cabecalho']['totais']['total_presencas']);
+                $sheet->setCellValue('E4', 'Total Faltas: ' . $dados['cabecalho']['totais']['total_faltas']);
+                $sheet->setCellValue('G4', 'Total FM: ' . $dados['cabecalho']['totais']['total_fm']);
+                $startRow = 6;
+            }
 
-            $row = 2;
+            $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'Dias Úteis', 'Presentes', 'Ausentes', 'Justificados', 'Feriados', 'Taxa Presença (%)'], NULL, 'A' . $startRow);
+            $sheet->getStyle('A' . $startRow . ':I' . $startRow)->applyFromArray($headerStyle);
+
+            $row = $startRow + 1;
             foreach ($dados['dados'] as $r) {
                 $s = $r['resumo'];
                 $sheet->fromArray([
@@ -839,9 +1076,30 @@ class RelatorioController
             $row += 5;
             $sheet->setCellValue('A' . $row, $dados['legenda']);
             $sheet->getStyle('A' . $row)->getFont()->setItalic(true);
+        } elseif ($tipo === 'escala') {
+            $sheet->setCellValue('A1', 'Relatório de Assiduidade por Escala');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+            $sheet->setCellValue('A2', 'Escala: ' . $dados['cabecalho']['escala']);
+            $sheet->setCellValue('A3', 'Período: ' . $dados['cabecalho']['periodo']['inicio'] . ' a ' . $dados['cabecalho']['periodo']['fim']);
+
+            $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'Presenças', 'Faltas', 'FM'], NULL, 'A5');
+            $sheet->getStyle('A5:F5')->applyFromArray($headerStyle);
+
+            $row = 6;
+            foreach ($dados['dados'] as $r) {
+                $sheet->fromArray([
+                    $r['funcionario']['numero_funcionario'],
+                    $r['funcionario']['nome_completo'],
+                    $r['funcionario']['departamento'] ?? '',
+                    $r['resumo']['presencas'],
+                    $r['resumo']['faltas'],
+                    $r['resumo']['fm']
+                ], NULL, 'A' . $row);
+                $row++;
+            }
         }
 
-        foreach (range('A', ($tipo === 'individual' ? 'H' : 'I')) as $col) {
+        foreach (range('A', ($tipo === 'individual' ? 'H' : ($tipo === 'escala' ? 'F' : 'I'))) as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
