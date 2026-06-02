@@ -40,7 +40,7 @@ try {
 }
 
 // 3. Obter lista de tenants activos
-$query = "SELECT id, subdominio as slug, nome FROM tenants WHERE estado = 'activo'";
+$query = "SELECT id, subdominio as slug, nome_empresa as nome FROM tenants WHERE estado = 'activo'";
 if ($targetTenant) {
     $query .= " AND subdominio = :slug";
 }
