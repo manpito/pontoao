@@ -244,6 +244,19 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->delete("/escalas/{id}/atribuicoes/{funcionario_id}", [\App\Controllers\EscalaController::class, "removerAtribuicao"])
           ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
 
+    // --- Excepções e Cobertura ---
+    $group->get("/escala-excepcoes",                         [\App\Controllers\EscalaExcecoesController::class, "index"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager", "rh_colaborador", "supervisor"]));
+
+    $group->post("/escala-excepcoes",                        [\App\Controllers\EscalaExcecoesController::class, "store"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager", "supervisor"]));
+
+    $group->put("/escala-excepcoes/{id}",                    [\App\Controllers\EscalaExcecoesController::class, "update"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager", "supervisor"]));
+
+    $group->delete("/escala-excepcoes/{id}",                 [\App\Controllers\EscalaExcecoesController::class, "destroy"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager", "supervisor"]));
+
     // --- Exportação ---
     $group->get('/exportacao/primavera',        [\App\Controllers\ExportacaoController::class, 'primavera'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));

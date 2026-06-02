@@ -559,6 +559,18 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         </div>
         <div id="escalaTurnosLista"></div>
         <div id="escalaAtribuicoes"></div>
+        <div class="card-section" id="escalaExcecoesSection" style="margin-top:20px; padding: 20px; border-top: 1px solid var(--border)">
+          <div class="card-head" style="padding: 0; border: none; margin-bottom: 16px">
+            <div class="card-title">Excepções e cobertura</div>
+            <button class="btn" onclick="abrirModalExcepcao()">+ Nova excepção</button>
+          </div>
+          <div class="toolbar" style="margin-bottom:12px">
+            <input type="date" id="excDataInicio" class="search-input" style="flex:0;width:150px">
+            <input type="date" id="excDataFim" class="search-input" style="flex:0;width:150px">
+            <button class="btn" onclick="carregarExcecoes()">Filtrar</button>
+          </div>
+          <div id="excecoesList"><div class="empty">Sem excepções no período.</div></div>
+        </div>
       </div>
     </div>
     <!-- EXPORTAÇÁO -->
@@ -734,6 +746,38 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalTurno')">Cancelar</button>
       <button class="btn btn-accent" onclick="guardarTurno()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EXCEPÇÃO -->
+<div class="overlay" id="modalExcepcao">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalExcepcaoTitle">Nova excepção</h3>
+      <button class="modal-close" onclick="fecharModal('modalExcepcao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="excId">
+      <div class="form-group"><label>Data *</label><input type="date" id="excData"></div>
+      <div class="form-group"><label>Funcionário ausente *</label><select id="excAusente"></select></div>
+      <div class="form-group"><label>Turno *</label><select id="excTurno"></select></div>
+      <div class="form-group">
+        <label>Motivo *</label>
+        <select id="excMotivo">
+          <option value="ferias">Férias</option>
+          <option value="doenca">Doença</option>
+          <option value="pessoal">Pessoal</option>
+          <option value="troca">Troca de turno</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Substituto (opcional)</label><select id="excSubstituto"><option value="">Turno descoberto</option></select></div>
+      <div class="form-group"><label>Descrição</label><textarea id="excDescricao" rows="2"></textarea></div>
+    </div>
+    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
+      <button class="btn" onclick="fecharModal('modalExcepcao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarExcepcao()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1922,6 +1966,7 @@ async function eliminarEscala(id) {
 
 async function verDetalheEscala(id) {
   try {
+    carregarExcecoes();
     const res = await api("GET", `/api/escalas/${id}`);
     const e = res.dados;
     document.getElementById("escalaDetalheNome").textContent = e.nome;
@@ -2018,6 +2063,116 @@ async function removerAtribuicaoEscala(escalaId, funcId) {
     toast(res.mensagem, "ok");
     verDetalheEscala(escalaId);
   } catch(e) { toast(e.message, "err"); }
+}
+
+// ── EXCEPÇÕES ──
+let _excecoes = [];
+async function carregarExcecoes() {
+  const el = document.getElementById("excecoesList");
+  if (!el) return;
+
+  const ini = document.getElementById("excDataInicio").value;
+  const fim = document.getElementById("excDataFim").value;
+  let url = "/api/escala-excepcoes";
+  const params = [];
+  if (ini) params.push(`data_inicio=${ini}`);
+  if (fim) params.push(`data_fim=${fim}`);
+  if (params.length) url += "?" + params.join("&");
+
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api("GET", url);
+    _excecoes = res.dados || [];
+    const rows = _excecoes.map(x => `<tr>
+      <td>${x.data}</td>
+      <td><strong>${x.funcionario_ausente_nome}</strong><br><small>${x.funcionario_ausente_numero}</small></td>
+      <td>${x.turno_nome}</td>
+      <td><span class="badge badge-gray">${x.motivo}</span></td>
+      <td>${x.funcionario_substituto_id ? `<strong>${x.funcionario_substituto_nome}</strong>` : '<span style="color:var(--danger)">Descoberto</span>'}</td>
+      <td>
+        <button class="btn btn-sm" onclick="atribuirSubstituto(${x.id})">Substituto</button>
+        <button class="btn btn-sm btn-danger" onclick="eliminarExcecao(${x.id})">✕</button>
+      </td>
+    </tr>`).join("");
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Data</th><th>Ausente</th><th>Turno</th><th>Motivo</th><th>Substituto</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" class="empty">Sem excepções no período.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar excepções.</div>'; }
+}
+
+async function abrirModalExcepcao(id = null) {
+  document.getElementById("excId").value = id || "";
+  document.getElementById("modalExcepcaoTitle").textContent = id ? "Editar excepção" : "Nova excepção";
+
+  // Popular selectores
+  try {
+    const [resF, resT] = await Promise.all([
+      api("GET", "/api/funcionarios?estado=activo"),
+      api("GET", "/api/turnos")
+    ]);
+    const selA = document.getElementById("excAusente");
+    const selS = document.getElementById("excSubstituto");
+    const optF = (resF.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join("");
+    selA.innerHTML = optF;
+    selS.innerHTML = '<option value="">Turno descoberto</option>' + optF;
+
+    const selT = document.getElementById("excTurno");
+    selT.innerHTML = (resT.dados||[]).filter(t => t.tipo === 'trabalho').map(t => `<option value="${t.id}">${t.nome}</option>`).join("");
+  } catch(_) {}
+
+  if (id) {
+    const x = _excecoes.find(e => e.id === id);
+    if (x) {
+      document.getElementById("excData").value = x.data;
+      document.getElementById("excAusente").value = x.funcionario_ausente_id;
+      document.getElementById("excTurno").value = x.turno_id;
+      document.getElementById("excMotivo").value = x.motivo;
+      document.getElementById("excSubstituto").value = x.funcionario_substituto_id || "";
+      document.getElementById("excDescricao").value = x.descricao || "";
+    }
+  } else {
+    document.getElementById("excData").value = new Date().toISOString().slice(0,10);
+    document.getElementById("excMotivo").value = "pessoal";
+    document.getElementById("excDescricao").value = "";
+  }
+  document.getElementById("modalExcepcao").classList.add("open");
+}
+
+async function guardarExcepcao() {
+  const id = document.getElementById("excId").value;
+  const payload = {
+    data: document.getElementById("excData").value,
+    funcionario_ausente_id: parseInt(document.getElementById("excAusente").value),
+    funcionario_substituto_id: document.getElementById("excSubstituto").value ? parseInt(document.getElementById("excSubstituto").value) : null,
+    turno_id: parseInt(document.getElementById("excTurno").value),
+    motivo: document.getElementById("excMotivo").value,
+    descricao: document.getElementById("excDescricao").value
+  };
+
+  try {
+    const res = id ? await api("PUT", `/api/escala-excepcoes/${id}`, payload) : await api("POST", "/api/escala-excepcoes", payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || "Excepção guardada.", "ok");
+    fecharModal("modalExcepcao");
+    carregarExcecoes();
+  } catch(e) { toast(e.message, "err"); }
+}
+
+async function eliminarExcecao(id) {
+  if (!confirm("Eliminar esta excepção?")) return;
+  try {
+    const res = await api("DELETE", `/api/escala-excepcoes/${id}`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, "ok");
+    carregarExcecoes();
+  } catch(e) { toast(e.message, "err"); }
+}
+
+async function atribuirSubstituto(id) {
+  await abrirModalExcepcao(id);
+  document.getElementById("modalExcepcaoTitle").textContent = "Atribuir substituto";
+  // Ocultar outros campos se quisermos uma UI mais limpa, mas para já editamos tudo
 }
 
 // ── EXPORTAÇÁO ──
