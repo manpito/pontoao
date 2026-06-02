@@ -528,13 +528,16 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div><div class="page-title">Relatórios</div><div class="page-sub">Assiduidade e horas trabalhadas · LGT Lei 7/15</div></div>
       </div>
       <div class="toolbar">
-        <select class="select-input" id="relTipo">
+        <select class="select-input" id="relTipo" onchange="toggleRelatorioSelects()">
           <option value="assiduidade">Assiduidade</option>
           <option value="horas">Horas trabalhadas</option>
+          <option value="departamento">Por departamento</option>
+          <option value="escala">Por escala</option>
         </select>
         <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
         <input class="search-input" type="date" id="relFim" style="flex:0;width:160px">
         <select class="select-input" id="relDep"><option value="">Todos os departamentos</option></select>
+        <select class="select-input" id="relEscala" style="display:none"><option value="">Seleccionar escala</option></select>
         <input class="search-input" placeholder="Nº ou nome..." id="relSearch" style="flex:0;width:150px">
         <button class="btn btn-accent" onclick="gerarRelatorio()">Gerar</button>
         <button class="btn" onclick="exportarRelatorio('csv')" title="Exportar CSV">↓ CSV</button>
@@ -1894,18 +1897,48 @@ async function gerarRelatorio() {
   const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
   const dep    = document.getElementById('relDep')?.value || '';
+  const escala = document.getElementById('relEscala')?.value || '';
   const search = document.getElementById('relSearch')?.value?.trim() || '';
   const out    = document.getElementById('relatorioOutput');
+
+  if (tipo === 'departamento' && !dep) { toast('Seleccione um departamento.','err'); return; }
+  if (tipo === 'escala' && !escala) { toast('Seleccione uma escala.','err'); return; }
+
   out.innerHTML = '<div class="empty"><span class="spinner"></span> A gerar relatório...</div>';
+
   let url = `/api/relatorios/${tipo}?data_inicio=${inicio}&data_fim=${fim}`;
-  if (dep)    url += `&departamento_id=${dep}`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?inicio=${inicio}&fim=${fim}`;
+  if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?inicio=${inicio}&fim=${fim}`;
+
+  if (tipo === 'assiduidade' || tipo === 'horas') {
+    if (dep)    url += `&departamento_id=${dep}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+  }
+
   try {
     const res = await api('GET', url);
     if (res.erro) throw new Error(res.mensagem);
-    const rows = (res.dados||[]).map(r => {
-      const s = r.resumo;
-      if (tipo === 'assiduidade') {
+
+    let rows = '';
+    let headers = '';
+    let cardTitle = '';
+    let info = '';
+
+    if (tipo === 'assiduidade' || tipo === 'horas' || tipo === 'departamento') {
+      rows = (res.dados||[]).map(r => {
+        const s = r.resumo;
+        if (tipo === 'horas') {
+          return `<tr>
+            <td><strong>${r.funcionario.nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero}</span></td>
+            <td>${r.funcionario.departamento||'—'}</td>
+            <td style="font-family:var(--mono);text-align:center">${s.horas_efectivas}h</td>
+            <td style="font-family:var(--mono);text-align:center">${s.horas_esperadas}h</td>
+            <td style="font-family:var(--mono);text-align:center;color:${s.horas_extra>0?'var(--accent)':'var(--muted2)'}">${s.horas_extra}h</td>
+            <td style="font-family:var(--mono);text-align:center;color:${s.horas_deficit>0?'var(--danger)':'var(--muted2)'}">${s.horas_deficit}h</td>
+            <td style="font-family:var(--mono);text-align:center">${s.minutos_atraso_total}min</td>
+            <td style="text-align:center"><strong style="color:${s.saldo_horas>=0?'var(--accent)':'var(--danger)'}">${s.saldo_horas>=0?'+':''}${s.saldo_horas}h</strong></td>
+          </tr>`;
+        }
         return `<tr>
           <td><strong>${r.funcionario.nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero}</span></td>
           <td>${r.funcionario.departamento||'—'}</td>
@@ -1915,28 +1948,31 @@ async function gerarRelatorio() {
           <td style="font-family:var(--mono);text-align:center">${s.dias_feriado}</td>
           <td style="text-align:center"><strong style="color:${s.taxa_presenca>=90?'var(--accent)':s.taxa_presenca>=75?'var(--warn)':'var(--danger)'}">${s.taxa_presenca}%</strong></td>
         </tr>`;
-      } else {
-        return `<tr>
-          <td><strong>${r.funcionario.nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero}</span></td>
-          <td>${r.funcionario.departamento||'—'}</td>
-          <td style="font-family:var(--mono);text-align:center">${s.horas_efectivas}h</td>
-          <td style="font-family:var(--mono);text-align:center">${s.horas_esperadas}h</td>
-          <td style="font-family:var(--mono);text-align:center;color:${s.horas_extra>0?'var(--accent)':'var(--muted2)'}">${s.horas_extra}h</td>
-          <td style="font-family:var(--mono);text-align:center;color:${s.horas_deficit>0?'var(--danger)':'var(--muted2)'}">${s.horas_deficit}h</td>
-          <td style="font-family:var(--mono);text-align:center">${s.minutos_atraso_total}min</td>
-          <td style="text-align:center"><strong style="color:${s.saldo_horas>=0?'var(--accent)':'var(--danger)'}">${s.saldo_horas>=0?'+':''}${s.saldo_horas}h</strong></td>
-        </tr>`;
-      }
-    }).join('');
+      }).join('');
 
-    const headers = tipo === 'assiduidade'
-      ? '<tr><th>Funcionário</th><th>Departamento</th><th>Presentes</th><th>Ausentes</th><th>Justificados</th><th>Feriados</th><th>Taxa</th></tr>'
-      : '<tr><th>Funcionário</th><th>Departamento</th><th>H. Efectivas</th><th>H. Esperadas</th><th>H. Extra</th><th>H. Défice</th><th>Atrasos</th><th>Saldo</th></tr>';
+      headers = (tipo === 'horas')
+        ? '<tr><th>Funcionário</th><th>Departamento</th><th>H. Efectivas</th><th>H. Esperadas</th><th>H. Extra</th><th>H. Défice</th><th>Atrasos</th><th>Saldo</th></tr>'
+        : '<tr><th>Funcionário</th><th>Departamento</th><th>Presentes</th><th>Ausentes</th><th>Justificados</th><th>Feriados</th><th>Taxa</th></tr>';
+
+      cardTitle = tipo === 'assiduidade' ? 'Assiduidade' : (tipo === 'horas' ? 'Horas trabalhadas' : `Assiduidade: ${res.cabecalho?.departamento}`);
+      info = `Gerado ${res.gerado_em || new Date().toLocaleString()} · ${res.total_funcionarios || res.dados?.length || 0} funcionário(s)`;
+    } else if (tipo === 'escala') {
+      rows = (res.dados||[]).map(r => `<tr>
+        <td><strong>${r.funcionario.nome_completo}</strong><br><span style="font-size:11px;color:var(--muted2)">${r.funcionario.numero_funcionario}</span></td>
+        <td>${r.funcionario.departamento||'—'}</td>
+        <td style="font-family:var(--mono);text-align:center">${r.resumo.presencas}</td>
+        <td style="font-family:var(--mono);text-align:center;color:var(--danger)">${r.resumo.faltas}</td>
+        <td style="font-family:var(--mono);text-align:center;color:var(--warn)">${r.resumo.fm}</td>
+      </tr>`).join('');
+      headers = '<tr><th>Funcionário</th><th>Departamento</th><th>Presenças</th><th>Faltas</th><th>FM</th></tr>';
+      cardTitle = `Assiduidade por Escala: ${res.cabecalho?.escala}`;
+      info = `${inicio} → ${fim} · ${res.dados?.length || 0} funcionário(s)`;
+    }
 
     out.innerHTML = `<div class="card">
       <div class="card-head">
-        <div class="card-title">${tipo==='assiduidade'?'Assiduidade':'Horas trabalhadas'} · ${inicio} → ${fim}</div>
-        <span style="font-size:11px;color:var(--muted2)">Gerado ${res.gerado_em} · ${res.total_funcionarios} funcionário(s)</span>
+        <div class="card-title">${cardTitle} · ${inicio} → ${fim}</div>
+        <span style="font-size:11px;color:var(--muted2)">${info}</span>
       </div>
       <table class="tbl">
         <thead>${headers}</thead>
@@ -2559,11 +2595,50 @@ async function exportarRelatorio(formato) {
   const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
   const dep    = document.getElementById('relDep')?.value || '';
+  const escala = document.getElementById('relEscala')?.value || '';
   const search = document.getElementById('relSearch')?.value?.trim() || '';
+
   let url = `/api/relatorios/${tipo}/exportar?formato=${formato}&data_inicio=${inicio}&data_fim=${fim}`;
-  if (dep)    url += `&departamento_id=${dep}`;
-  if (search) url += `&search=${encodeURIComponent(search)}`;
+  if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
+  if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
+
+  if (tipo === 'assiduidade' || tipo === 'horas') {
+    if (dep)    url += `&departamento_id=${dep}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+  }
   downloadApi(url, `relatorio_${tipo}_${inicio}_${fim}.${formato}`);
+}
+
+function toggleRelatorioSelects() {
+  const tipo = document.getElementById('relTipo').value;
+  const relDep = document.getElementById('relDep');
+  const relEscala = document.getElementById('relEscala');
+  const relSearch = document.getElementById('relSearch');
+
+  if (tipo === 'escala') {
+    relDep.style.display = 'none';
+    relEscala.style.display = 'inline-block';
+    relSearch.style.display = 'none';
+    popularEscalasRelatorio();
+  } else if (tipo === 'departamento') {
+    relDep.style.display = 'inline-block';
+    relEscala.style.display = 'none';
+    relSearch.style.display = 'none';
+  } else {
+    relDep.style.display = 'inline-block';
+    relEscala.style.display = 'none';
+    relSearch.style.display = 'inline-block';
+  }
+}
+
+async function popularEscalasRelatorio() {
+  const sel = document.getElementById('relEscala');
+  if (sel.options.length > 1) return;
+  try {
+    const res = await api('GET', '/api/escalas');
+    sel.innerHTML = '<option value="">Seleccionar escala</option>' +
+      (res.dados||[]).map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+  } catch(e) { toast(e.message,'err'); }
 }
 
 // ── ACESSO AO PORTAL ──
