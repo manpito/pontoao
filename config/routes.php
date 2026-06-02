@@ -144,6 +144,16 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->put('/marcacoes/{id}',      [\App\Controllers\MarcacaoController::class, 'update'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
+    // --- Marcações em Falta ---
+    $group->get('/marcacoes-falta',           [\App\Controllers\MarcacaoFaltaController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+
+    $group->get('/marcacoes-falta/pendentes', [\App\Controllers\MarcacaoFaltaController::class, 'pendentes'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+
+    $group->put('/marcacoes-falta/{id}',      [\App\Controllers\MarcacaoFaltaController::class, 'update'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+
     // Endpoint para receber marcações do zk-bridge (autenticado por API key, não por JWT)
     $group->post('/zk-bridge/marcacoes', [\App\Controllers\ZkBridgeController::class, 'receive'])
           ->add(\App\Middleware\ZkBridgeAuthMiddleware::class);

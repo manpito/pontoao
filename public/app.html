@@ -328,6 +328,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <button class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard"><span class="ni">◈</span> Dashboard</button>
     <button class="nav-item" onclick="nav('presenca')" id="nav-presenca"><span class="ni">◉</span> Presenças hoje</button>
     <button class="nav-item" onclick="nav('marcacoes')" id="nav-marcacoes"><span class="ni">◷</span> Marcações</button>
+    <button class="nav-item" onclick="nav('marcacoes-falta')" id="nav-marcacoes-falta"><span class="ni">⚠</span> Faltas</button>
 
     <hr class="sb-divider">
     <div class="sb-section">Recursos Humanos</div>
@@ -369,6 +370,14 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <button class="btn" onclick="loadDashboard()">↺ Actualizar</button>
       </div>
       <div class="kpi-row" id="kpiRow"><div class="empty"><span class="spinner"></span></div></div>
+      <div id="alertaMarcacoesFalta" style="display:none" class="card" style="border-left: 3px solid var(--danger, #e74c3c)">
+        <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <strong id="alertaMarcacoesFaltaCount">0</strong> marcação(ões) em falta pendente(s) de classificação
+          </div>
+          <button class="btn btn-accent" onclick="nav('marcacoes-falta')">Ver e classificar</button>
+        </div>
+      </div>
       <div class="card">
         <div class="card-head"><div class="card-title">Últimas marcações</div></div>
         <div class="card-body" id="dashMarcacoes"><div class="empty"><span class="spinner"></span></div></div>
@@ -401,6 +410,32 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="card">
         <div class="card-head"><div class="card-title">Registos</div></div>
         <div id="marcacoesTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- PÁGINA FALTAS -->
+    <div class="page" id="page-marcacoes-falta">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Marcações em Falta</div>
+          <div class="page-sub">Classificação de ausências e faltas de marcação</div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <select class="select-input" id="faltaFiltroEstado">
+          <option value="">Todos os estados</option>
+          <option value="pendente">Pendente</option>
+          <option value="justificada_trabalho">Justificada — Trabalho externo</option>
+          <option value="justificada_motivo">Justificada — Motivo pessoal</option>
+          <option value="injustificada_meio_dia">Injustificada — Meio dia</option>
+          <option value="injustificada_falta">Injustificada — Falta</option>
+        </select>
+        <input class="search-input" type="date" id="faltaFiltroInicio" style="flex:0;width:150px">
+        <input class="search-input" type="date" id="faltaFiltroFim" style="flex:0;width:150px">
+        <button class="btn btn-accent" onclick="carregarMarcacoesFalta()">Filtrar</button>
+      </div>
+      <div class="card">
+        <div id="marcacoesFaltaTable"><div class="empty"><span class="spinner"></span></div></div>
       </div>
     </div>
 
@@ -848,6 +883,37 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   </div>
 </div>
 
+<!-- MODAL CLASSIFICAR FALTA -->
+<div class="overlay" id="modalClassificarFalta">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Classificar marcação em falta</h3>
+      <button class="modal-close" onclick="fecharModal('modalClassificarFalta')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cfId">
+      <div id="cfInfoFuncionario" style="margin-bottom:16px;font-size:13px;color:var(--muted2)"></div>
+      <div class="form-group">
+        <label>Classificação *</label>
+        <select id="cfEstado">
+          <option value="justificada_trabalho">Justificada — Trabalho externo</option>
+          <option value="justificada_motivo">Justificada — Motivo pessoal</option>
+          <option value="injustificada_meio_dia">Injustificada — Meio dia</option>
+          <option value="injustificada_falta">Injustificada — Falta</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nota (opcional)</label>
+        <textarea id="cfNota" rows="3" placeholder="Justificação ou observação..."></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalClassificarFalta')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarClassificacao()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ACESSO PORTAL -->
 <div class="overlay" id="modalAcessoPortal">
   <div class="modal" style="max-width:420px">
@@ -856,7 +922,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Configure as credenciais de acesso do funcionário ao portal de marcação de ponto. O acesso é automaticamente bloqueado quando o funcionário é suspenso ou desligado.</p>
       <div class="form-group"><label>Email de acesso *</label><input type="email" id="apEmail" placeholder="funcionario@empresa.ao"></div>
       <div class="form-group"><label>Password <span style="color:var(--muted2)">(deixe em branco para não alterar)</span></label><input type="password" id="apPassword" placeholder="mínimo 6 caracteres"></div>
-      	<div class="form-group"><label>Perfil de acesso</label>
+	<div class="form-group"><label>Perfil de acesso</label>
 	<select id="apPerfil">
         <option value="funcionario">Funcionário — apenas portal de ponto</option>
         <option value="supervisor">Supervisor — visualização e aprovações</option>
@@ -1032,6 +1098,7 @@ function applyPermissions() {
   hide('nav-dashboard', false);
   hide('nav-presenca', false);
   hide('nav-marcacoes', false);
+  hide('nav-marcacoes-falta', ['rh_colaborador', 'funcionario'].includes(p));
   hide('nav-funcionarios', p === 'supervisor');
   hide('nav-ferias', false);
   hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
@@ -1073,7 +1140,7 @@ function nav(page) {
   document.getElementById('page-' + page)?.classList.add('active');
   const loaders = {
     dashboard: loadDashboard, presenca: loadPresenca,
-    marcacoes: loadMarcacoes, funcionarios: loadFuncionarios,
+    marcacoes: loadMarcacoes, 'marcacoes-falta': carregarMarcacoesFalta, funcionarios: loadFuncionarios,
     ferias: loadFerias, departamentos: loadDepartamentos,
     horarios: loadHorarios, periodos: loadPeriodos, configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
   };
@@ -1096,6 +1163,8 @@ async function loadDashboard() {
     const presentes = new Set((marc.dados||[]).filter(m=>m.tipo==='entrada').map(m=>m.funcionario)).size;
     const pendFerias = await api('GET', '/api/ferias?estado=pendente');
     const nPend = pendFerias.dados?.length || 0;
+
+    verificarMarcacoesPendentes();
 
     document.getElementById('kpiRow').innerHTML = `
       <div class="kpi"><div class="kpi-val green">${presentes}</div><div class="kpi-label">Presentes hoje</div></div>
@@ -1337,6 +1406,94 @@ async function desligarFunc(id, nome) {
   } catch(e) { toast(e.message,'err'); }
 }
 
+// ── MARCAÇÕES EM FALTA ──
+async function verificarMarcacoesPendentes() {
+  const el = document.getElementById('alertaMarcacoesFalta');
+  const countEl = document.getElementById('alertaMarcacoesFaltaCount');
+  if (!el) return;
+  try {
+    const res = await api('GET', '/api/marcacoes-falta/pendentes');
+    const n = res.total || 0;
+    countEl.textContent = n;
+    el.style.display = n > 0 ? 'block' : 'none';
+  } catch(_) { el.style.display = 'none'; }
+}
+
+async function carregarMarcacoesFalta() {
+  const el = document.getElementById('marcacoesFaltaTable');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+
+  const estado = document.getElementById('faltaFiltroEstado').value;
+  const inicio = document.getElementById('faltaFiltroInicio').value;
+  const fim    = document.getElementById('faltaFiltroFim').value;
+
+  let url = '/api/marcacoes-falta?';
+  if (estado) url += `&estado=${estado}`;
+  if (inicio) url += `&data_inicio=${inicio}`;
+  if (fim)    url += `&data_fim=${fim}`;
+
+  try {
+    const res = await api('GET', url);
+    const rows = (res.dados||[]).map(m => {
+      let nota = m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada';
+      if (m.nota_classificacao) nota += ` <br><small style="color:var(--muted2)">Nota: ${m.nota_classificacao}</small>`;
+
+      const badgeClass = m.estado === 'pendente' ? 'warn' : (m.estado.startsWith('justificada') ? 'green' : 'red');
+
+      return `<tr>
+        <td><span style="font-family:var(--mono)">${m.data}</span></td>
+        <td><strong>${m.funcionario_nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${m.funcionario_numero}</span></td>
+        <td>${nota}</td>
+        <td><span class="badge badge-${badgeClass}">${labelEstadoFalta(m.estado)}</span></td>
+        <td>
+          ${m.estado === 'pendente' ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}')">Classificar</button>` : '—'}
+        </td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Observação</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" class="empty">Sem marcações em falta.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar marcações em falta.</div>'; }
+}
+
+function labelEstadoFalta(e) {
+  const labels = {
+    pendente: 'Pendente',
+    justificada_trabalho: 'Trabalho Externo',
+    justificada_motivo: 'Motivo Pessoal',
+    injustificada_meio_dia: 'Meio Dia',
+    injustificada_falta: 'Falta'
+  };
+  return labels[e] || e;
+}
+
+function abrirModalClassificar(id, nome, data, nota) {
+  document.getElementById('cfId').value = id;
+  document.getElementById('cfInfoFuncionario').innerHTML = `<strong>${nome}</strong> · ${data} · ${nota}`;
+  document.getElementById('cfNota').value = '';
+  document.getElementById('cfEstado').value = 'justificada_trabalho';
+  document.getElementById('modalClassificarFalta').classList.add('open');
+}
+
+async function guardarClassificacao() {
+  const id = document.getElementById('cfId').value;
+  const payload = {
+    estado: document.getElementById('cfEstado').value,
+    nota_classificacao: document.getElementById('cfNota').value.trim()
+  };
+  try {
+    const res = await api('PUT', `/api/marcacoes-falta/${id}`, payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Classificação guardada com sucesso.', 'ok');
+    fecharModal('modalClassificarFalta');
+    carregarMarcacoesFalta();
+    verificarMarcacoesPendentes();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
 // ── FÉRIAS ──
 async function loadFerias() {
   document.getElementById('feriasTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -1547,8 +1704,8 @@ async function abrirPeriodo(ano, mes, label) {
     loadPeriodos();
   } catch(e) { toast(e.message, 'err'); }
 }
-  
-  
+
+
 
 
 // ── CONFIGURAÇÕES ──
@@ -2421,7 +2578,7 @@ async function abrirAcessoPortal() {
     if (res.tem_acesso && res.dados) {
       document.getElementById('apEmail').value  = res.dados.email || '';
       document.getElementById('apActivo').value = res.dados.activo ? '1' : '0';
-	document.getElementById('apPerfil').value = res.dados.perfil || 'funcionario';      
+	document.getElementById('apPerfil').value = res.dados.perfil || 'funcionario';
 	document.getElementById('apPassword').value = '';
       document.getElementById('apUltimoLogin').textContent = res.dados.ultimo_login
         ? 'Último login: ' + res.dados.ultimo_login.slice(0,16)
