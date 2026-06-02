@@ -37,8 +37,216 @@ class RelatorioController
      * - tipo de ausência (justificada / injustificada)
      * - marcações do dia
      */
+    public function individual(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+        $funcId = (int) $args['funcionario_id'];
+
+        // RBAC: admin e rh vêem qualquer funcionário. Supervisor vê apenas funcionários da sua equipa. Funcionário vê apenas o seu próprio relatório.
+        if ($perfil === 'funcionario' && $user->funcionario_id != $funcId) {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório.']);
+        }
+
+        $params     = $request->getQueryParams();
+        $dataInicio = $params['inicio'] ?? date('Y-m-01');
+        $dataFim    = $params['fim']    ?? date('Y-m-t');
+        $formato    = $params['formato'] ?? 'html';
+
+        $db = $this->db();
+
+        // 1. Dados do funcionário
+        $stmtF = $db->prepare("
+            SELECT f.id, f.nome_completo, f.numero_funcionario, f.data_admissao,
+                   d.nome AS departamento, c.nome AS cargo,
+                   h.horas_dia AS horas_esperadas_dia,
+                   h.tolerancia_entrada_min,
+                   f.supervisor_id
+            FROM funcionarios f
+            LEFT JOIN departamentos d ON f.departamento_id = d.id
+            LEFT JOIN cargos c ON f.cargo_id = c.id
+            LEFT JOIN funcionario_horario fh ON fh.funcionario_id = f.id AND fh.data_fim IS NULL
+            LEFT JOIN horarios h ON fh.horario_id = h.id
+            WHERE f.id = :id
+        ");
+        $stmtF->execute([':id' => $funcId]);
+        $func = $stmtF->fetch(PDO::FETCH_ASSOC);
+
+        if (!$func) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+
+        if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
+        }
+
+        // 2. Feriados
+        $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
+
+        // 3. Marcações
+        $stmtM = $db->prepare("
+            SELECT tipo, data_hora
+            FROM marcacoes
+            WHERE funcionario_id = :fid
+              AND data_hora BETWEEN :ini AND :fim
+            ORDER BY data_hora ASC
+        ");
+        $stmtM->execute([
+            ':fid' => $funcId,
+            ':ini' => $dataInicio . ' 00:00:00',
+            ':fim' => $dataFim    . ' 23:59:59'
+        ]);
+        $marcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+
+        // 4. Marcações em falta
+        $stmtMF = $db->prepare("
+            SELECT data, nota_classificacao, estado
+            FROM marcacoes_em_falta
+            WHERE funcionario_id = :fid
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtMF->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $mfList = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+
+        // 5. Justificações
+        $stmtJ = $db->prepare("
+            SELECT data_inicio, data_fim, tipo, estado
+            FROM justificacoes
+            WHERE funcionario_id = :fid
+              AND data_inicio <= :fim AND data_fim >= :ini
+              AND estado = 'aprovada'
+        ");
+        $stmtJ->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
+
+        // Agrupar marcações por dia
+        $marcPorDia = [];
+        foreach ($marcacoes as $m) {
+            $dia = substr($m['data_hora'], 0, 10);
+            $marcPorDia[$dia][] = $m;
+        }
+
+        // Processar dias
+        $dias = [];
+        $atual = strtotime($dataInicio);
+        $fim   = strtotime($dataFim);
+        $totalPresente = 0;
+        $totalAusente  = 0;
+        $totalFM       = 0;
+        $totalMinutos  = 0;
+
+        while ($atual <= $fim) {
+            $dataStr   = date('Y-m-d', $atual);
+            $diaSemana = (int) date('N', $atual);
+            $nomesDias = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
+
+            if ($dataStr < $func['data_admissao']) {
+                $atual = strtotime('+1 day', $atual);
+                continue;
+            }
+
+            $diaInfo = [
+                'data'       => $dataStr,
+                'dia_nome'   => $nomesDias[$diaSemana],
+                'entrada'    => null,
+                'saida'      => null,
+                'intervalo_inicio' => null,
+                'intervalo_fim'    => null,
+                'horas'      => 0,
+                'estado'     => 'ausente',
+                'falta_marcacao' => false
+            ];
+
+            if (isset($feriados[$dataStr])) {
+                $diaInfo['estado'] = 'feriado';
+            } elseif ($diaSemana >= 6) {
+                $diaInfo['estado'] = 'fim_semana';
+            }
+
+            // Processar marcações
+            $mDia = $marcPorDia[$dataStr] ?? [];
+            $entrada = null; $saida = null; $intIni = null; $intFim = null;
+            $minutosIntervalo = 0;
+
+            foreach ($mDia as $m) {
+                $ts = strtotime($m['data_hora']);
+                $h  = date('H:i', $ts);
+                switch ($m['tipo']) {
+                    case 'entrada': $entrada = $ts; $diaInfo['entrada'] = $h; break;
+                    case 'saida':   $saida   = $ts; $diaInfo['saida']   = $h; break;
+                    case 'inicio_intervalo': $intIni = $ts; $diaInfo['intervalo_inicio'] = $h; break;
+                    case 'fim_intervalo':    $intFim = $ts; $diaInfo['intervalo_fim']    = $h;
+                        if ($intIni) $minutosIntervalo += (int)round(($ts - $intIni)/60);
+                        break;
+                }
+            }
+
+            if ($entrada) {
+                $diaInfo['estado'] = 'presente';
+                $totalPresente++;
+                $saidaCalc = $saida ?? $entrada;
+                $minutos = (int)round(($saidaCalc - $entrada)/60) - $minutosIntervalo;
+                $diaInfo['horas'] = round($minutos/60, 2);
+                $totalMinutos += $minutos;
+            } elseif ($diaInfo['estado'] === 'ausente') {
+                // Verificar justificação
+                foreach ($justificacoes as $j) {
+                    if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim']) {
+                        $diaInfo['estado'] = 'justificado (' . $j['tipo'] . ')';
+                        break;
+                    }
+                }
+                if ($diaInfo['estado'] === 'ausente') $totalAusente++;
+            }
+
+            // Verificar FM
+            foreach ($mfList as $mf) {
+                if ($mf['data'] === $dataStr) {
+                    $diaInfo['falta_marcacao'] = true;
+                    $diaInfo['estado'] = 'fm';
+                    $totalFM++;
+                    $nota = mb_strtolower($mf['nota_classificacao'] ?? '');
+                    if (str_contains($nota, 'entrada')) $diaInfo['entrada'] = 'FM';
+                    if (str_contains($nota, 'saída') || str_contains($nota, 'saida')) $diaInfo['saida'] = 'FM';
+                    break;
+                }
+            }
+
+            $dias[] = $diaInfo;
+            $atual = strtotime('+1 day', $atual);
+        }
+
+        $dados = [
+            'funcionario' => [
+                'nome' => $func['nome_completo'],
+                'numero' => $func['numero_funcionario'],
+                'departamento' => $func['departamento'],
+                'cargo' => $func['cargo'],
+                'data_admissao' => $func['data_admissao']
+            ],
+            'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
+            'resumo' => [
+                'dias_presente' => $totalPresente,
+                'dias_ausente'  => $totalAusente,
+                'dias_fm'       => $totalFM,
+                'total_horas'   => round($totalMinutos/60, 2)
+            ],
+            'dias' => $dias,
+            'legenda' => 'FM = Falta de Marcação'
+        ];
+
+        if ($formato === 'xlsx') {
+            return $this->exportarExcel($dados, 'individual', "relatorio_individual_{$func['numero_funcionario']}", $response);
+        }
+
+        return $this->json(200, $dados);
+    }
+
     public function assiduidade(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+
         $params    = $request->getQueryParams();
         $dataInicio = $params['data_inicio'] ?? date('Y-m-01');
         $dataFim    = $params['data_fim']    ?? date('Y-m-t');
@@ -58,8 +266,9 @@ class RelatorioController
         $bindFuncs  = [];
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid)';
+            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
             $bindFuncs[':sid'] = (int) $user->funcionario_id;
+            $bindFuncs[':sid_self'] = (int) $user->funcionario_id;
         }
 
         if ($funcId)     { $whereFuncs[] = 'f.id = :fid'; $bindFuncs[':fid'] = $funcId; }
@@ -111,12 +320,22 @@ class RelatorioController
         ");
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
+        // 4b. Buscar marcações em falta no período
+        $stmtMF = $db->query("
+            SELECT funcionario_id, data, nota_classificacao, estado
+            FROM marcacoes_em_falta
+            WHERE funcionario_id IN ({$inStr})
+              AND data BETWEEN '{$dataInicio}' AND '{$dataFim}'
+        ");
+        $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+
         // 5. Calcular por funcionário
         $resultado = [];
 
         foreach ($funcionarios as $func) {
             $marcFunc = array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']);
             $justFunc = array_filter($justificacoes, fn($j) => $j['funcionario_id'] == $func['id']);
+            $mfFunc   = array_filter($marcacoesFalta, fn($mf) => $mf['funcionario_id'] == $func['id']);
 
             // Agrupar marcações por dia
             $marcPorDia = [];
@@ -151,7 +370,33 @@ class RelatorioController
                     'dia_semana' => $diaSemana,
                     'tipo'      => '',
                     'marcacoes' => $marcPorDia[$dataStr] ?? [],
+                    'hora_entrada' => null,
+                    'hora_saida'   => null,
+                    'tem_falta_marcacao' => false
                 ];
+
+                // Extrair entrada/saída das marcações para facilitar o frontend
+                if (!empty($diaInfo['marcacoes'])) {
+                    foreach ($diaInfo['marcacoes'] as $m) {
+                        if ($m['tipo'] === 'entrada' && !$diaInfo['hora_entrada']) {
+                            $diaInfo['hora_entrada'] = substr(explode(' ', $m['data_hora'])[1], 0, 5);
+                        }
+                        if ($m['tipo'] === 'saida') {
+                            $diaInfo['hora_saida'] = substr(explode(' ', $m['data_hora'])[1], 0, 5);
+                        }
+                    }
+                }
+
+                // Verificar se há marcação em falta detectada
+                foreach ($mfFunc as $mf) {
+                    if ($mf['data'] === $dataStr) {
+                        $diaInfo['tem_falta_marcacao'] = true;
+                        $nota = mb_strtolower($mf['nota_classificacao'] ?? '');
+                        if (str_contains($nota, 'entrada')) $diaInfo['hora_entrada'] = 'FM';
+                        if (str_contains($nota, 'saída') || str_contains($nota, 'saida')) $diaInfo['hora_saida'] = 'FM';
+                        break;
+                    }
+                }
 
                 if ($diaSemana >= 6) {
                     $diaInfo['tipo'] = 'fim_semana';
@@ -223,6 +468,9 @@ class RelatorioController
      */
     public function horas(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+
         $params     = $request->getQueryParams();
         $dataInicio = $params['data_inicio'] ?? date('Y-m-01');
         $dataFim    = $params['data_fim']    ?? date('Y-m-t');
@@ -236,8 +484,9 @@ class RelatorioController
         $nomeSearchH = !empty($params['search'])  ? $params['search']  : null;
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid)';
+            $whereFuncs[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
             $bindFuncs[':sid'] = (int) $user->funcionario_id;
+            $bindFuncs[':sid_self'] = (int) $user->funcionario_id;
         }
 
         if ($funcId)      { $whereFuncs[] = 'f.id = :fid'; $bindFuncs[':fid'] = $funcId; }
@@ -281,10 +530,20 @@ class RelatorioController
         ");
         $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
+        // Buscar marcações em falta no período
+        $stmtMF = $db->query("
+            SELECT funcionario_id, data, nota_classificacao, estado
+            FROM marcacoes_em_falta
+            WHERE funcionario_id IN ({$inStr})
+              AND data BETWEEN '{$dataInicio}' AND '{$dataFim}'
+        ");
+        $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+
         $resultado = [];
 
         foreach ($funcionarios as $func) {
             $marcFunc   = array_values(array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']));
+            $mfFunc     = array_filter($marcacoesFalta, fn($mf) => $mf['funcionario_id'] == $func['id']);
             $marcPorDia = [];
             foreach ($marcFunc as $m) {
                 $dia = substr($m['data_hora'], 0, 10);
@@ -353,10 +612,25 @@ class RelatorioController
                 $totalMinutosSaidaAnt  += $saidaAntMin;
                 $totalDiasPresente++;
 
+                $hEntrada = $entrada ? date('H:i', $entrada) : null;
+                $hSaida   = $saida   ? date('H:i', $saida)   : null;
+                $temFM    = false;
+
+                foreach ($mfFunc as $mf) {
+                    if ($mf['data'] === $dia) {
+                        $temFM = true;
+                        $nota = mb_strtolower($mf['nota_classificacao'] ?? '');
+                        if (str_contains($nota, 'entrada')) $hEntrada = 'FM';
+                        if (str_contains($nota, 'saída') || str_contains($nota, 'saida')) $hSaida = 'FM';
+                        break;
+                    }
+                }
+
                 $detalhesDia[] = [
                     'data'                => $dia,
-                    'entrada'             => $entrada ? date('H:i', $entrada) : null,
-                    'saida'               => $saida   ? date('H:i', $saida)   : null,
+                    'entrada'             => $hEntrada,
+                    'saida'               => $hSaida,
+                    'tem_falta_marcacao'  => $temFM,
                     'minutos_intervalo'   => $minutosIntervalo,
                     'minutos_trabalhados' => $minutosTrabalhados,
                     'minutos_esperados'   => $minutosEsperados,
@@ -448,11 +722,143 @@ class RelatorioController
 
         $filename = "relatorio_{$tipo}_{$periodo['inicio']}_{$periodo['fim']}";
 
+        if ($formato === 'xlsx') {
+            return $this->exportarExcel($body, $tipo, $filename, $response);
+        }
+
         if ($formato === 'csv') {
             return $this->exportarCSV($dados, $tipo, $filename, $response);
         }
 
         return $dadosResponse;
+    }
+
+    private function exportarExcel(array $dados, string $tipo, string $filename, ResponseInterface $response): ResponseInterface
+    {
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $headerStyle = [
+            'font' => ['bold' => true],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'CCCCCC']
+            ]
+        ];
+
+        $fmStyle = [
+            'font' => ['bold' => true],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => 'FFFF00']
+            ]
+        ];
+
+        if ($tipo === 'assiduidade') {
+            $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'Dias Úteis', 'Presentes', 'Ausentes', 'Justificados', 'Feriados', 'Taxa Presença (%)'], NULL, 'A1');
+            $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
+
+            $row = 2;
+            foreach ($dados['dados'] as $r) {
+                $s = $r['resumo'];
+                $sheet->fromArray([
+                    $r['funcionario']['numero'],
+                    $r['funcionario']['nome'],
+                    $r['funcionario']['departamento'] ?? '',
+                    $s['dias_uteis'],
+                    $s['dias_presente'],
+                    $s['dias_ausente'],
+                    $s['dias_justificados'],
+                    $s['dias_feriado'],
+                    $s['taxa_presenca'],
+                ], NULL, 'A' . $row);
+                $row++;
+            }
+        } elseif ($tipo === 'horas') {
+            $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'H. Efectivas', 'H. Esperadas', 'H. Extra', 'H. Défice', 'Atrasos (min)', 'Saldo (h)'], NULL, 'A1');
+            $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
+
+            $row = 2;
+            foreach ($dados['dados'] as $r) {
+                $s = $r['resumo'];
+                $sheet->fromArray([
+                    $r['funcionario']['numero'],
+                    $r['funcionario']['nome'],
+                    $r['funcionario']['departamento'] ?? '',
+                    $s['horas_efectivas'],
+                    $s['horas_esperadas'],
+                    $s['horas_extra'],
+                    $s['horas_deficit'],
+                    $s['minutos_atraso_total'],
+                    $s['saldo_horas'],
+                ], NULL, 'A' . $row);
+                $row++;
+            }
+        } elseif ($tipo === 'individual') {
+            $f = $dados['funcionario'];
+            $sheet->setCellValue('A1', 'Relatório Individual de Assiduidade');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+            $sheet->setCellValue('A3', 'Funcionário:'); $sheet->setCellValue('B3', $f['nome']);
+            $sheet->setCellValue('A4', 'Número:');      $sheet->setCellValue('B4', $f['numero']);
+            $sheet->setCellValue('A5', 'Departamento:'); $sheet->setCellValue('B5', $f['departamento']);
+            $sheet->setCellValue('A6', 'Cargo:');        $sheet->setCellValue('B6', $f['cargo']);
+            $sheet->setCellValue('A7', 'Período:');      $sheet->setCellValue('B7', $dados['periodo']['inicio'] . ' a ' . $dados['periodo']['fim']);
+            $sheet->getStyle('A3:A7')->getFont()->setBold(true);
+
+            $sheet->fromArray(['Data', 'Dia', 'Entrada', 'Saída', 'Iníc. Int.', 'Fim Int.', 'Horas', 'Estado'], NULL, 'A9');
+            $sheet->getStyle('A9:H9')->applyFromArray($headerStyle);
+
+            $row = 10;
+            foreach ($dados['dias'] as $d) {
+                $sheet->setCellValue('A' . $row, $d['data']);
+                $sheet->setCellValue('B' . $row, $d['dia_nome']);
+                $sheet->setCellValue('C' . $row, $d['entrada']);
+                $sheet->setCellValue('D' . $row, $d['saida']);
+                $sheet->setCellValue('E' . $row, $d['intervalo_inicio']);
+                $sheet->setCellValue('F' . $row, $d['intervalo_fim']);
+                $sheet->setCellValue('G' . $row, $d['horas']);
+                $sheet->setCellValue('H' . $row, $d['estado']);
+
+                if ($d['entrada'] === 'FM') $sheet->getStyle('C' . $row)->applyFromArray($fmStyle);
+                if ($d['saida'] === 'FM')   $sheet->getStyle('D' . $row)->applyFromArray($fmStyle);
+
+                $row++;
+            }
+
+            $row++;
+            $sheet->setCellValue('A' . $row, 'Resumo:');
+            $sheet->getStyle('A' . $row)->getFont()->setBold(true);
+            $row++;
+            $sheet->setCellValue('A' . $row, 'Dias Presente:');   $sheet->setCellValue('B' . $row, $dados['resumo']['dias_presente']);
+            $sheet->setCellValue('A' . ($row+1), 'Dias Ausente:'); $sheet->setCellValue('B' . ($row+1), $dados['resumo']['dias_ausente']);
+            $sheet->setCellValue('A' . ($row+2), 'Dias FM:');      $sheet->setCellValue('B' . ($row+2), $dados['resumo']['dias_fm']);
+            $sheet->setCellValue('A' . ($row+3), 'Total Horas:');  $sheet->setCellValue('B' . ($row+3), $dados['resumo']['total_horas']);
+            $sheet->getStyle('A'.$row.':A'.($row+3))->getFont()->setBold(true);
+
+            $row += 5;
+            $sheet->setCellValue('A' . $row, $dados['legenda']);
+            $sheet->getStyle('A' . $row)->getFont()->setItalic(true);
+        }
+
+        foreach (range('A', ($tipo === 'individual' ? 'H' : 'I')) as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $tempFile = tempnam(sys_get_temp_dir(), 'excel');
+        $writer->save($tempFile);
+
+        $stream = fopen($tempFile, 'r+');
+        $resp = new Response(200);
+        $resp->getBody()->write(fread($stream, filesize($tempFile)));
+        fclose($stream);
+        unlink($tempFile);
+
+        return $resp
+            ->withHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->withHeader('Content-Disposition', "attachment; filename=\"{$filename}.xlsx\"")
+            ->withHeader('Cache-Control', 'no-cache');
     }
 
     private function exportarCSV(array $dados, string $tipo, string $filename, ResponseInterface $response): ResponseInterface
