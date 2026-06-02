@@ -351,6 +351,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <hr class="sb-divider">
     <div class="sb-section">Sistema</div>
     <button class="nav-item" onclick="nav('periodos')" id="nav-periodos"><span class="ni">◰</span> Períodos mensais</button>
+    <button class="nav-item" onclick="nav('terminais')" id="nav-terminais"><span class="ni">⊙</span> Terminais</button>
     <button class="nav-item" onclick="nav('configs')" id="nav-configs"><span class="ni">◎</span> Configurações</button>
 
     <div class="sb-user">
@@ -510,6 +511,32 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div><div class="page-title">Períodos mensais</div><div class="page-sub">Fecho bloqueia edição de marcações</div></div>
       </div>
       <div id="periodosContent"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- TERMINAIS -->
+    <div class="page" id="page-terminais">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Terminais</div>
+          <div class="page-sub">Relógios ZKTeco · Grupos de segurança · Estado de ligação</div>
+        </div>
+        <button class="btn btn-accent" id="btnNovoTerminal" onclick="abrirModalTerminal()">+ Novo terminal</button>
+      </div>
+      <div class="card">
+        <div class="card-head"><div class="card-title">Terminais registados</div></div>
+        <div id="terminaisTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+      <div class="card" id="terminalDetalhe" style="display:none">
+        <div class="card-head">
+          <div class="card-title" id="terminalDetalheNome">—</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btnPingTerminal" onclick="pingTerminal()">⚡ Testar ligação</button>
+            <button class="btn" onclick="abrirModalAssociarDep()">+ Associar departamento</button>
+          </div>
+        </div>
+        <div id="terminalDepsLista"></div>
+        <div id="terminalPingResult" style="margin-top:12px"></div>
+      </div>
     </div>
 
     <!-- CONFIGURAÇÕES -->
@@ -918,6 +945,64 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   </div>
 </div>
 
+<!-- MODAL TERMINAL -->
+<div class="overlay" id="modalTerminal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTerminalTitle">Novo terminal</h3>
+      <button class="modal-close" onclick="fecharModal('modalTerminal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="termId">
+      <div class="form-group"><label>Nome *</label><input id="termNome" placeholder="Ex: Entrada Principal"></div>
+      <div class="form-group"><label>Localização</label><input id="termLocal" placeholder="Ex: Receção"></div>
+      <div class="form-group"><label>Descrição</label><textarea id="termDesc" rows="2"></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>IP *</label><input id="termIp" placeholder="192.168.1.100"></div>
+        <div class="form-group"><label>Porta</label><input type="number" id="termPorta" value="4370"></div>
+      </div>
+      <div class="form-group">
+        <label>Modelo</label>
+        <select id="termModelo">
+          <option value="zkteco">ZKTeco</option>
+          <option value="facepro">FacePro</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Departamento por defeito</label><select id="termDepDefault"><option value="">Nenhum</option></select></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalTerminal')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarTerminal()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE ASSOCIAÇÃO DE DEPARTAMENTO -->
+<div class="overlay" id="modalAssociarDep">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Associar departamento</h3>
+      <button class="modal-close" onclick="fecharModal('modalAssociarDep')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="assocTermId">
+      <div class="form-group">
+        <label>Departamento *</label>
+        <select id="assocDepId"></select>
+      </div>
+      <p style="font-size:12px;color:var(--muted2);margin-top:8px">
+        Se o terminal não tiver departamentos associados, aceita marcações de todos os funcionários.
+        Ao associar pelo menos um departamento, apenas funcionários desse(s) departamento(s) podem marcar presença neste terminal.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAssociarDep')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarAssociacaoDep()">Associar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ACESSO PORTAL -->
 <div class="overlay" id="modalAcessoPortal">
   <div class="modal" style="max-width:420px">
@@ -1113,6 +1198,7 @@ function applyPermissions() {
   hide('nav-turnos', p === 'supervisor');
   hide('nav-escalas', p === 'supervisor');
   hide('nav-periodos', p === 'supervisor');
+  hide('nav-terminais', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
   hide('nav-configs', p !== 'super_admin_tenant');
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
 
@@ -1123,6 +1209,7 @@ function applyPermissions() {
   hide('btnNovaEscala', ['rh_colaborador', 'supervisor'].includes(p));
   hide('btnGuardarConfigs', p !== 'super_admin_tenant');
   hide('btnNovoCargo', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('btnNovoTerminal', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
 
   if (p === 'supervisor') {
       sections.forEach((s, i) => { if (i >= 2) s.style.display = 'none'; });
@@ -1146,7 +1233,7 @@ function nav(page) {
     dashboard: loadDashboard, presenca: loadPresenca,
     marcacoes: loadMarcacoes, 'marcacoes-falta': carregarMarcacoesFalta, funcionarios: loadFuncionarios,
     ferias: loadFerias, departamentos: loadDepartamentos,
-    horarios: loadHorarios, periodos: loadPeriodos, configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
+    horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais, configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
   };
   loaders[page]?.();
 }
@@ -1788,6 +1875,172 @@ async function guardarConfigs() {
     if (res.erro) throw new Error(res.mensagem);
     toast('Configurações guardadas com sucesso.','ok');
   } catch(e) { toast(e.message,'err'); }
+}
+
+// ── TERMINAIS ──
+let _terminais = [];
+async function carregarTerminais() {
+  const el = document.getElementById('terminaisTable');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/terminais');
+    _terminais = res.dados || [];
+    const rows = _terminais.map(t => `<tr>
+      <td><strong>${t.nome}</strong></td>
+      <td>${t.localizacao || '—'}</td>
+      <td><span style="font-family:var(--mono)">${t.ip}:${t.porta}</span></td>
+      <td>${t.modelo}</td>
+      <td><span class="badge badge-${t.online ? 'green' : 'gray'}">${t.online ? 'Online' : 'Offline'}</span></td>
+      <td><small style="color:var(--muted2)">${t.ultimo_heartbeat || 'Nunca'}</small></td>
+      <td>
+        <button class="btn btn-sm" onclick="verDetalheTerminal(${t.id})">Detalhe</button>
+        <button class="btn btn-sm" onclick="abrirModalTerminal(${t.id})">Editar</button>
+      </td>
+    </tr>`).join('');
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Nome</th><th>Localização</th><th>IP:Porta</th><th>Modelo</th><th>Estado</th><th>Último Heartbeat</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" class="empty">Nenhum terminal registado.</td></tr>'}</tbody>
+    </table>`;
+  } catch (e) { el.innerHTML = '<div class="empty">Erro ao carregar terminais.</div>'; }
+}
+
+async function abrirModalTerminal(id = null) {
+  const isRestricted = ['rh_colaborador', 'supervisor', 'funcionario'].includes(USER.perfil);
+  if (isRestricted) return;
+
+  document.getElementById('termId').value = id || '';
+  document.getElementById('modalTerminalTitle').textContent = id ? 'Editar terminal' : 'Novo terminal';
+
+  // Popular select de departamentos
+  try {
+    const res = await api('GET', '/api/departamentos');
+    const sel = document.getElementById('termDepDefault');
+    sel.innerHTML = '<option value="">Nenhum</option>' + (res.dados || []).map(d => `<option value="${d.id}">${d.nome}</option>`).join('');
+  } catch (_) { }
+
+  if (id) {
+    const t = _terminais.find(x => x.id === id);
+    if (t) {
+      document.getElementById('termNome').value = t.nome || '';
+      document.getElementById('termLocal').value = t.localizacao || '';
+      document.getElementById('termDesc').value = t.descricao || '';
+      document.getElementById('termIp').value = t.ip || '';
+      document.getElementById('termPorta').value = t.porta || 4370;
+      document.getElementById('termModelo').value = t.modelo || 'zkteco';
+      document.getElementById('termDepDefault').value = t.default_departamento_id || '';
+    }
+  } else {
+    document.getElementById('termNome').value = '';
+    document.getElementById('termLocal').value = '';
+    document.getElementById('termDesc').value = '';
+    document.getElementById('termIp').value = '';
+    document.getElementById('termPorta').value = 4370;
+    document.getElementById('termModelo').value = 'zkteco';
+    document.getElementById('termDepDefault').value = '';
+  }
+  document.getElementById('modalTerminal').classList.add('open');
+}
+
+async function guardarTerminal() {
+  const id = document.getElementById('termId').value;
+  const payload = {
+    nome: document.getElementById('termNome').value.trim(),
+    localizacao: document.getElementById('termLocal').value.trim(),
+    descricao: document.getElementById('termDesc').value.trim(),
+    ip: document.getElementById('termIp').value.trim(),
+    porta: parseInt(document.getElementById('termPorta').value),
+    modelo: document.getElementById('termModelo').value,
+    default_departamento_id: document.getElementById('termDepDefault').value || null
+  };
+
+  if (!payload.nome || !payload.ip) { toast('Nome e IP são obrigatórios.', 'err'); return; }
+
+  try {
+    const res = id ? await api('PUT', `/api/terminais/${id}`, payload) : await api('POST', '/api/terminais', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Terminal guardado com sucesso.', 'ok');
+    fecharModal('modalTerminal');
+    carregarTerminais();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function verDetalheTerminal(id) {
+  try {
+    const res = await api('GET', `/api/terminais/${id}`);
+    const t = res.dados;
+    document.getElementById('terminalDetalheNome').textContent = t.nome;
+    document.getElementById('assocTermId').value = t.id;
+    document.getElementById('terminalPingResult').innerHTML = '';
+
+    const deps = t.departamentos || [];
+    let depsHtml = '<div style="margin-top:20px"><div class="card-title">Departamentos Autorizados</div>';
+    depsHtml += `<table class="tbl" style="margin-top:12px"><thead><tr><th>Departamento</th><th>Acções</th></tr></thead><tbody>`;
+    depsHtml += deps.map(d => `<tr>
+      <td><strong>${d.nome}</strong></td>
+      <td><button class="btn btn-sm btn-danger" onclick="removerAssociacaoDep(${t.id}, ${d.id})">Remover</button></td>
+    </tr>`).join('');
+    depsHtml += (deps.length ? '' : '<tr><td colspan="2" class="empty">Sem restrições. Todos os funcionários podem marcar ponto.</td></tr>') + '</tbody></table></div>';
+
+    document.getElementById('terminalDepsLista').innerHTML = depsHtml;
+    document.getElementById('terminalDetalhe').style.display = 'block';
+    document.getElementById('terminalDetalhe').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { toast('Erro ao carregar detalhes: ' + e.message, 'err'); }
+}
+
+async function pingTerminal() {
+  const id = document.getElementById('assocTermId').value;
+  const out = document.getElementById('terminalPingResult');
+  out.innerHTML = '<span class="spinner"></span> A testar ligação...';
+  try {
+    const res = await api('GET', `/api/terminais/${id}/ping`);
+    out.innerHTML = `<span class="badge badge-${res.online ? 'green' : 'red'}">${res.mensagem}</span> ${res.latencia ? `· Latência: ${res.latencia}` : ''}`;
+  } catch (e) { out.innerHTML = `<span class="badge badge-red">Erro: ${e.message}</span>`; }
+}
+
+async function abrirModalAssociarDep() {
+  const termId = document.getElementById('assocTermId').value;
+  if (!termId) return;
+
+  try {
+    const [resD, resT] = await Promise.all([
+      api('GET', '/api/departamentos'),
+      api('GET', `/api/terminais/${termId}/departamentos`)
+    ]);
+    const todos = resD.dados || [];
+    const jaAssoc = (resT.dados || []).map(d => d.id);
+    const disponiveis = todos.filter(d => !jaAssoc.includes(d.id));
+
+    const sel = document.getElementById('assocDepId');
+    sel.innerHTML = disponiveis.map(d => `<option value="${d.id}">${d.nome}</option>`).join('');
+    if (!disponiveis.length) { toast('Todos os departamentos já estão associados.', 'inf'); return; }
+
+    document.getElementById('modalAssociarDep').classList.add('open');
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function guardarAssociacaoDep() {
+  const termId = document.getElementById('assocTermId').value;
+  const depId = document.getElementById('assocDepId').value;
+  if (!depId) return;
+
+  try {
+    const res = await api('POST', `/api/terminais/${termId}/departamentos`, { departamento_id: parseInt(depId) });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Departamento associado.', 'ok');
+    fecharModal('modalAssociarDep');
+    verDetalheTerminal(termId);
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+async function removerAssociacaoDep(termId, depId) {
+  if (!confirm('Remover esta restrição de departamento?')) return;
+  try {
+    const res = await api('DELETE', `/api/terminais/${termId}/departamentos/${depId}`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Associação removida.', 'ok');
+    verDetalheTerminal(termId);
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 // ── SELECTORES ──

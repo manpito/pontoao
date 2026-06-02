@@ -326,6 +326,34 @@ $group->get('/relatorios/horas/exportar',              [\App\Controllers\Relator
           ->add(AuthMiddleware::role(['super_admin_tenant']));
     $group->post('/periodos/configurar',           [\App\Controllers\PeriodoController::class, 'configurar'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+    // --- Terminais ---
+    $group->get('/terminais',                              [\App\Controllers\TerminalController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->post('/terminais',                             [\App\Controllers\TerminalController::class, 'store'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->get('/terminais/{id}',                        [\App\Controllers\TerminalController::class, 'show'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->put('/terminais/{id}',                        [\App\Controllers\TerminalController::class, 'update'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->delete('/terminais/{id}',                     [\App\Controllers\TerminalController::class, 'destroy'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->get('/terminais/{id}/departamentos',          [\App\Controllers\TerminalController::class, 'listarDepartamentos'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->post('/terminais/{id}/departamentos',          [\App\Controllers\TerminalController::class, 'associarDepartamento'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->delete('/terminais/{id}/departamentos/{dep_id}', [\App\Controllers\TerminalController::class, 'removerDepartamento'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->get('/terminais/{id}/ping',                   [\App\Controllers\TerminalController::class, 'ping'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 })->add(TenantMiddleware::tenantOnly());
 
 // ============================================================
