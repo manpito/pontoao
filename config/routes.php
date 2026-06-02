@@ -173,6 +173,9 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->get('/relatorios/horas',        [\App\Controllers\RelatorioController::class, 'horas'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
+    $group->get('/relatorios/individual/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'individual'])
+          ->add(AuthMiddleware::class);
+
     // --- Férias ---
     $group->get('/ferias',              [\App\Controllers\FeriasController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
