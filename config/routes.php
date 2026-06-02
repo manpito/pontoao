@@ -200,24 +200,49 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->put('/notificacoes/{id}/ler', [\App\Controllers\NotificacaoController::class, 'marcarLida'])
           ->add(AuthMiddleware::class);
 
-    // --- Rotações ---
-    $group->get('/rotacoes',                    [\App\Controllers\RotacaoController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
-
-    $group->post('/rotacoes',                   [\App\Controllers\RotacaoController::class, 'store'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
-    $group->get('/rotacoes/{id}',               [\App\Controllers\RotacaoController::class, 'show'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
-
-    $group->put('/rotacoes/{id}',               [\App\Controllers\RotacaoController::class, 'update'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
-    $group->post('/rotacoes/{id}/atribuir',     [\App\Controllers\RotacaoController::class, 'atribuir'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
-
-    $group->get('/rotacoes/{id}/calendario',    [\App\Controllers\RotacaoController::class, 'calendario'])
+    // --- Turnos ---
+    $group->get("/turnos",                    [\App\Controllers\TurnoController::class, "index"])
           ->add(AuthMiddleware::class);
+
+    $group->post("/turnos",                   [\App\Controllers\TurnoController::class, "store"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->put("/turnos/{id}",               [\App\Controllers\TurnoController::class, "update"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->delete("/turnos/{id}",            [\App\Controllers\TurnoController::class, "destroy"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    // --- Escalas ---
+    $group->get("/escalas",                                 [\App\Controllers\EscalaController::class, "index"])
+          ->add(AuthMiddleware::class);
+
+    $group->post("/escalas",                                [\App\Controllers\EscalaController::class, "store"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->get("/escalas/{id}",                            [\App\Controllers\EscalaController::class, "show"])
+          ->add(AuthMiddleware::class);
+
+    $group->put("/escalas/{id}",                            [\App\Controllers\EscalaController::class, "update"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->delete("/escalas/{id}",                         [\App\Controllers\EscalaController::class, "destroy"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->post("/escalas/{id}/turnos",                    [\App\Controllers\EscalaController::class, "adicionarTurno"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->delete("/escalas/{id}/turnos/{posicao}",        [\App\Controllers\EscalaController::class, "removerTurno"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->get("/escalas/{id}/atribuicoes",                [\App\Controllers\EscalaController::class, "listarAtribuicoes"])
+          ->add(AuthMiddleware::class);
+
+    $group->post("/escalas/{id}/atribuicoes",               [\App\Controllers\EscalaController::class, "atribuir"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
+
+    $group->delete("/escalas/{id}/atribuicoes/{funcionario_id}", [\App\Controllers\EscalaController::class, "removerAtribuicao"])
+          ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
 
     // --- Exportação ---
     $group->get('/exportacao/primavera',        [\App\Controllers\ExportacaoController::class, 'primavera'])
