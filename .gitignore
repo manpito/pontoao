@@ -4,3 +4,4 @@ storage/uploads/
 vendor/
 *.log
 /.phpunit.cache/
+/logs/cron_marcacoes.log
