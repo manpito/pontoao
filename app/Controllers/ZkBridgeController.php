@@ -413,6 +413,25 @@ class ZkBridgeController
             throw new \RuntimeException("Funcionário '{$userId}' não encontrado.");
         }
 
+        // Verificação de grupo de segurança (departamento)
+        $stmtDeps = $db->prepare("SELECT departamento_id FROM relogio_departamentos WHERE relogio_id = :rid");
+        $stmtDeps->execute([':rid' => $relogio['id']]);
+        $depsPermitidos = $stmtDeps->fetchAll(PDO::FETCH_COLUMN);
+
+        if (!empty($depsPermitidos)) {
+            // Se o relógio tem restrições, verificar se o funcionário pertence a um dos departamentos permitidos
+            $stmtF = $db->prepare("SELECT departamento_id FROM funcionarios WHERE id = :fid");
+            $stmtF->execute([':fid' => $func['id']]);
+            $depFunc = $stmtF->fetchColumn();
+
+            if (!in_array($depFunc, $depsPermitidos)) {
+                $timestampLog = date('Y-m-d H:i:s');
+                $logMsg = "[BLOQUEIO] {$timestampLog} Terminal:{$relogio['nome']} Funcionário:{$userId} Departamento:{$depFunc} não autorizado";
+                $this->log($logMsg);
+                return false;
+            }
+        }
+
         // Verificar duplicado (mesmo funcionário, mesmo minuto, mesmo tipo)
         $checkDup = $db->prepare("
             SELECT id FROM marcacoes
