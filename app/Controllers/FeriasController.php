@@ -246,10 +246,43 @@ class FeriasController
                 ':ano'  => $ano,
             ]);
 
+            $this->gerarExcecoesFerias($db, $pedido, (int) $user->sub);
+
             return $this->json(200, ['mensagem' => 'Férias aprovadas com sucesso.']);
         }
 
         return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para esta operação no estado actual do pedido.']);
+    }
+
+    /**
+     * Gera excepções em escala_excepcoes para um período de férias aprovado
+     */
+    private function gerarExcecoesFerias(PDO $db, array $pedido, int $usuarioId): void
+    {
+        $escalaService = new \App\Services\EscalaService($db);
+        $inicio = new \DateTimeImmutable($pedido['data_inicio']);
+        $fim    = new \DateTimeImmutable($pedido['data_fim']);
+
+        $atual = $inicio;
+        while ($atual <= $fim) {
+            $dataStr = $atual->format('Y-m-d');
+            $turno = $escalaService->calcularTurnoEm((int) $pedido['funcionario_id'], $dataStr);
+
+            // Se o funcionário tem turno de trabalho previsto para este dia
+            if ($turno && $turno['tipo'] === 'trabalho') {
+                $stmt = $db->prepare("
+                    INSERT INTO escala_excepcoes (data, funcionario_ausente_id, funcionario_substituto_id, turno_id, motivo, criado_por)
+                    VALUES (:data, :ausente, NULL, :turno, 'ferias', :criado_por)
+                ");
+                $stmt->execute([
+                    ':data'       => $dataStr,
+                    ':ausente'    => $pedido['funcionario_id'],
+                    ':turno'      => $turno['turno_id'],
+                    ':criado_por' => $usuarioId
+                ]);
+            }
+            $atual = $atual->modify('+1 day');
+        }
     }
 
     /**
