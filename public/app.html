@@ -584,12 +584,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="horas">Horas trabalhadas</option>
           <option value="departamento">Por departamento</option>
           <option value="escala">Por escala</option>
+          <option value="marcacoes-diarias">Marcações diárias</option>
         </select>
+        <select class="select-input" id="relFunc" style="display:none"><option value="">Seleccionar funcionário</option></select>
         <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
         <input class="search-input" type="date" id="relFim" style="flex:0;width:160px">
         <select class="select-input" id="relDep"><option value="">Todos os departamentos</option></select>
         <select class="select-input" id="relEscala" style="display:none"><option value="">Seleccionar escala</option></select>
-        <input class="search-input" placeholder="Nº ou nome..." id="relSearch" style="flex:0;width:150px">
+        <input class="search-input" placeholder="Nº funcionário..." id="relNumero" style="flex:0;width:130px">
+        <input class="search-input" placeholder="Nome..." id="relSearch" style="flex:0;width:150px">
         <button class="btn btn-accent" onclick="gerarRelatorio()">Gerar</button>
         <button class="btn" onclick="exportarRelatorio('csv')" title="Exportar CSV">↓ CSV</button>
         <button class="btn" onclick="exportarRelatorio('xlsx')" title="Exportar Excel">↓ Excel</button>
@@ -742,6 +745,22 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div class="form-group"><label>Cargo</label><select id="fCargo"><option value="">— Nenhum —</option></select></div>
         <div class="form-group" style="grid-column:1/-1"><label>Morada</label><input id="fMorada" placeholder="Rua, número, município"></div>
       </div>
+
+      <!-- SECÇÃO ESCALA -->
+      <div id="sectionEscala" style="margin-top:20px;padding-top:20px;border-top:1px dashed var(--border);display:none">
+        <div style="font-weight:600;margin-bottom:12px;font-size:13px;display:flex;justify-content:space-between">
+          <span>Escala e Ciclo</span>
+          <span id="fEscalaActual" style="font-weight:400;color:var(--accent)"></span>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr">
+          <div class="form-group"><label>Atribuir Escala</label><select id="fEscalaSel"><option value="">— Seleccionar —</option></select></div>
+          <div class="form-group"><label>Data Início</label><input type="date" id="fEscalaInicio"></div>
+          <div class="form-group"><label>Posição Inicial</label><input type="number" id="fEscalaPos" min="1" value="1"></div>
+        </div>
+        <div style="text-align:right;margin-top:8px">
+          <button class="btn btn-sm" onclick="atribuirEscalaFunc()">Atribuir escala</button>
+        </div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalFunc')">Cancelar</button>
@@ -794,14 +813,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 <!-- MODAL DEPARTAMENTO -->
 <div class="overlay" id="modalDep">
   <div class="modal" style="max-width:420px">
-    <div class="modal-head"><h3>Novo departamento</h3><button class="modal-close" onclick="fecharModal('modalDep')">✕</button></div>
+    <div class="modal-head"><h3 id="modalDepTitle">Novo departamento</h3><button class="modal-close" onclick="fecharModal('modalDep')">✕</button></div>
     <div class="modal-body">
+      <input type="hidden" id="dId">
       <div class="form-group"><label>Nome *</label><input id="dNome" placeholder="Ex: Recursos Humanos"></div>
       <div class="form-group"><label>Código</label><input id="dCodigo" placeholder="Ex: RH"></div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalDep')">Cancelar</button>
-      <button class="btn btn-accent" onclick="submeterDep()">Criar</button>
+      <button class="btn btn-accent" id="btnGuardarDep" onclick="submeterDep()">Criar</button>
     </div>
   </div>
 </div>
@@ -1424,6 +1444,7 @@ async function loadFuncionarios() {
     const res = await api('GET', '/api/funcionarios');
     _funcionarios = res.dados || [];
     filtrarFuncionarios();
+    if (_editFuncId) carregarEscalaActualFunc(_editFuncId);
   } catch(e) { document.getElementById('funcionariosTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
 }
 
@@ -1447,7 +1468,11 @@ function filtrarFuncionarios() {
     <td><span class="badge badge-${f.estado==='activo'?'green':f.estado==='suspenso'?'warn':'gray'}">${f.estado}</span></td>
     <td>
       ${p === 'supervisor' ? '' : `<button class="btn btn-sm" onclick="editarFunc(${f.id})">${p === 'rh_colaborador' ? 'Ver' : 'Editar'}</button>`}
-      ${p === 'super_admin_tenant' || p === 'rh_manager' ? (f.estado!=='desligado' ? `<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>` : '') : ''}
+      ${p === 'super_admin_tenant' || p === 'rh_manager' ? `
+        ${f.estado === 'activo' ? `<button class="btn btn-sm" style="background:var(--warn);color:white" onclick="suspenderFunc(${f.id},'${f.nome_completo}')">Suspender</button>` : ''}
+        ${f.estado === 'suspenso' || f.estado === 'desligado' ? `<button class="btn btn-sm" style="background:var(--accent);color:white" onclick="reactivarFunc(${f.id},'${f.nome_completo}')">Reactivar</button>` : ''}
+        ${f.estado !== 'desligado' ? `<button class="btn btn-sm btn-danger" onclick="desligarFunc(${f.id},'${f.nome_completo}')">Desligar</button>` : ''}
+      ` : ''}
     </td>
   </tr>`).join('');
   document.getElementById('funcionariosTable').innerHTML = `<table class="tbl">
@@ -1461,6 +1486,7 @@ function abrirModalFunc(id) {
   if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
   hide('btnAcessoPortal', isRestricted);
   hide('btnGuardarFunc', isRestricted);
+  hide('sectionEscala', true);
 
   _editFuncId = id || null;
   document.getElementById('modalFuncTitle').textContent = id ? (isRestricted ? 'Ver funcionario' : 'Editar funcionario') : 'Novo funcionario';
@@ -1504,7 +1530,55 @@ function editarFunc(id) {
   document.getElementById('fTelefone').value   = f.telefone || '';
   document.getElementById('fDep').value        = f.departamento_id || '';
   document.getElementById('fCargo').value      = f.cargo_id || '';
+
+  // Carregar dados da escala
+  const canManageEscala = USER.perfil === 'super_admin_tenant' || USER.perfil === 'rh_manager';
+  if (canManageEscala) {
+    document.getElementById('sectionEscala').style.display = 'block';
+    popularEscalasFunc();
+    carregarEscalaActualFunc(id);
+  }
+
   document.getElementById('modalFunc').classList.add('open');
+}
+
+async function popularEscalasFunc() {
+  const sel = document.getElementById('fEscalaSel');
+  if (sel.options.length > 1) return;
+  try {
+    const res = await api('GET', '/api/escalas');
+    sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+      (res.dados||[]).map(e => `<option value="${e.id}">${e.nome}</option>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function carregarEscalaActualFunc(funcId) {
+  const info = document.getElementById('fEscalaActual');
+  const f = _funcionarios.find(x => x.id == funcId);
+  if (f && f.escala_nome) {
+    info.textContent = `Actual: ${f.escala_nome} (Início: ${f.escala_data_inicio})`;
+  } else {
+    info.textContent = 'Sem escala atribuída';
+  }
+}
+
+async function atribuirEscalaFunc() {
+  const escalaId = document.getElementById('fEscalaSel').value;
+  const dataIni  = document.getElementById('fEscalaInicio').value;
+  const pos      = document.getElementById('fEscalaPos').value;
+
+  if (!escalaId || !dataIni) { toast('Seleccione a escala e a data de início.','err'); return; }
+
+  try {
+    const res = await api('POST', `/api/escalas/${escalaId}/atribuicoes`, {
+      funcionario_id: _editFuncId,
+      data_inicio: dataIni,
+      posicao_inicial: parseInt(pos) || 1
+    });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFuncionarios(); // Recarregar para ter os dados da nova escala via query f.id
+  } catch(e) { toast(e.message,'err'); }
 }
 async function submeterFunc() {
   const payload = {
@@ -1543,6 +1617,26 @@ async function desligarFunc(id, nome) {
   if (!confirm(`Confirma o desligamento de "${nome}"?\n\nEsta acção regista a data de saída mas mantém o histórico.`)) return;
   try {
     const res = await api('DELETE', `/api/funcionarios/${id}`, { motivo: 'Desligamento registado pelo gestor.' });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFuncionarios();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function suspenderFunc(id, nome) {
+  if (!confirm(`Confirmar suspensão de "${nome}"?`)) return;
+  try {
+    const res = await api('POST', `/api/funcionarios/${id}/suspender`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem,'ok');
+    loadFuncionarios();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+async function reactivarFunc(id, nome) {
+  if (!confirm(`Reactivar funcionário "${nome}"?`)) return;
+  try {
+    const res = await api('POST', `/api/funcionarios/${id}/reactivar`);
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok');
     loadFuncionarios();
@@ -1700,21 +1794,44 @@ async function loadDepartamentos() {
       <td><span style="font-family:var(--mono);color:var(--muted2)">${d.codigo||'—'}</span></td>
       <td>${d.total_funcionarios}</td>
       <td><span class="badge badge-${d.activo?'green':'gray'}">${d.activo?'Activo':'Inactivo'}</span></td>
+      <td>
+        <button class="btn btn-sm" onclick="abrirModalEditarDep(${d.id}, '${d.nome.replace(/'/g, "\\'")}', '${(d.codigo||'').replace(/'/g, "\\'")}')">Editar</button>
+      </td>
     </tr>`).join('');
     document.getElementById('depTable').innerHTML = `<table class="tbl">
-      <thead><tr><th>Nome</th><th>Código</th><th>Funcionários</th><th>Estado</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="4" class="empty">Sem departamentos.</td></tr>'}</tbody>
+      <thead><tr><th>Nome</th><th>Código</th><th>Funcionários</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="5" class="empty">Sem departamentos.</td></tr>'}</tbody>
     </table>`;
   } catch(e) { document.getElementById('depTable').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
 }
 
-function abrirModalDep() { document.getElementById('dNome').value=''; document.getElementById('dCodigo').value=''; document.getElementById('modalDep').classList.add('open'); }
+function abrirModalDep() {
+  document.getElementById('dId').value = '';
+  document.getElementById('dNome').value = '';
+  document.getElementById('dCodigo').value = '';
+  document.getElementById('modalDepTitle').textContent = 'Novo departamento';
+  document.getElementById('btnGuardarDep').textContent = 'Criar';
+  document.getElementById('modalDep').classList.add('open');
+}
+
+function abrirModalEditarDep(id, nome, codigo) {
+  document.getElementById('dId').value = id;
+  document.getElementById('dNome').value = nome;
+  document.getElementById('dCodigo').value = codigo;
+  document.getElementById('modalDepTitle').textContent = 'Editar departamento';
+  document.getElementById('btnGuardarDep').textContent = 'Guardar';
+  document.getElementById('modalDep').classList.add('open');
+}
 
 async function submeterDep() {
+  const id   = document.getElementById('dId').value;
   const nome = document.getElementById('dNome').value.trim();
+  const cod  = document.getElementById('dCodigo').value.trim() || null;
   if (!nome) { toast('O nome é obrigatório.','err'); return; }
   try {
-    const res = await api('POST', '/api/departamentos', { nome, codigo: document.getElementById('dCodigo').value||null });
+    const method = id ? 'PUT' : 'POST';
+    const url    = id ? `/api/departamentos/${id}` : '/api/departamentos';
+    const res    = await api(method, url, { nome, codigo: cod });
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok'); fecharModal('modalDep'); loadDepartamentos(); carregarSelectores();
   applyPermissions();
@@ -2342,20 +2459,25 @@ async function gerarRelatorio() {
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
   const dep    = document.getElementById('relDep')?.value || '';
   const escala = document.getElementById('relEscala')?.value || '';
+  const funcId = document.getElementById('relFunc')?.value || '';
+  const numero = document.getElementById('relNumero')?.value?.trim() || '';
   const search = document.getElementById('relSearch')?.value?.trim() || '';
   const out    = document.getElementById('relatorioOutput');
 
   if (tipo === 'departamento' && !dep) { toast('Seleccione um departamento.','err'); return; }
   if (tipo === 'escala' && !escala) { toast('Seleccione uma escala.','err'); return; }
+  if (tipo === 'marcacoes-diarias' && !funcId) { toast('Seleccione um funcionário.','err'); return; }
 
   out.innerHTML = '<div class="empty"><span class="spinner"></span> A gerar relatório...</div>';
 
   let url = `/api/relatorios/${tipo}?data_inicio=${inicio}&data_fim=${fim}`;
   if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?inicio=${inicio}&fim=${fim}`;
   if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?inicio=${inicio}&fim=${fim}`;
+  if (tipo === 'marcacoes-diarias') url = `/api/relatorios/marcacoes-diarias/${funcId}?inicio=${inicio}&fim=${fim}`;
 
   if (tipo === 'assiduidade' || tipo === 'horas') {
     if (dep)    url += `&departamento_id=${dep}`;
+    if (numero) url += `&numero=${encodeURIComponent(numero)}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
   }
 
@@ -2411,6 +2533,21 @@ async function gerarRelatorio() {
       headers = '<tr><th>Funcionário</th><th>Departamento</th><th>Presenças</th><th>Faltas</th><th>FM</th></tr>';
       cardTitle = `Assiduidade por Escala: ${res.cabecalho?.escala}`;
       info = `${inicio} → ${fim} · ${res.dados?.length || 0} funcionário(s)`;
+    } else if (tipo === 'marcacoes-diarias') {
+      const f = res.funcionario;
+      cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
+      headers = '<tr><th>Data</th><th>Dia</th><th>Hora</th><th>Tipo</th><th>Origem</th></tr>';
+      rows = (res.dias||[]).map(d => {
+        if (!d.marcacoes.length) return `<tr><td>${d.data}</td><td>${d.dia_semana}</td><td colspan="3" class="empty">Sem marcações</td></tr>`;
+        return d.marcacoes.map((m, idx) => `<tr>
+          <td>${idx === 0 ? d.data : ''}</td>
+          <td>${idx === 0 ? d.dia_semana : ''}</td>
+          <td style="font-family:var(--mono)">${m.hora}</td>
+          <td><span class="badge ${m.tipo.startsWith('ENTRADA')?'badge-green':m.tipo.startsWith('SAÍDA')?'badge-red':'badge-blue'}">${m.tipo}</span></td>
+          <td style="font-size:11px;color:var(--muted2)">${m.origem}</td>
+        </tr>`).join('') + `<tr style="background:var(--bg-alt);font-size:11px"><td colspan="2"></td><td colspan="3"><strong>Resumo:</strong> Ent: ${d.resumo.primeira_entrada||'--:--'} | Sai: ${d.resumo.ultima_saida||'--:--'} | Total: ${d.resumo.total_horas}h</td></tr>`;
+      }).join('');
+      info = `Período: ${res.periodo.inicio} a ${res.periodo.fim}`;
     }
 
     out.innerHTML = `<div class="card">
@@ -3040,14 +3177,18 @@ async function exportarRelatorio(formato) {
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
   const dep    = document.getElementById('relDep')?.value || '';
   const escala = document.getElementById('relEscala')?.value || '';
+  const funcId = document.getElementById('relFunc')?.value || '';
+  const numero = document.getElementById('relNumero')?.value?.trim() || '';
   const search = document.getElementById('relSearch')?.value?.trim() || '';
 
   let url = `/api/relatorios/${tipo}/exportar?formato=${formato}&data_inicio=${inicio}&data_fim=${fim}`;
   if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
   if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
+  if (tipo === 'marcacoes-diarias') url = `/api/relatorios/marcacoes-diarias/${funcId}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
 
   if (tipo === 'assiduidade' || tipo === 'horas') {
     if (dep)    url += `&departamento_id=${dep}`;
+    if (numero) url += `&numero=${encodeURIComponent(numero)}`;
     if (search) url += `&search=${encodeURIComponent(search)}`;
   }
   downloadApi(url, `relatorio_${tipo}_${inicio}_${fim}.${formato}`);
@@ -3057,22 +3198,53 @@ function toggleRelatorioSelects() {
   const tipo = document.getElementById('relTipo').value;
   const relDep = document.getElementById('relDep');
   const relEscala = document.getElementById('relEscala');
+  const relFunc = document.getElementById('relFunc');
+  const relNumero = document.getElementById('relNumero');
   const relSearch = document.getElementById('relSearch');
 
   if (tipo === 'escala') {
     relDep.style.display = 'none';
     relEscala.style.display = 'inline-block';
+    relFunc.style.display = 'none';
+    relNumero.style.display = 'none';
     relSearch.style.display = 'none';
     popularEscalasRelatorio();
   } else if (tipo === 'departamento') {
     relDep.style.display = 'inline-block';
     relEscala.style.display = 'none';
+    relFunc.style.display = 'none';
+    relNumero.style.display = 'none';
     relSearch.style.display = 'none';
+  } else if (tipo === 'individual') {
+    relDep.style.display = 'none';
+    relEscala.style.display = 'none';
+    relFunc.style.display = 'none';
+    relNumero.style.display = 'none';
+    relSearch.style.display = 'none';
+  } else if (tipo === 'marcacoes-diarias') {
+    relDep.style.display = 'none';
+    relEscala.style.display = 'none';
+    relFunc.style.display = 'inline-block';
+    relNumero.style.display = 'none';
+    relSearch.style.display = 'none';
+    popularFuncionariosRelatorio();
   } else {
     relDep.style.display = 'inline-block';
     relEscala.style.display = 'none';
+    relFunc.style.display = 'none';
+    relNumero.style.display = 'inline-block';
     relSearch.style.display = 'inline-block';
   }
+}
+
+async function popularFuncionariosRelatorio() {
+  const sel = document.getElementById('relFunc');
+  if (sel.options.length > 1) return;
+  try {
+    const res = await api('GET', '/api/funcionarios');
+    sel.innerHTML = '<option value="">Seleccionar funcionário</option>' +
+      (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
+  } catch(e) { toast(e.message,'err'); }
 }
 
 async function popularEscalasRelatorio() {

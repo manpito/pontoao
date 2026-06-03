@@ -98,6 +98,12 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->delete('/funcionarios/{id}',[\App\Controllers\FuncionarioController::class, 'destroy'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));
 
+    $group->post('/funcionarios/{id}/suspender', [\App\Controllers\FuncionarioController::class, 'suspender'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/funcionarios/{id}/reactivar', [\App\Controllers\FuncionarioController::class, 'reactivar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
 
     // --- Cargos ---
     $group->get('/cargos',            [CargoController::class, 'index'])
@@ -181,6 +187,9 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
     $group->get('/relatorios/individual/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'individual'])
+          ->add(AuthMiddleware::class);
+
+    $group->get('/relatorios/marcacoes-diarias/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'marcacoesDiarias'])
           ->add(AuthMiddleware::class);
 
     // --- Férias ---

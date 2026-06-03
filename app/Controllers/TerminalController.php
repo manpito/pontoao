@@ -31,10 +31,10 @@ class TerminalController
         ");
         $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Adicionar estado online/offline baseado no último heartbeat (5 min)
+        // Adicionar estado online/offline baseado no último heartbeat (2 horas)
         foreach ($dados as &$d) {
             $ultimo = $d['ultimo_heartbeat'] ? strtotime($d['ultimo_heartbeat']) : 0;
-            $d['online'] = (time() - $ultimo) < 300;
+            $d['online'] = (time() - $ultimo) < 7200;
         }
 
         return $this->json($response, 200, ['dados' => $dados]);

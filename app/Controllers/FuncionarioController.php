@@ -37,19 +37,25 @@ class FuncionarioController
         $user   = $request->getAttribute('auth_user');
         $perfil = $request->getAttribute('auth_perfil');
 
-        $where  = ['f.estado != "desligado"'];
+        $estado = $params['estado'] ?? null;
+        $where  = [];
         $bind   = [];
+
+        if ($estado === 'desligado') {
+            $where[] = "f.estado = 'desligado'";
+        } else {
+            $where[] = "f.estado != 'desligado'";
+            if ($estado) {
+                $where[] = 'f.estado = :estado';
+                $bind[':estado'] = $estado;
+            }
+        }
 
         // Filtro supervisor: apenas a sua equipa
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
             $where[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
             $bind[':sid'] = (int) $user->funcionario_id;
             $bind[':sid_self'] = (int) $user->funcionario_id;
-        }
-
-        if (!empty($params['estado'])) {
-            $where[] = 'f.estado = :estado';
-            $bind[':estado'] = $params['estado'];
         }
 
         if (!empty($params['departamento_id'])) {
@@ -70,7 +76,9 @@ class FuncionarioController
                 f.telefone, f.data_admissao, f.tipo_contrato, f.data_fim_contrato,
                 f.vencimento_base_aoa, f.estado, f.nif, f.niss, f.num_dependentes,
                 f.genero, f.data_nascimento, f.foto_url,
-                d.nome AS departamento, c.nome AS cargo
+                d.nome AS departamento, c.nome AS cargo,
+                (SELECT e.nome FROM funcionario_escala fe JOIN escalas e ON fe.escala_id = e.id WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE()) ORDER BY fe.data_inicio DESC LIMIT 1) AS escala_nome,
+                (SELECT fe.data_inicio FROM funcionario_escala fe WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE()) ORDER BY fe.data_inicio DESC LIMIT 1) AS escala_data_inicio
             FROM funcionarios f
             LEFT JOIN departamentos d ON f.departamento_id = d.id
             LEFT JOIN cargos c ON f.cargo_id = c.id
@@ -88,7 +96,7 @@ class FuncionarioController
             }, $dados);
         }
 
-        return $this->json(200, [
+        return $this->json($response, 200, [
             'dados' => $dados,
             'total' => count($dados),
         ]);
@@ -106,7 +114,9 @@ class FuncionarioController
                 f.*,
                 d.nome AS departamento_nome,
                 c.nome AS cargo_nome,
-                h.nome AS horario_nome
+                h.nome AS horario_nome,
+                (SELECT e.nome FROM funcionario_escala fe JOIN escalas e ON fe.escala_id = e.id WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE()) ORDER BY fe.data_inicio DESC LIMIT 1) AS escala_nome,
+                (SELECT fe.data_inicio FROM funcionario_escala fe WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE()) ORDER BY fe.data_inicio DESC LIMIT 1) AS escala_data_inicio
             FROM funcionarios f
             LEFT JOIN departamentos d ON f.departamento_id = d.id
             LEFT JOIN cargos c ON f.cargo_id = c.id
@@ -119,7 +129,7 @@ class FuncionarioController
         $funcionario = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$funcionario) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
         }
 
         // Omitir vencimento para rh_colaborador e supervisor
@@ -127,7 +137,7 @@ class FuncionarioController
             $funcionario['vencimento_base_aoa'] = 0;
         }
 
-        return $this->json(200, ['dados' => $funcionario]);
+        return $this->json($response, 200, ['dados' => $funcionario]);
     }
 
     /**
@@ -139,7 +149,7 @@ class FuncionarioController
 
         $erro = $this->validar($body);
         if ($erro) {
-            return $this->json(422, ['erro' => true, 'mensagem' => $erro]);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => $erro]);
         }
 
         $db = $this->db();
@@ -220,7 +230,7 @@ class FuncionarioController
 
         $this->auditoria($db, $request, 'funcionario.criado', 'funcionario', $id, null, ['numero' => $numero, 'nome' => $body['nome_completo']]);
 
-        return $this->json(201, [
+        return $this->json($response, 201, [
             'mensagem'           => 'Funcionário criado com sucesso.',
             'id'                 => $id,
             'numero_funcionario' => $numero,
@@ -241,7 +251,7 @@ class FuncionarioController
         $antes = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$antes) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
         }
 
         $campos = [
@@ -263,7 +273,7 @@ class FuncionarioController
         }
 
         if (empty($sets)) {
-            return $this->json(400, ['erro' => true, 'mensagem' => 'Nenhum campo para actualizar.']);
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Nenhum campo para actualizar.']);
         }
 
         $db->prepare("UPDATE funcionarios SET " . implode(', ', $sets) . " WHERE id = :id")->execute($bind);
@@ -278,13 +288,56 @@ class FuncionarioController
 
         $this->auditoria($db, $request, 'funcionario.actualizado', 'funcionario', $id, $antes, $body);
 
-        return $this->json(200, ['mensagem' => 'Funcionário actualizado com sucesso.']);
+        return $this->json($response, 200, ['mensagem' => 'Funcionário actualizado com sucesso.']);
     }
 
     /**
      * DELETE /api/funcionarios/{id}
      * Não elimina — desliga o funcionário (LGT exige histórico)
      */
+    public function suspender(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id   = (int) $args['id'];
+        $db   = $this->db();
+
+        $stmt = $db->prepare("SELECT id, nome_completo, estado FROM funcionarios WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $func = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$func) {
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+        if ($func['estado'] === 'desligado') {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Não é possível suspender um funcionário desligado.']);
+        }
+
+        $db->prepare("UPDATE funcionarios SET estado = 'suspenso' WHERE id = :id")->execute([':id' => $id]);
+
+        $this->auditoria($db, $request, 'funcionario.suspenso', 'funcionario', $id, ['estado' => $func['estado']], ['estado' => 'suspenso']);
+
+        return $this->json($response, 200, ['mensagem' => "Funcionário '{$func['nome_completo']}' suspenso com sucesso."]);
+    }
+
+    public function reactivar(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id   = (int) $args['id'];
+        $db   = $this->db();
+
+        $stmt = $db->prepare("SELECT id, nome_completo, estado FROM funcionarios WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $func = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$func) {
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+
+        $db->prepare("UPDATE funcionarios SET estado = 'activo' WHERE id = :id")->execute([':id' => $id]);
+
+        $this->auditoria($db, $request, 'funcionario.reactivado', 'funcionario', $id, ['estado' => $func['estado']], ['estado' => 'activo']);
+
+        return $this->json($response, 200, ['mensagem' => "Funcionário '{$func['nome_completo']}' reactivado com sucesso."]);
+    }
+
     public function destroy(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $id   = (int) $args['id'];
@@ -296,7 +349,7 @@ class FuncionarioController
         $func = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$func) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado ou já desligado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado ou já desligado.']);
         }
 
         $db->prepare("
@@ -314,7 +367,7 @@ class FuncionarioController
 
         $this->auditoria($db, $request, 'funcionario.desligado', 'funcionario', $id, null, ['motivo' => $body['motivo'] ?? null]);
 
-        return $this->json(200, ['mensagem' => "Funcionário '{$func['nome_completo']}' desligado com sucesso."]);
+        return $this->json($response, 200, ['mensagem' => "Funcionário '{$func['nome_completo']}' desligado com sucesso."]);
     }
 
     private function validar(array $body): ?string
@@ -361,11 +414,11 @@ class FuncionarioController
         );
     }
 
-    private function json(int $status, array $data): ResponseInterface
+    private function json(ResponseInterface $response, int $status, array $data): ResponseInterface
     {
-        $response = new Response($status);
+
         $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE));
-        return $response->withHeader('Content-Type', 'application/json; charset=UTF-8');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json; charset=UTF-8');
     }
 
     /**
@@ -383,22 +436,22 @@ class FuncionarioController
         $func = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         if (!$func) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
         }
 
         if (empty($body['email'])) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'O email é obrigatório para criar acesso ao portal.']);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'O email é obrigatório para criar acesso ao portal.']);
         }
 
         if (empty($body['password']) || strlen($body['password']) < 6) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'A password deve ter pelo menos 6 caracteres.']);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'A password deve ter pelo menos 6 caracteres.']);
         }
 
         // Verificar se email já existe
         $check = $db->prepare("SELECT id FROM utilizadores WHERE email = :email AND funcionario_id != :fid LIMIT 1");
         $check->execute([':email' => $body['email'], ':fid' => $id]);
         if ($check->fetch()) {
-            return $this->json(409, ['erro' => true, 'mensagem' => 'Este email já está em uso por outro utilizador.']);
+            return $this->json($response, 409, ['erro' => true, 'mensagem' => 'Este email já está em uso por outro utilizador.']);
         }
 	$perfil = in_array($body['perfil'] ?? '', ['funcionario', 'supervisor', 'rh_manager', 'rh_colaborador'])
 	? $body['perfil']
@@ -440,7 +493,7 @@ class FuncionarioController
 
         $this->auditoria($db, $request, 'funcionario.acesso_portal', 'funcionario', $id, null, ['email' => $body['email']]);
 
-        return $this->json(200, ['mensagem' => $mensagem]);
+        return $this->json($response, 200, ['mensagem' => $mensagem]);
     }
 
     /**
@@ -456,18 +509,18 @@ class FuncionarioController
         $activo = isset($body['activo']) ? (int) $body['activo'] : null;
 
         if ($activo === null) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'Campo activo (0 ou 1) é obrigatório.']);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'Campo activo (0 ou 1) é obrigatório.']);
         }
 
         $stmt = $db->prepare("UPDATE utilizadores SET activo = :activo WHERE funcionario_id = :fid");
         $stmt->execute([':activo' => $activo, ':fid' => $id]);
 
         if ($stmt->rowCount() === 0) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Este funcionário não tem acesso ao portal configurado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Este funcionário não tem acesso ao portal configurado.']);
         }
 
         $msg = $activo ? 'Acesso ao portal activado.' : 'Acesso ao portal desactivado.';
-        return $this->json(200, ['mensagem' => $msg]);
+        return $this->json($response, 200, ['mensagem' => $msg]);
     }
 
     /**
@@ -484,10 +537,10 @@ class FuncionarioController
         $util = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         if (!$util) {
-            return $this->json(200, ['tem_acesso' => false, 'dados' => null]);
+            return $this->json($response, 200, ['tem_acesso' => false, 'dados' => null]);
         }
 
-        return $this->json(200, [
+        return $this->json($response, 200, [
             'tem_acesso' => true,
             'dados' => [
                 'email'       => $util['email'],
