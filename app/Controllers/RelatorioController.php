@@ -1275,7 +1275,10 @@ class RelatorioController
                     $row++;
                 }
                 $sheet->setCellValue('C' . $row, 'Resumo:');
-                $sheet->setCellValue('D' . $row, "Ent: {$d['resumo']['primeira_entrada'] ?? '--:--'} | Sai: {$d['resumo']['ultima_saida'] ?? '--:--'} | Total: {$d['resumo']['total_horas']}h");
+                $priEnt = $d['resumo']['primeira_entrada'] ?? '--:--';
+                $ultSai = $d['resumo']['ultima_saida'] ?? '--:--';
+                $totH = $d['resumo']['total_horas'];
+                $sheet->setCellValue('D' . $row, "Ent: {$priEnt} | Sai: {$ultSai} | Total: {$totH}h");
                 $sheet->getStyle("C$row:D$row")->getFont()->setItalic(true)->setSize(9);
                 $row++;
             }
