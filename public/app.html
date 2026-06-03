@@ -1441,7 +1441,8 @@ async function submeterEdicaoMarcacao() {
 async function loadFuncionarios() {
   document.getElementById('funcionariosTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   try {
-    const res = await api('GET', '/api/funcionarios');
+    const estadoFiltro = document.getElementById('funcEstado').value;
+    const res = await api('GET', '/api/funcionarios' + (estadoFiltro === 'desligado' ? '?estado=desligado' : ''));
     _funcionarios = res.dados || [];
     filtrarFuncionarios();
     if (_editFuncId) carregarEscalaActualFunc(_editFuncId);
@@ -3241,7 +3242,8 @@ async function popularFuncionariosRelatorio() {
   const sel = document.getElementById('relFunc');
   if (sel.options.length > 1) return;
   try {
-    const res = await api('GET', '/api/funcionarios');
+    const estadoFiltro = document.getElementById('funcEstado').value;
+    const res = await api('GET', '/api/funcionarios' + (estadoFiltro === 'desligado' ? '?estado=desligado' : ''));
     sel.innerHTML = '<option value="">Seleccionar funcionário</option>' +
       (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
   } catch(e) { toast(e.message,'err'); }
