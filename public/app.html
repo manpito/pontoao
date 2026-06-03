@@ -449,7 +449,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       </div>
       <div class="toolbar">
         <input class="search-input" placeholder="Pesquisar por nome, número ou email..." id="funcSearch" oninput="filtrarFuncionarios()">
-        <select class="select-input" id="funcEstado" onchange="filtrarFuncionarios()">
+        <select class="select-input" id="funcEstado" onchange="loadFuncionarios()">
           <option value="">Todos os estados</option>
           <option value="activo">Activo</option>
           <option value="suspenso">Suspenso</option>
