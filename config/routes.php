@@ -6,6 +6,7 @@ use App\Controllers\Admin\SuperAdminController;
 use App\Controllers\Admin\TenantController;
 use App\Controllers\Auth\AuthController;
 use App\Controllers\CargoController;
+use App\Controllers\LogAuditoriaController;
 use App\Controllers\Auth\SuperAdminAuthController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\SuperAdminMiddleware;
@@ -210,6 +211,13 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
           ->add(AuthMiddleware::role(['super_admin_tenant']));
 
     $group->put('/configuracoes',       [\App\Controllers\ConfiguracaoController::class, 'update'])
+          ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+    // --- Logs de Auditoria ---
+    $group->get('/logs/auditoria',       [LogAuditoriaController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+    $group->get('/logs/auditoria/acoes', [LogAuditoriaController::class, 'acoes'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));
 
     // --- Notificações ---
