@@ -28,6 +28,20 @@ class RelatorioController
         return Database::tenant($sub);
     }
 
+    private function getTenantInfo(): array
+    {
+        $sub  = TenantResolver::resolve();
+        $stmt = Database::master()->prepare(
+            "SELECT nome_empresa, nif FROM tenants WHERE subdominio = :sub LIMIT 1"
+        );
+        $stmt->execute([':sub' => $sub]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return [
+            'nome_empresa' => $row['nome_empresa'] ?? '',
+            'nif'          => $row['nif'] ?? '',
+        ];
+    }
+
     /**
      * GET /api/relatorios/assiduidade
      * Params: data_inicio, data_fim, funcionario_id (opcional), departamento_id (opcional)
@@ -39,6 +53,7 @@ class RelatorioController
      */
     public function marcacoesDiarias(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $user   = $request->getAttribute('auth_user');
         $perfil = $request->getAttribute('auth_perfil');
         $funcId = (int) $args['funcionario_id'];
@@ -75,13 +90,19 @@ class RelatorioController
             return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
         }
 
-        // 2. Marcações com origem
+        // 2. Feriados
+        $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
+
+        // 3. Marcações com origem e auditoria
         $stmtM = $db->prepare("
-            SELECT tipo, data_hora, origem
-            FROM marcacoes
-            WHERE funcionario_id = :fid
-              AND data_hora BETWEEN :ini AND :fim
-            ORDER BY data_hora ASC
+            SELECT m.id, m.tipo, m.data_hora, m.origem,
+                   m.editada, m.data_hora_original, m.motivo_edicao, m.data_edicao,
+                   u.nome AS editada_por_nome
+            FROM marcacoes m
+            LEFT JOIN utilizadores u ON m.editada_por = u.id
+            WHERE m.funcionario_id = :fid
+              AND m.data_hora BETWEEN :ini AND :fim
+            ORDER BY m.data_hora ASC
         ");
         $stmtM->execute([
             ':fid' => $funcId,
@@ -97,7 +118,7 @@ class RelatorioController
             $marcPorDia[$dia][] = $m;
         }
 
-        // 3. Processar dias
+        // 4. Processar dias
         $dias = [];
         $atual = strtotime($dataInicio);
         $fim   = strtotime($dataFim);
@@ -128,9 +149,15 @@ class RelatorioController
                 };
 
                 $marcacoesFormatadas[] = [
-                    'hora' => $hora,
-                    'tipo' => $tipoMapeado,
-                    'origem' => $m['origem']
+                    'id'            => (int) $m['id'],
+                    'hora'          => $hora,
+                    'hora_original' => $m['data_hora_original'] ? date('H:i', strtotime($m['data_hora_original'])) : null,
+                    'tipo'          => $tipoMapeado,
+                    'origem'        => $m['origem'],
+                    'editada'       => (bool) $m['editada'],
+                    'motivo_edicao' => $m['motivo_edicao'],
+                    'data_edicao'   => $m['data_edicao'] ? date('d/m/Y H:i', strtotime($m['data_edicao'])) : null,
+                    'editada_por'   => $m['editada_por_nome'],
                 ];
 
                 if ($m['tipo'] === 'entrada') {
@@ -152,11 +179,21 @@ class RelatorioController
                 }
             }
 
+            $tipoDia = 'util';
+            if (isset($feriados[$dataStr])) {
+                $tipoDia = 'feriado';
+            } elseif ($diaSemana === 6) {
+                $tipoDia = 'sabado';
+            } elseif ($diaSemana === 7) {
+                $tipoDia = 'domingo';
+            }
+
             $dias[] = [
                 'data' => $dataStr,
                 'dia_semana' => $nomesDias[$diaSemana],
                 'marcacoes' => $marcacoesFormatadas,
                 'resumo' => [
+                    'tipo_dia' => $tipoDia,
                     'primeira_entrada' => $primeiraEntrada,
                     'ultima_saida' => $ultimaSaida,
                     'total_horas' => round($minutosTotais/60, 2)
@@ -167,6 +204,7 @@ class RelatorioController
         }
 
         $dados = [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'funcionario' => [
                 'nome' => $func['nome_completo'],
                 'numero' => $func['numero_funcionario'],
@@ -186,6 +224,7 @@ class RelatorioController
 
     public function individual(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $user   = $request->getAttribute('auth_user');
         $perfil = $request->getAttribute('auth_perfil');
         $funcId = (int) $args['funcionario_id'];
@@ -364,6 +403,7 @@ class RelatorioController
         }
 
         $dados = [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'funcionario' => [
                 'nome' => $func['nome_completo'],
                 'numero' => $func['numero_funcionario'],
@@ -391,6 +431,7 @@ class RelatorioController
 
     public function assiduidade(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $user   = $request->getAttribute('auth_user');
         $perfil = $request->getAttribute('auth_perfil');
 
@@ -595,6 +636,7 @@ class RelatorioController
         }
 
         return $this->json($response, 200, [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
             'total_funcionarios' => count($resultado),
             'dados'  => $resultado,
@@ -615,6 +657,7 @@ class RelatorioController
      */
     public function horas(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $user   = $request->getAttribute('auth_user');
         $perfil = $request->getAttribute('auth_perfil');
 
@@ -813,6 +856,7 @@ class RelatorioController
         }
 
         return $this->json($response, 200, [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'periodo'            => ['inicio' => $dataInicio, 'fim' => $dataFim],
             'total_funcionarios' => count($resultado),
             'dados'              => $resultado,
@@ -826,6 +870,7 @@ class RelatorioController
      */
     public function porDepartamento(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $depId = (int) $args['departamento_id'];
         $params = $request->getQueryParams();
         $inicio = $params['inicio'] ?? date('Y-m-01');
@@ -881,6 +926,7 @@ class RelatorioController
         }
 
         $dados = [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'cabecalho' => [
                 'departamento' => $depNome,
                 'periodo' => ['inicio' => $inicio, 'fim' => $fim],
@@ -907,6 +953,7 @@ class RelatorioController
      */
     public function porEscala(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
+        $tenantInfo = $this->getTenantInfo();
         $escalaId = (int) $args['escala_id'];
         $params = $request->getQueryParams();
         $inicio = $params['inicio'] ?? date('Y-m-01');
@@ -1031,6 +1078,7 @@ class RelatorioController
         }
 
         $dados = [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'cabecalho' => [
                 'escala' => $escalaNome,
                 'periodo' => ['inicio' => $inicio, 'fim' => $fim]
