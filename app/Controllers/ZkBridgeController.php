@@ -41,12 +41,12 @@ class ZkBridgeController
         $db      = $request->getAttribute('tenant_db');
 
         if ($db && $relogio) {
-            $db->prepare("UPDATE relogios SET ultimo_sync = NOW() WHERE id = :id")
+            $db->prepare("UPDATE relogios SET ultimo_sync = NOW(), ultimo_heartbeat = NOW() WHERE id = :id")
                ->execute([':id' => $relogio['id']]);
         }
 
         $response->getBody()->write("OK");
-        return $response->withHeader('Content-Type', 'text/plain');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -100,7 +100,7 @@ class ZkBridgeController
             'mensagem'    => "OK: {$processados} marcação(ões) registada(s).",
         ]));
 
-        return $response->withHeader('Content-Type', 'application/json');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json');
     }
 
     // -------------------------------------------------------------------------
@@ -130,7 +130,7 @@ class ZkBridgeController
             'total'        => count($utilizadores),
         ]));
 
-        return $response->withHeader('Content-Type', 'application/json');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json');
     }
 
     // -------------------------------------------------------------------------
@@ -143,7 +143,7 @@ class ZkBridgeController
         $db   = $request->getAttribute('tenant_db');
 
         if (empty($body['nome']) || empty($body['ip']) || empty($body['api_key'])) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'nome, ip e api_key são obrigatórios.']);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'nome, ip e api_key são obrigatórios.']);
         }
 
         $apiKeyHash = hash('sha256', $body['api_key']);
@@ -183,7 +183,7 @@ class ZkBridgeController
             $msg = 'Relógio registado com sucesso.';
         }
 
-        return $this->json(200, ['mensagem' => $msg, 'id' => $id]);
+        return $this->json($response, 200, ['mensagem' => $msg, 'id' => $id]);
     }
 
     // -------------------------------------------------------------------------
@@ -297,7 +297,7 @@ class ZkBridgeController
 
         if ($table !== 'ATTLOG' || empty($raw)) {
             $response->getBody()->write("OK");
-            return $response->withHeader('Content-Type', 'text/plain');
+            return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
         }
 
         $processados = 0;
@@ -336,12 +336,12 @@ class ZkBridgeController
         }
 
         if ($db && $relogio) {
-            $db->prepare("UPDATE relogios SET ultimo_sync = NOW() WHERE id = :id")
+            $db->prepare("UPDATE relogios SET ultimo_sync = NOW(), ultimo_heartbeat = NOW() WHERE id = :id")
                ->execute([':id' => $relogio['id']]);
         }
 
         $response->getBody()->write("OK: {$processados}");
-        return $response->withHeader('Content-Type', 'text/plain');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -351,7 +351,7 @@ class ZkBridgeController
     public function admsGetRequest(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $response->getBody()->write("OK");
-        return $response->withHeader('Content-Type', 'text/plain');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -361,7 +361,7 @@ class ZkBridgeController
     public function admsDeviceCmd(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $response->getBody()->write("OK");
-        return $response->withHeader('Content-Type', 'text/plain');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -518,10 +518,10 @@ class ZkBridgeController
         return $time ? date('Y-m-d H:i:s', $time) : null;
     }
 
-    private function json(int $status, array $data): ResponseInterface
+    private function json(ResponseInterface $response, int $status, array $data): ResponseInterface
     {
-        $response = new Response($status);
+
         $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE));
-        return $response->withHeader('Content-Type', 'application/json; charset=UTF-8');
+        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json; charset=UTF-8');
     }
 }

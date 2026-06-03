@@ -37,6 +37,153 @@ class RelatorioController
      * - tipo de ausência (justificada / injustificada)
      * - marcações do dia
      */
+    public function marcacoesDiarias(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+        $funcId = (int) $args['funcionario_id'];
+
+        // RBAC: admin e rh vêem qualquer funcionário. Supervisor vê apenas funcionários da sua equipa. Funcionário vê apenas o seu próprio relatório.
+        if ($perfil === 'funcionario' && $user->funcionario_id != $funcId) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório.']);
+        }
+
+        $params     = $request->getQueryParams();
+        $dataInicio = $params['inicio'] ?? date('Y-m-01');
+        $dataFim    = $params['fim']    ?? date('Y-m-t');
+        $formato    = $params['formato'] ?? 'json';
+
+        $db = $this->db();
+
+        // 1. Dados do funcionário
+        $stmtF = $db->prepare("
+            SELECT f.id, f.nome_completo, f.numero_funcionario, f.data_admissao,
+                   d.nome AS departamento, c.nome AS cargo, f.supervisor_id
+            FROM funcionarios f
+            LEFT JOIN departamentos d ON f.departamento_id = d.id
+            LEFT JOIN cargos c ON f.cargo_id = c.id
+            WHERE f.id = :id
+        ");
+        $stmtF->execute([':id' => $funcId]);
+        $func = $stmtF->fetch(PDO::FETCH_ASSOC);
+
+        if (!$func) {
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+
+        if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
+        }
+
+        // 2. Marcações com origem
+        $stmtM = $db->prepare("
+            SELECT tipo, data_hora, origem
+            FROM marcacoes
+            WHERE funcionario_id = :fid
+              AND data_hora BETWEEN :ini AND :fim
+            ORDER BY data_hora ASC
+        ");
+        $stmtM->execute([
+            ':fid' => $funcId,
+            ':ini' => $dataInicio . ' 00:00:00',
+            ':fim' => $dataFim    . ' 23:59:59'
+        ]);
+        $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+
+        // Agrupar por dia
+        $marcPorDia = [];
+        foreach ($marcacoesRaw as $m) {
+            $dia = substr($m['data_hora'], 0, 10);
+            $marcPorDia[$dia][] = $m;
+        }
+
+        // 3. Processar dias
+        $dias = [];
+        $atual = strtotime($dataInicio);
+        $fim   = strtotime($dataFim);
+        $nomesDias = [1 => 'Segunda-feira', 2 => 'Terça-feira', 3 => 'Quarta-feira', 4 => 'Quinta-feira', 5 => 'Sexta-feira', 6 => 'Sábado', 7 => 'Domingo'];
+
+        while ($atual <= $fim) {
+            $dataStr   = date('Y-m-d', $atual);
+            $diaSemana = (int) date('N', $atual);
+
+            $mDia = $marcPorDia[$dataStr] ?? [];
+            $marcacoesFormatadas = [];
+
+            $primeiraEntrada = null;
+            $ultimaSaida = null;
+            $entradaTs = null;
+            $minutosTotais = 0;
+            $intervaloInicio = null;
+
+            foreach ($mDia as $m) {
+                $ts = strtotime($m['data_hora']);
+                $hora = date('H:i', $ts);
+                $tipoMapeado = match($m['tipo']) {
+                    'entrada' => 'ENTRADA',
+                    'saida' => 'SAÍDA',
+                    'inicio_intervalo' => 'INI_INTERVALO',
+                    'fim_intervalo' => 'FIM_INTERVALO',
+                    default => strtoupper($m['tipo'])
+                };
+
+                $marcacoesFormatadas[] = [
+                    'hora' => $hora,
+                    'tipo' => $tipoMapeado,
+                    'origem' => $m['origem']
+                ];
+
+                if ($m['tipo'] === 'entrada') {
+                    if ($primeiraEntrada === null) $primeiraEntrada = $hora;
+                    $entradaTs = $ts;
+                } elseif ($m['tipo'] === 'saida') {
+                    $ultimaSaida = $hora;
+                    if ($entradaTs) {
+                        $minutosTotais += (int)round(($ts - $entradaTs)/60);
+                        $entradaTs = null;
+                    }
+                } elseif ($m['tipo'] === 'inicio_intervalo') {
+                    $intervaloInicio = $ts;
+                } elseif ($m['tipo'] === 'fim_intervalo') {
+                    if ($intervaloInicio) {
+                        $minutosTotais -= (int)round(($ts - $intervaloInicio)/60);
+                        $intervaloInicio = null;
+                    }
+                }
+            }
+
+            $dias[] = [
+                'data' => $dataStr,
+                'dia_semana' => $nomesDias[$diaSemana],
+                'marcacoes' => $marcacoesFormatadas,
+                'resumo' => [
+                    'primeira_entrada' => $primeiraEntrada,
+                    'ultima_saida' => $ultimaSaida,
+                    'total_horas' => round($minutosTotais/60, 2)
+                ]
+            ];
+
+            $atual = strtotime('+1 day', $atual);
+        }
+
+        $dados = [
+            'funcionario' => [
+                'nome' => $func['nome_completo'],
+                'numero' => $func['numero_funcionario'],
+                'departamento' => $func['departamento'],
+                'cargo' => $func['cargo']
+            ],
+            'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
+            'dias' => $dias
+        ];
+
+        if ($formato === 'xlsx') {
+            return $this->exportarExcel($dados, 'marcacoes_diarias', "relatorio_marcacoes_{$func['numero_funcionario']}", $response);
+        }
+
+        return $this->json($response, 200, $dados);
+    }
+
     public function individual(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $user   = $request->getAttribute('auth_user');
@@ -45,7 +192,7 @@ class RelatorioController
 
         // RBAC: admin e rh vêem qualquer funcionário. Supervisor vê apenas funcionários da sua equipa. Funcionário vê apenas o seu próprio relatório.
         if ($perfil === 'funcionario' && $user->funcionario_id != $funcId) {
-            return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório.']);
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório.']);
         }
 
         $params     = $request->getQueryParams();
@@ -73,11 +220,11 @@ class RelatorioController
         $func = $stmtF->fetch(PDO::FETCH_ASSOC);
 
         if (!$func) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
         }
 
         if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
-            return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
         }
 
         // 2. Feriados
@@ -239,7 +386,7 @@ class RelatorioController
             return $this->exportarExcel($dados, 'individual', "relatorio_individual_{$func['numero_funcionario']}", $response);
         }
 
-        return $this->json(200, $dados);
+        return $this->json($response, 200, $dados);
     }
 
     public function assiduidade(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -256,7 +403,7 @@ class RelatorioController
         $nomeSearch = !empty($params['search'])            ? $params['search']                 : null;
 
         if ($dataFim < $dataInicio) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'data_fim não pode ser anterior a data_inicio.']);
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'data_fim não pode ser anterior a data_inicio.']);
         }
 
         $db = $this->db();
@@ -292,7 +439,7 @@ class RelatorioController
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($funcionarios)) {
-            return $this->json(200, ['dados' => [], 'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim]]);
+            return $this->json($response, 200, ['dados' => [], 'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim]]);
         }
 
         // 2. Buscar feriados no período
@@ -447,7 +594,7 @@ class RelatorioController
             ];
         }
 
-        return $this->json(200, [
+        return $this->json($response, 200, [
             'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
             'total_funcionarios' => count($resultado),
             'dados'  => $resultado,
@@ -514,7 +661,7 @@ class RelatorioController
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($funcionarios)) {
-            return $this->json(200, ['dados' => [], 'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim]]);
+            return $this->json($response, 200, ['dados' => [], 'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim]]);
         }
 
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
@@ -665,7 +812,7 @@ class RelatorioController
             ];
         }
 
-        return $this->json(200, [
+        return $this->json($response, 200, [
             'periodo'            => ['inicio' => $dataInicio, 'fim' => $dataFim],
             'total_funcionarios' => count($resultado),
             'dados'              => $resultado,
@@ -694,7 +841,7 @@ class RelatorioController
         $depNome = $stmt->fetchColumn();
 
         if (!$depNome) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Departamento não encontrado.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Departamento não encontrado.']);
         }
 
         // RBAC: Supervisor só pode aceder ao departamento dos funcionários da sua equipa.
@@ -702,7 +849,7 @@ class RelatorioController
             $stmtCheck = $db->prepare("SELECT 1 FROM funcionarios WHERE departamento_id = :did AND (supervisor_id = :sid OR id = :sid_self) LIMIT 1");
             $stmtCheck->execute([':did' => $depId, ':sid' => $user->funcionario_id, ':sid_self' => $user->funcionario_id]);
             if (!$stmtCheck->fetch()) {
-                return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para aceder ao relatório deste departamento.']);
+                return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para aceder ao relatório deste departamento.']);
             }
         }
 
@@ -752,7 +899,7 @@ class RelatorioController
             return $this->exportarExcel($dados, 'departamento', "relatorio_departamento_{$depId}", $response);
         }
 
-        return $this->json(200, $dados);
+        return $this->json($response, 200, $dados);
     }
 
     /**
@@ -775,7 +922,7 @@ class RelatorioController
         $escalaNome = $stmtE->fetchColumn();
 
         if (!$escalaNome) {
-            return $this->json(404, ['erro' => true, 'mensagem' => 'Escala não encontrada.']);
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Escala não encontrada.']);
         }
 
         $sqlFuncs = "
@@ -801,7 +948,7 @@ class RelatorioController
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($funcionarios)) {
-            return $this->json(200, [
+            return $this->json($response, 200, [
                 'cabecalho' => ['escala' => $escalaNome, 'periodo' => ['inicio' => $inicio, 'fim' => $fim]],
                 'dados' => []
             ]);
@@ -895,7 +1042,7 @@ class RelatorioController
             return $this->exportarExcel($dados, 'escala', "relatorio_escala_{$escalaId}", $response);
         }
 
-        return $this->json(200, $dados);
+        return $this->json($response, 200, $dados);
     }
 
     /**
@@ -1097,9 +1244,50 @@ class RelatorioController
                 ], NULL, 'A' . $row);
                 $row++;
             }
+        } elseif ($tipo === 'marcacoes_diarias') {
+            $f = $dados['funcionario'];
+            $sheet->setCellValue('A1', 'Relatório de Marcações Diárias');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+            $sheet->setCellValue('A3', 'Funcionário:'); $sheet->setCellValue('B3', $f['nome']);
+            $sheet->setCellValue('A4', 'Número:');      $sheet->setCellValue('B4', $f['numero']);
+            $sheet->setCellValue('A5', 'Período:');      $sheet->setCellValue('B5', $dados['periodo']['inicio'] . ' a ' . $dados['periodo']['fim']);
+            $sheet->getStyle('A3:A5')->getFont()->setBold(true);
+
+            $sheet->fromArray(['Data', 'Dia', 'Hora', 'Tipo', 'Origem'], NULL, 'A7');
+            $sheet->getStyle('A7:E7')->applyFromArray($headerStyle);
+
+            $row = 8;
+            foreach ($dados['dias'] as $d) {
+                if (empty($d['marcacoes'])) {
+                    $sheet->fromArray([$d['data'], $d['dia_semana'], 'Sem marcações'], NULL, 'A' . $row);
+                    $row++;
+                    continue;
+                }
+                foreach ($d['marcacoes'] as $idx => $m) {
+                    $sheet->fromArray([
+                        $idx === 0 ? $d['data'] : '',
+                        $idx === 0 ? $d['dia_semana'] : '',
+                        $m['hora'],
+                        $m['tipo'],
+                        $m['origem']
+                    ], NULL, 'A' . $row);
+                    $row++;
+                }
+                $sheet->setCellValue('C' . $row, 'Resumo:');
+                $sheet->setCellValue('D' . $row, "Ent: {$d['resumo']['primeira_entrada'] ?? '--:--'} | Sai: {$d['resumo']['ultima_saida'] ?? '--:--'} | Total: {$d['resumo']['total_horas']}h");
+                $sheet->getStyle("C$row:D$row")->getFont()->setItalic(true)->setSize(9);
+                $row++;
+            }
         }
 
-        foreach (range('A', ($tipo === 'individual' ? 'H' : ($tipo === 'escala' ? 'F' : 'I'))) as $col) {
+        $lastCol = match($tipo) {
+            'individual' => 'H',
+            'escala' => 'F',
+            'marcacoes_diarias' => 'E',
+            default => 'I'
+        };
+        foreach (range('A', $lastCol) as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -1170,10 +1358,9 @@ class RelatorioController
             ->withHeader('Cache-Control', 'no-cache');
     }
 
-    private function json(int $status, array $data): ResponseInterface
+    private function json(ResponseInterface $response, int $status, array $data): ResponseInterface
     {
-        $response = new Response($status);
         $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
-        return $response->withHeader('Content-Type', 'application/json; charset=UTF-8');
+        return $response->withStatus($status)->withHeader('Content-Type', 'application/json; charset=UTF-8');
     }
 }
