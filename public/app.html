@@ -2658,7 +2658,7 @@ async function gerarRelatorio() {
         if (canEdit && r.tipo_dia === 'util') {
           if (ent) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
           if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
-          if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent" onclick="abrirModalInserirMarcacao(${f.id},'${d.data}','entrada')">+ Registar</button>`;
+          if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent" onclick="abrirModalInserirMarcacao(document.getElementById('relFunc').value,'${d.data}','entrada')">+ Registar</button>`;
         }
 
         return `<tr>
