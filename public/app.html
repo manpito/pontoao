@@ -299,6 +299,14 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .periodo-info { flex: 1; font-size: 13px; }
 .periodo-info strong { display: block; margin-bottom: 2px; }
 .periodo-info span { font-size: 11px; color: var(--muted2); }
+.tab-btn {
+  padding: 8px 16px; border-radius: 8px 8px 0 0; border: 1px solid var(--border);
+  border-bottom: none; background: var(--s2); color: var(--muted2);
+  font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all .15s;
+}
+.tab-btn:hover { color: var(--text); background: var(--s3); }
+.tab-btn.active { background: var(--s3); color: var(--accent); border-top: 2px solid var(--accent); }
 .rh-colaborador .col-vencimento, .supervisor .col-vencimento { display: none !important; }
 @media print {
   .print-only { display: grid !important; }
@@ -591,7 +599,26 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="escala">Por escala</option>
           <option value="marcacoes-diarias">Marcações diárias</option>
         </select>
-        <select class="select-input" id="relFunc" style="display:none"><option value="">Seleccionar funcionário</option></select>
+        <div id="relFuncPicker" style="display:none;position:relative">
+          <div id="relFuncPickerToggle" onclick="toggleFuncPicker()" style="cursor:pointer;display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;min-width:220px">
+            <span id="relFuncPickerLabel">Seleccionar funcionários...</span>
+            <span style="margin-left:auto">▾</span>
+          </div>
+          <div id="relFuncPickerDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--s2);border:1px solid var(--border);border-radius:8px;min-width:380px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);margin-top:4px">
+            <div style="padding:10px;border-bottom:1px solid var(--border);display:flex;gap:8px">
+              <input class="search-input" id="relFuncSearch" placeholder="Nº ou nome..." oninput="filtrarFuncPicker()" style="flex:1">
+              <select class="select-input" id="relFuncDepFilter" onchange="filtrarFuncPicker()" style="flex:0;width:160px">
+                <option value="">Todos os departamentos</option>
+              </select>
+            </div>
+            <div style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center">
+              <label style="font-size:12px;cursor:pointer"><input type="checkbox" id="relFuncSelectAll" onchange="toggleSelectAllFunc()"> Seleccionar todos</label>
+              <button class="btn btn-sm" onclick="seleccionarDepartamentoCompleto()" style="margin-left:auto">Seleccionar departamento completo</button>
+            </div>
+            <div id="relFuncList" style="padding:4px 0"></div>
+          </div>
+        </div>
+        <input type="hidden" id="relFunc">
         <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
         <input class="search-input" type="date" id="relFim" style="flex:0;width:160px">
         <select class="select-input" id="relDep"><option value="">Todos os departamentos</option></select>
@@ -2508,7 +2535,234 @@ function fmtAOA(v) {
 }
 
 
+// ── PICKER DE FUNCIONÁRIOS ──
+function toggleFuncPicker() {
+  const dropdown = document.getElementById('relFuncPickerDropdown');
+  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', e => {
+  const picker = document.getElementById('relFuncPicker');
+  const dropdown = document.getElementById('relFuncPickerDropdown');
+  if (picker && !picker.contains(e.target)) {
+    dropdown.style.display = 'none';
+  }
+});
+
+function filtrarFuncPicker() {
+  const search = document.getElementById('relFuncSearch').value.toLowerCase();
+  const depId  = document.getElementById('relFuncDepFilter').value;
+  const labels = document.querySelectorAll('#relFuncList label');
+
+  labels.forEach(lbl => {
+    const cb = lbl.querySelector('input');
+    const nome = cb.dataset.nome.toLowerCase();
+    const numero = cb.dataset.numero.toLowerCase();
+    const dep = cb.dataset.dep;
+
+    const matchesSearch = !search || nome.includes(search) || numero.includes(search);
+    const matchesDep = !depId || dep === depId;
+
+    lbl.style.display = (matchesSearch && matchesDep) ? 'flex' : 'none';
+  });
+}
+
+function updatePickerLabel() {
+  const selected = document.querySelectorAll('.func-picker-cb:checked');
+  const label = document.getElementById('relFuncPickerLabel');
+  if (selected.length === 0) {
+    label.textContent = 'Seleccionar funcionários...';
+  } else if (selected.length === 1) {
+    label.textContent = '1 funcionário seleccionado';
+  } else {
+    label.textContent = `${selected.length} funcionários seleccionados`;
+  }
+}
+
+function toggleSelectAllFunc() {
+  const selectAll = document.getElementById('relFuncSelectAll').checked;
+  const labels = document.querySelectorAll('#relFuncList label');
+  labels.forEach(lbl => {
+    if (lbl.style.display !== 'none') {
+      const cb = lbl.querySelector('input');
+      cb.checked = selectAll;
+    }
+  });
+  updatePickerLabel();
+}
+
+function seleccionarDepartamentoCompleto() {
+  const depId = document.getElementById('relFuncDepFilter').value;
+  if (!depId) {
+    toast('Seleccione um departamento no filtro primeiro.', 'inf');
+    return;
+  }
+  const labels = document.querySelectorAll('#relFuncList label');
+  labels.forEach(lbl => {
+    const cb = lbl.querySelector('input');
+    if (cb.dataset.dep === depId) {
+      cb.checked = true;
+    }
+  });
+  updatePickerLabel();
+}
+
+function getSelectedFuncs() {
+  const selected = document.querySelectorAll('.func-picker-cb:checked');
+  return Array.from(selected).map(cb => ({
+    id: cb.value,
+    nome: cb.dataset.nome,
+    numero: cb.dataset.numero
+  }));
+}
+
+function activarAba(id) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('[id^="tab-panel-"]').forEach(panel => panel.style.display = 'none');
+
+  document.getElementById(`tab-btn-${id}`).classList.add('active');
+  document.getElementById(`tab-panel-${id}`).style.display = 'block';
+}
+
+async function popularFuncPicker() {
+  const listEl = document.getElementById('relFuncList');
+  const depFilter = document.getElementById('relFuncDepFilter');
+  listEl.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/funcionarios?estado=activo');
+    const funcs = res.dados || [];
+
+    // Popula lista
+    listEl.innerHTML = funcs.map(f => `
+      <label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <input type="checkbox" class="func-picker-cb" value="${f.id}" data-nome="${f.nome_completo}" data-numero="${f.numero_funcionario}" data-dep="${f.departamento_id||''}" onchange="updatePickerLabel()">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted2);width:48px">${f.numero_funcionario}</span>
+        <span style="flex:1">${f.nome_completo}</span>
+        <span style="font-size:11px;color:var(--muted2)">${f.departamento||''}</span>
+      </label>
+    `).join('');
+
+    // Popula departamentos no filtro
+    const deps = [];
+    const depIds = new Set();
+    funcs.forEach(f => {
+      if (f.departamento_id && !depIds.has(f.departamento_id)) {
+        depIds.add(f.departamento_id);
+        deps.push({ id: f.departamento_id, nome: f.departamento });
+      }
+    });
+    depFilter.innerHTML = '<option value="">Todos os departamentos</option>' +
+      deps.sort((a,b) => a.nome.localeCompare(b.nome)).map(d => `<option value="${d.id}">${d.nome}</option>`).join('');
+
+  } catch(e) { listEl.innerHTML = '<div class="empty">Erro ao carregar funcionários.</div>'; }
+}
+
 // ── RELATÓRIOS ──
+function gerarHTMLRelatorioIndividual(res) {
+  const f = res.funcionario;
+  const cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
+  const headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
+
+  let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, marcManuais = 0;
+
+  const rows = (res.dias||[]).map(d => {
+    const r = d.resumo;
+    const ent = d.marcacoes.find(m => m.tipo === 'ENTRADA');
+    const sai = [...d.marcacoes].reverse().find(m => m.tipo === 'SAÍDA');
+    const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
+    const fimInt = d.marcacoes.find(m => m.tipo === 'FIM_INTERVALO');
+
+    if (ent) diasPresentes++;
+    totalHoras += r.total_horas || 0;
+    totalAtrasos += r.atraso || 0;
+
+    const fmtM = (m) => {
+      if (!m) return '--:--';
+      if (m.editada) marcManuais++;
+      let h = m.hora;
+      if (m.editada) {
+          const tooltip = `Editado em ${m.data_edicao} por ${m.editada_por || 'Sistema'}. Original: ${m.hora_original}. Motivo: ${m.motivo_edicao}`;
+          h += ` <span style="cursor:help;color:var(--warn);font-weight:700" title="${tooltip}">*</span>`;
+      }
+      return h;
+    };
+
+    let pStr = '--:--';
+    if (iniInt && fimInt) {
+      const diff = (parseInt(fimInt.hora.split(':')[0])*60 + parseInt(fimInt.hora.split(':')[1])) - (parseInt(iniInt.hora.split(':')[0])*60 + parseInt(iniInt.hora.split(':')[1]));
+      if (diff > 0) pStr = Math.floor(diff/60).toString().padStart(2,'0') + ':' + (diff%60).toString().padStart(2,'0');
+    }
+    const hTot = Math.floor(r.total_horas || 0);
+    const mTot = Math.round(((r.total_horas || 0) - hTot) * 60);
+    const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : '--:--';
+
+    let ocor = '';
+    if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
+    else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
+    else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
+    else if (!ent) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
+    else if (ent && !sai) ocor = '<span class="badge badge-warn">Falta Marcação</span>';
+    else if (r.atraso > 0) ocor = `<span class="badge badge-warn">Entrada Tardia (+${r.atraso}min)</span>`;
+
+    const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
+    let acts = '';
+    if (canEdit && r.tipo_dia === 'util') {
+      if (ent) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
+      if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
+      if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','entrada')">+ Registar</button>`;
+      if (ent && !sai) acts += `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','saida')" title="Registar saída">+ Saída</button>`;
+    }
+
+    return `<tr>
+      <td><span style="font-family:var(--mono)">${d.data}</span></td>
+      <td>${d.dia_semana.slice(0,3)}</td>
+      <td style="text-align:center;font-family:var(--mono)">${fmtM(ent)}</td>
+      <td style="text-align:center;font-family:var(--mono)">${fmtM(sai)}</td>
+      <td style="text-align:center;color:var(--muted2)">${pStr}</td>
+      <td style="text-align:center"><strong>${tStr}</strong></td>
+      <td>${ocor}</td>
+      <td>${acts}</td>
+    </tr>`;
+  }).join('');
+
+  const info = `Período: ${res.periodo.inicio} a ${res.periodo.fim}`;
+
+  const cabecalhoEmpresa = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--border)">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${res.empresa?.nome || ''}</div>
+        <div style="font-size:12px;color:var(--muted2)">NIF: ${res.empresa?.nif || ''}</div>
+      </div>
+      <div style="text-align:right;font-size:11px;color:var(--muted2)">
+        <div>PontoAO · Sistema de Assiduidade</div>
+        <div>Lei n.º 7/15 (LGT Angola)</div>
+      </div>
+    </div>
+  `;
+
+  const footer = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
+      <div><div style="font-size:11px;color:var(--muted2)">TOTAL HORAS</div><div style="font-size:18px;font-weight:700">${totalHoras.toFixed(1)}h</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">DIAS PRESENTES</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${diasPresentes}</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">DIAS AUSENTES</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${diasAusentes}</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">ATRASOS</div><div style="font-size:18px;font-weight:700;color:var(--warn)">${totalAtrasos}min</div></div>
+    </div>
+    ${marcManuais > 0 ? `<div style="margin-top:10px;font-size:11px;color:var(--muted2)">* ${marcManuais} marcação(ões) ajustada(s) manualmente. Detalhes disponíveis no log de auditoria.</div>` : ''}
+    <div class="print-only" style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px">
+      <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Colaborador</div>
+      <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Supervisor / RH</div>
+      <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Data: ____/____/______</div>
+    </div>
+  `;
+
+  return `${cabecalhoEmpresa}
+    <div class="card">
+      <div class="card-head"><div class="card-title">${cardTitle} · ${res.periodo.inicio} → ${res.periodo.fim}</div><span style="font-size:11px;color:var(--muted2)">${info}</span></div>
+      <table class="tbl"><thead>${headers}</thead><tbody>${rows||'<tr><td colspan="8" class="empty">Sem dados.</td></tr>'}</tbody></table>
+    </div>
+    ${footer}`;
+}
+
 async function gerarRelatorio() {
   const tipo   = document.getElementById('relTipo').value;
   const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
@@ -2522,14 +2776,58 @@ async function gerarRelatorio() {
 
   if (tipo === 'departamento' && !dep) { toast('Seleccione um departamento.','err'); return; }
   if (tipo === 'escala' && !escala) { toast('Seleccione uma escala.','err'); return; }
-  if (tipo === 'marcacoes-diarias' && !funcId) { toast('Seleccione um funcionário.','err'); return; }
+
+  if (tipo === 'marcacoes-diarias') {
+    const selected = getSelectedFuncs();
+    if (selected.length === 0) { toast('Seleccione pelo menos um funcionário.', 'err'); return; }
+
+    out.innerHTML = `
+      <div id="relMarcacoesAbas">
+        <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;flex-wrap:wrap" id="relMarcacoesTabNav"></div>
+        <div id="relMarcacoesTabContent"></div>
+      </div>
+    `;
+    const tabNav = document.getElementById('relMarcacoesTabNav');
+    const tabContent = document.getElementById('relMarcacoesTabContent');
+
+    selected.forEach(async (func, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (idx === 0 ? ' active' : '');
+      btn.id = `tab-btn-${func.id}`;
+      const nomeCurto = func.nome.split(' ')[0] + (func.nome.split(' ').length > 1 ? ' ' + func.nome.split(' ').pop() : '');
+      btn.innerHTML = `<span class="spinner" id="tab-spinner-${func.id}" style="width:10px;height:10px;margin-right:5px"></span> ${func.numero} · ${nomeCurto}`;
+      btn.onclick = () => activarAba(func.id);
+      tabNav.appendChild(btn);
+
+      const panel = document.createElement('div');
+      panel.id = `tab-panel-${func.id}`;
+      panel.style.display = idx === 0 ? 'block' : 'none';
+      panel.innerHTML = '<div class="empty"><span class="spinner"></span> A carregar relatório...</div>';
+      tabContent.appendChild(panel);
+
+      try {
+        const res = await api('GET', `/api/relatorios/marcacoes-diarias/${func.id}?inicio=${inicio}&fim=${fim}`);
+        if (res.erro) throw new Error(res.mensagem);
+        panel.innerHTML = gerarHTMLRelatorioIndividual(res);
+        document.getElementById(`tab-spinner-${func.id}`).style.display = 'none';
+
+        // Guardar dados da empresa para PDF (do primeiro que chegar)
+        if (!out.dataset.empresaNome) {
+          out.dataset.empresaNome = res.empresa?.nome || '';
+          out.dataset.empresaNif  = res.empresa?.nif || '';
+        }
+      } catch(e) {
+        panel.innerHTML = `<div class="empty" style="color:var(--danger)">Erro: ${e.message}</div>`;
+      }
+    });
+    return;
+  }
 
   out.innerHTML = '<div class="empty"><span class="spinner"></span> A gerar relatório...</div>';
 
   let url = `/api/relatorios/${tipo}?data_inicio=${inicio}&data_fim=${fim}`;
   if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?inicio=${inicio}&fim=${fim}`;
   if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?inicio=${inicio}&fim=${fim}`;
-  if (tipo === 'marcacoes-diarias') url = `/api/relatorios/marcacoes-diarias/${funcId}?inicio=${inicio}&fim=${fim}`;
 
   if (tipo === 'assiduidade' || tipo === 'horas') {
     if (dep)    url += `&departamento_id=${dep}`;
@@ -2608,93 +2906,7 @@ async function gerarRelatorio() {
       cardTitle = `Assiduidade por Escala: ${res.cabecalho?.escala}`;
       info = `${inicio} → ${fim} · ${res.dados?.length || 0} funcionário(s)`;
     } else if (tipo === 'marcacoes-diarias') {
-      const f = res.funcionario;
-      cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
-      headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
-
-      let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, marcManuais = 0;
-
-      rows = (res.dias||[]).map(d => {
-        const r = d.resumo;
-        const ent = d.marcacoes.find(m => m.tipo === 'ENTRADA');
-        const sai = [...d.marcacoes].reverse().find(m => m.tipo === 'SAÍDA');
-        const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
-        const fimInt = d.marcacoes.find(m => m.tipo === 'FIM_INTERVALO');
-
-        if (ent) diasPresentes++;
-        totalHoras += r.total_horas || 0;
-        totalAtrasos += r.atraso || 0;
-
-        const fmtM = (m) => {
-          if (!m) return '--:--';
-          if (m.editada) marcManuais++;
-          let h = m.hora;
-          if (m.editada) {
-              const tooltip = `Editado em ${m.data_edicao} por ${m.editada_por || 'Sistema'}. Original: ${m.hora_original}. Motivo: ${m.motivo_edicao}`;
-              h += ` <span style="cursor:help;color:var(--warn);font-weight:700" title="${tooltip}">*</span>`;
-          }
-          return h;
-        };
-
-        let pStr = '--:--';
-        if (iniInt && fimInt) {
-          const diff = (parseInt(fimInt.hora.split(':')[0])*60 + parseInt(fimInt.hora.split(':')[1])) - (parseInt(iniInt.hora.split(':')[0])*60 + parseInt(iniInt.hora.split(':')[1]));
-          if (diff > 0) pStr = Math.floor(diff/60).toString().padStart(2,'0') + ':' + (diff%60).toString().padStart(2,'0');
-        }
-        const hTot = Math.floor(r.total_horas || 0);
-        const mTot = Math.round(((r.total_horas || 0) - hTot) * 60);
-        const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : '--:--';
-
-        let ocor = '';
-        if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
-        else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
-        else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
-        else if (!ent) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
-        else if (ent && !sai) ocor = '<span class="badge badge-warn">Falta Marcação</span>';
-        else if (r.atraso > 0) ocor = `<span class="badge badge-warn">Entrada Tardia (+${r.atraso}min)</span>`;
-
-        const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
-        let acts = '';
-        if (canEdit && r.tipo_dia === 'util') {
-          if (ent) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
-          if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
-          if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent" onclick="abrirModalInserirMarcacao(document.getElementById('relFunc').value,'${d.data}','entrada')">+ Registar</button>`;
-          if (ent && !sai) acts += `<button class="btn btn-sm btn-accent" onclick="abrirModalInserirMarcacao(document.getElementById('relFunc').value,'${d.data}','saida')" title="Registar saída">+ Saída</button>`;
-        }
-
-        return `<tr>
-          <td><span style="font-family:var(--mono)">${d.data}</span></td>
-          <td>${d.dia_semana.slice(0,3)}</td>
-          <td style="text-align:center;font-family:var(--mono)">${fmtM(ent)}</td>
-          <td style="text-align:center;font-family:var(--mono)">${fmtM(sai)}</td>
-          <td style="text-align:center;color:var(--muted2)">${pStr}</td>
-          <td style="text-align:center"><strong>${tStr}</strong></td>
-          <td>${ocor}</td>
-          <td>${acts}</td>
-        </tr>`;
-      }).join('');
-
-      info = `Período: ${res.periodo.inicio} a ${res.periodo.fim}`;
-      const footer = `
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
-          <div><div style="font-size:11px;color:var(--muted2)">TOTAL HORAS</div><div style="font-size:18px;font-weight:700">${totalHoras.toFixed(1)}h</div></div>
-          <div><div style="font-size:11px;color:var(--muted2)">DIAS PRESENTES</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${diasPresentes}</div></div>
-          <div><div style="font-size:11px;color:var(--muted2)">DIAS AUSENTES</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${diasAusentes}</div></div>
-          <div><div style="font-size:11px;color:var(--muted2)">ATRASOS</div><div style="font-size:18px;font-weight:700;color:var(--warn)">${totalAtrasos}min</div></div>
-        </div>
-        ${marcManuais > 0 ? `<div style="margin-top:10px;font-size:11px;color:var(--muted2)">* ${marcManuais} marcação(ões) ajustada(s) manualmente. Detalhes disponíveis no log de auditoria.</div>` : ''}
-        <div class="print-only" style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px">
-          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Colaborador</div>
-          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Supervisor / RH</div>
-          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Data: ____/____/______</div>
-        </div>
-      `;
-      out.innerHTML = `${cabecalhoEmpresa}
-        <div class="card">
-          <div class="card-head"><div class="card-title">${cardTitle} · ${inicio} → ${fim}</div><span style="font-size:11px;color:var(--muted2)">${info}</span></div>
-          <table class="tbl"><thead>${headers}</thead><tbody>${rows||'<tr><td colspan="8" class="empty">Sem dados.</td></tr>'}</tbody></table>
-        </div>
-        ${footer}`;
+      out.innerHTML = gerarHTMLRelatorioIndividual(res);
       return;
     }
 
@@ -3221,8 +3433,6 @@ async function exportarRelatorioPDF() {
   const tipo   = document.getElementById('relTipo').value;
   const inicio = document.getElementById('relInicio').value || new Date().toISOString().slice(0,8) + '01';
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
-  const dep    = document.getElementById('relDep')?.value || '';
-  const search = document.getElementById('relSearch')?.value?.trim() || '';
 
   const out = document.getElementById('relatorioOutput');
   if (!out || out.innerHTML.includes('spinner') || out.innerHTML.trim() === '') {
@@ -3232,6 +3442,20 @@ async function exportarRelatorioPDF() {
 
   const titulo = tipo === 'assiduidade' ? 'Relatório de Assiduidade' : (tipo === 'horas' ? 'Relatório de Horas Trabalhadas' : 'Relatório de Marcações');
 
+  let reportBody = '';
+  if (tipo === 'marcacoes-diarias') {
+    const selected = getSelectedFuncs();
+    for (const func of selected) {
+      try {
+        const res = await api('GET', `/api/relatorios/marcacoes-diarias/${func.id}?inicio=${inicio}&fim=${fim}`);
+        reportBody += gerarHTMLRelatorioIndividual(res);
+        reportBody += '<div style="page-break-after:always"></div>';
+      } catch(e) { console.error(e); }
+    }
+  } else {
+    reportBody = Array.from(out.children).filter(c => !c.style.display.includes('flex') || !c.innerHTML.includes('NIF')).map(c => c.outerHTML).join('');
+  }
+
   const printContent = `
     <!DOCTYPE html>
     <html lang="pt">
@@ -3239,19 +3463,31 @@ async function exportarRelatorioPDF() {
       <meta charset="UTF-8">
       <title>${titulo} • ${inicio} → ${fim}</title>
       <style>
+        :root {
+          --bg: #fff; --s1: #fff; --s2: #f8f9fa; --s3: #f1f3f5;
+          --border: #dee2e6; --accent: #00a86b; --blue: #0056b3;
+          --warn: #856404; --danger: #c00; --text: #212529;
+          --muted: #6c757d; --muted2: #adb5bd; --mono: monospace;
+          --sans: sans-serif;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
         h1 { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: #111; }
         .meta { font-size: 10px; color: #666; margin-bottom: 16px; border-bottom: 2px solid #111; padding-bottom: 8px; }
         .cabecalho-pdf { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #000; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th { background: #1a1a1a; color: #fff; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
-        td { padding: 5px 8px; border-bottom: 1px solid #e5e5e5; font-size: 10px; }
-        tr:nth-child(even) td { background: #f9f9f9; }
-        .badge-green { color: #00a86b; font-weight: 700; }
-        .badge-red   { color: #cc0000; font-weight: 700; }
-        .badge-warn  { color: #cc7700; font-weight: 700; }
+        .card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+        .card-head { padding: 10px 15px; background: var(--s2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .card-title { font-weight: 700; text-transform: uppercase; font-size: 10px; }
+        .tbl { width: 100%; border-collapse: collapse; }
+        .tbl th { background: #1a1a1a; color: #fff; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; }
+        .tbl td { padding: 5px 8px; border-bottom: 1px solid #e5e5e5; font-size: 10px; }
+        .badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; }
+        .badge-blue { background: #e7f0ff; color: #0056b3; }
+        .badge-red { background: #ffebee; color: #c00; }
+        .badge-green { background: #e8f5e9; color: #2e7d32; }
+        .badge-warn { background: #fff3e0; color: #ef6c00; }
         .footer { margin-top: 20px; font-size: 9px; color: #999; border-top: 1px solid #ddd; padding-top: 8px; }
+        .no-print { display: none !important; }
         @media print {
           body { padding: 10px; }
           @page { margin: 15mm; size: A4 landscape; }
@@ -3259,6 +3495,7 @@ async function exportarRelatorioPDF() {
       </style>
     </head>
     <body>
+      ${tipo !== 'marcacoes-diarias' ? `
       <div class="cabecalho-pdf">
         <div>
           <div style="font-size:18px;font-weight:700">${out.dataset.empresaNome || ''}</div>
@@ -3271,10 +3508,11 @@ async function exportarRelatorioPDF() {
       </div>
       <h1>${titulo}</h1>
       <div class="meta">Período: ${inicio} a ${fim} • Gerado em: ${new Date().toLocaleString('pt-PT')}</div>
+      ` : ''}
       <div class="report-body">
-        ${Array.from(out.children).filter(c => !c.style.display.includes('flex') || !c.innerHTML.includes('NIF')).map(c => c.outerHTML).join('')}
+        ${reportBody}
       </div>
-      <div class="footer">PontoAO • Sistema de Controlo de Assiduidade • Lei n.º 7/15 (LGT Angola)</div>
+      ${tipo !== 'marcacoes-diarias' ? '<div class="footer">PontoAO • Sistema de Controlo de Assiduidade • Lei n.º 7/15 (LGT Angola)</div>' : ''}
     </body>
     </html>
   `;
@@ -3388,11 +3626,12 @@ function toggleRelatorioSelects() {
   } else if (tipo === 'marcacoes-diarias') {
     relDep.style.display = 'none';
     relEscala.style.display = 'none';
-    relFunc.style.display = 'inline-block';
+    document.getElementById('relFuncPicker').style.display = 'inline-block';
     relNumero.style.display = 'none';
     relSearch.style.display = 'none';
-    popularFuncionariosRelatorio();
+    popularFuncPicker();
   } else {
+    document.getElementById('relFuncPicker').style.display = 'none';
     relDep.style.display = 'inline-block';
     relEscala.style.display = 'none';
     relFunc.style.display = 'none';
