@@ -124,6 +124,8 @@ class RelatorioController
         $fim   = strtotime($dataFim);
         $nomesDias = [1 => 'Segunda-feira', 2 => 'Terça-feira', 3 => 'Quarta-feira', 4 => 'Quinta-feira', 5 => 'Sexta-feira', 6 => 'Sábado', 7 => 'Domingo'];
 
+        $escalaService = new \App\Services\EscalaService($db);
+
         while ($atual <= $fim) {
             $dataStr   = date('Y-m-d', $atual);
             $diaSemana = (int) date('N', $atual);
@@ -136,6 +138,8 @@ class RelatorioController
             $entradaTs = null;
             $minutosTotais = 0;
             $intervaloInicio = null;
+
+            $turno = $escalaService->calcularTurnoEm($funcId, $dataStr);
 
             foreach ($mDia as $m) {
                 $ts = strtotime($m['data_hora']);
@@ -188,15 +192,49 @@ class RelatorioController
                 $tipoDia = 'domingo';
             }
 
+            // Cálculo de atrasos e saídas antecipadas
+            $atrasoMinutos = 0;
+            $saidaAntecipadaMinutos = 0;
+
+            if ($turno && $turno['tipo'] !== 'folga') {
+                if ($turno['hora_entrada'] && $primeiraEntrada) {
+                    [$hP, $mP] = explode(':', $turno['hora_entrada']);
+                    $minPrevisto = (int)$hP * 60 + (int)$mP;
+                    [$hR, $mR] = explode(':', $primeiraEntrada);
+                    $minReal = (int)$hR * 60 + (int)$mR;
+                    $tolerancia = $turno['tolerancia_entrada_min'] ?? 10;
+
+                    $diff = $minReal - $minPrevisto;
+                    if ($diff > $tolerancia) {
+                        $atrasoMinutos = $diff - $tolerancia;
+                    }
+                }
+
+                if ($turno['hora_saida'] && $ultimaSaida) {
+                    [$hP, $mP] = explode(':', $turno['hora_saida']);
+                    $minPrevisto = (int)$hP * 60 + (int)$mP;
+                    [$hR, $mR] = explode(':', $ultimaSaida);
+                    $minReal = (int)$hR * 60 + (int)$mR;
+
+                    if ($minPrevisto - $minReal > 0) {
+                        $saidaAntecipadaMinutos = $minPrevisto - $minReal;
+                    }
+                }
+            }
+
             $dias[] = [
                 'data' => $dataStr,
                 'dia_semana' => $nomesDias[$diaSemana],
                 'marcacoes' => $marcacoesFormatadas,
                 'resumo' => [
-                    'tipo_dia' => $tipoDia,
-                    'primeira_entrada' => $primeiraEntrada,
-                    'ultima_saida' => $ultimaSaida,
-                    'total_horas' => round($minutosTotais/60, 2)
+                    'tipo_dia'                  => $tipoDia,
+                    'hora_prevista_entrada'     => $turno ? substr($turno['hora_entrada'] ?? '', 0, 5) : null,
+                    'hora_prevista_saida'       => $turno ? substr($turno['hora_saida'] ?? '', 0, 5) : null,
+                    'primeira_entrada'          => $primeiraEntrada,
+                    'ultima_saida'              => $ultimaSaida,
+                    'atraso_minutos'            => $atrasoMinutos,
+                    'saida_antecipada_minutos'  => $saidaAntecipadaMinutos,
+                    'total_horas'               => round($minutosTotais/60, 2)
                 ]
             ];
 

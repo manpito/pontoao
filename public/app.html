@@ -2650,7 +2650,7 @@ function gerarHTMLRelatorioIndividual(res) {
   const cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
   const headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
 
-  let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, marcManuais = 0;
+  let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, totalSaidasAntecipadas = 0, marcManuais = 0;
 
   const rows = (res.dias||[]).map(d => {
     const r = d.resumo;
@@ -2661,7 +2661,8 @@ function gerarHTMLRelatorioIndividual(res) {
 
     if (ent) diasPresentes++;
     totalHoras += r.total_horas || 0;
-    totalAtrasos += r.atraso || 0;
+    totalAtrasos += r.atraso_minutos || 0;
+    totalSaidasAntecipadas += r.saida_antecipada_minutos || 0;
 
     const fmtM = (m) => {
       if (!m) return '--:--';
@@ -2689,7 +2690,12 @@ function gerarHTMLRelatorioIndividual(res) {
     else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
     else if (!ent) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
     else if (ent && !sai) ocor = '<span class="badge badge-warn">Falta Marcação</span>';
-    else if (r.atraso > 0) ocor = `<span class="badge badge-warn">Entrada Tardia (+${r.atraso}min)</span>`;
+    else {
+        let badges = [];
+        if (r.atraso_minutos > 0) badges.push(`<span class="badge" style="background:rgba(255,235,59,.15);color:#d4af37">Entrada Tardia (+${r.atraso_minutos}min)</span>`);
+        if (r.saida_antecipada_minutos > 0) badges.push(`<span class="badge badge-warn">Saída Antecipada (-${r.saida_antecipada_minutos}min)</span>`);
+        ocor = badges.join(' ');
+    }
 
     const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
     let acts = '';
@@ -2703,8 +2709,8 @@ function gerarHTMLRelatorioIndividual(res) {
     return `<tr>
       <td><span style="font-family:var(--mono)">${d.data}</span></td>
       <td>${d.dia_semana.slice(0,3)}</td>
-      <td style="text-align:center;font-family:var(--mono)">${fmtM(ent)}</td>
-      <td style="text-align:center;font-family:var(--mono)">${fmtM(sai)}</td>
+      <td style="text-align:center;font-family:var(--mono)" title="${r.hora_prevista_entrada ? 'Previsto: ' + r.hora_prevista_entrada : ''}">${fmtM(ent)}</td>
+      <td style="text-align:center;font-family:var(--mono)" title="${r.hora_prevista_saida ? 'Previsto: ' + r.hora_prevista_saida : ''}">${fmtM(sai)}</td>
       <td style="text-align:center;color:var(--muted2)">${pStr}</td>
       <td style="text-align:center"><strong>${tStr}</strong></td>
       <td>${ocor}</td>
@@ -2728,11 +2734,12 @@ function gerarHTMLRelatorioIndividual(res) {
   `;
 
   const footer = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
       <div><div style="font-size:11px;color:var(--muted2)">TOTAL HORAS</div><div style="font-size:18px;font-weight:700">${totalHoras.toFixed(1)}h</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">DIAS PRESENTES</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${diasPresentes}</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">DIAS AUSENTES</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${diasAusentes}</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">ATRASOS</div><div style="font-size:18px;font-weight:700;color:var(--warn)">${totalAtrasos}min</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">SAÍDAS ANTECIPADAS</div><div style="font-size:18px;font-weight:700;color:#ff8c00">${totalSaidasAntecipadas}min</div></div>
     </div>
     ${marcManuais > 0 ? `<div style="margin-top:10px;font-size:11px;color:var(--muted2)">* ${marcManuais} marcação(ões) ajustada(s) manualmente. Detalhes disponíveis no log de auditoria.</div>` : ''}
     <div class="print-only" style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px">
