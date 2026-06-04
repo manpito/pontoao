@@ -599,24 +599,22 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="escala">Por escala</option>
           <option value="marcacoes-diarias">Marcações diárias</option>
         </select>
-        <div id="relFuncPicker" style="display:none;position:relative">
-          <div id="relFuncPickerToggle" onclick="toggleFuncPicker()" style="cursor:pointer;display:flex;align-items:center;gap:8px;background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;min-width:220px">
-            <span id="relFuncPickerLabel">Seleccionar funcionários...</span>
-            <span style="margin-left:auto">▾</span>
+        <div id="relFuncPicker" style="display:none;width:100%;margin-top:8px">
+          <!-- Linha de filtros -->
+          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+            <input class="search-input" id="relFuncSearch" placeholder="Nº ou nome..." oninput="filtrarFuncPicker()" style="flex:1">
+            <select class="select-input" id="relFuncDepFilter" onchange="filtrarFuncPicker()" style="flex:0;min-width:180px">
+              <option value="">Todos os departamentos</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;cursor:pointer">
+              <input type="checkbox" id="relFuncSelectAll" onchange="toggleSelectAllFunc()"> Seleccionar todos
+            </label>
+            <button class="btn" onclick="seleccionarDepartamentoCompleto()" style="white-space:nowrap">Sel. departamento</button>
           </div>
-          <div id="relFuncPickerDropdown" style="display:none;position:absolute;top:100%;left:0;z-index:100;background:var(--s2);border:1px solid var(--border);border-radius:8px;min-width:380px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.3);margin-top:4px">
-            <div style="padding:10px;border-bottom:1px solid var(--border);display:flex;gap:8px">
-              <input class="search-input" id="relFuncSearch" placeholder="Nº ou nome..." oninput="filtrarFuncPicker()" style="flex:1">
-              <select class="select-input" id="relFuncDepFilter" onchange="filtrarFuncPicker()" style="flex:0;width:160px">
-                <option value="">Todos os departamentos</option>
-              </select>
-            </div>
-            <div style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center">
-              <label style="font-size:12px;cursor:pointer"><input type="checkbox" id="relFuncSelectAll" onchange="toggleSelectAllFunc()"> Seleccionar todos</label>
-              <button class="btn btn-sm" onclick="seleccionarDepartamentoCompleto()" style="margin-left:auto">Seleccionar departamento completo</button>
-            </div>
-            <div id="relFuncList" style="padding:4px 0"></div>
-          </div>
+          <!-- Lista de funcionários -->
+          <div id="relFuncList" style="border:1px solid var(--border);border-radius:8px;max-height:280px;overflow-y:auto;background:var(--bg2)"></div>
+          <!-- Contador de seleccionados -->
+          <div id="relFuncPickerLabel" style="font-size:12px;color:var(--muted2);margin-top:6px;padding:4px 0">Seleccionar funcionários...</div>
         </div>
         <input type="hidden" id="relFunc">
         <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
@@ -2536,18 +2534,7 @@ function fmtAOA(v) {
 
 
 // ── PICKER DE FUNCIONÁRIOS ──
-function toggleFuncPicker() {
-  const dropdown = document.getElementById('relFuncPickerDropdown');
-  dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
-}
-
-document.addEventListener('click', e => {
-  const picker = document.getElementById('relFuncPicker');
-  const dropdown = document.getElementById('relFuncPickerDropdown');
-  if (picker && !picker.contains(e.target)) {
-    dropdown.style.display = 'none';
-  }
-});
+function toggleFuncPicker() {}
 
 function filtrarFuncPicker() {
   const search = document.getElementById('relFuncSearch').value.toLowerCase();
@@ -2634,11 +2621,11 @@ async function popularFuncPicker() {
 
     // Popula lista
     listEl.innerHTML = funcs.map(f => `
-      <label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-radius:4px" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <label style="display:flex;align-items:center;gap:12px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <input type="checkbox" class="func-picker-cb" value="${f.id}" data-nome="${f.nome_completo}" data-numero="${f.numero_funcionario}" data-dep="${f.departamento_id||''}" onchange="updatePickerLabel()">
-        <span style="font-family:var(--mono);font-size:11px;color:var(--muted2);width:48px">${f.numero_funcionario}</span>
-        <span style="flex:1">${f.nome_completo}</span>
-        <span style="font-size:11px;color:var(--muted2)">${f.departamento||''}</span>
+        <span style="font-family:var(--mono);font-size:12px;color:var(--muted2);width:52px">${f.numero_funcionario}</span>
+        <span style="flex:1;font-weight:600">${f.nome_completo}</span>
+        <span style="font-size:12px;color:var(--muted2)">${f.departamento||'—'}</span>
       </label>
     `).join('');
 
@@ -3626,7 +3613,7 @@ function toggleRelatorioSelects() {
   } else if (tipo === 'marcacoes-diarias') {
     relDep.style.display = 'none';
     relEscala.style.display = 'none';
-    document.getElementById('relFuncPicker').style.display = 'inline-block';
+    document.getElementById('relFuncPicker').style.display = 'block';
     relNumero.style.display = 'none';
     relSearch.style.display = 'none';
     popularFuncPicker();
