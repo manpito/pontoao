@@ -599,23 +599,6 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="escala">Por escala</option>
           <option value="marcacoes-diarias">Marcações diárias</option>
         </select>
-        <div id="relFuncPicker" style="display:none;width:100%;margin-top:8px">
-          <!-- Linha de filtros -->
-          <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
-            <input class="search-input" id="relFuncSearch" placeholder="Nº ou nome..." oninput="filtrarFuncPicker()" style="flex:1">
-            <select class="select-input" id="relFuncDepFilter" onchange="filtrarFuncPicker()" style="flex:0;min-width:180px">
-              <option value="">Todos os departamentos</option>
-            </select>
-            <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;cursor:pointer">
-              <input type="checkbox" id="relFuncSelectAll" onchange="toggleSelectAllFunc()"> Seleccionar todos
-            </label>
-            <button class="btn" onclick="seleccionarDepartamentoCompleto()" style="white-space:nowrap">Sel. departamento</button>
-          </div>
-          <!-- Lista de funcionários -->
-          <div id="relFuncList" style="border:1px solid var(--border);border-radius:8px;max-height:280px;overflow-y:auto;background:var(--bg2)"></div>
-          <!-- Contador de seleccionados -->
-          <div id="relFuncPickerLabel" style="font-size:12px;color:var(--muted2);margin-top:6px;padding:4px 0">Seleccionar funcionários...</div>
-        </div>
         <input type="hidden" id="relFunc">
         <input class="search-input" type="date" id="relInicio" style="flex:0;width:160px">
         <input class="search-input" type="date" id="relFim" style="flex:0;width:160px">
@@ -628,6 +611,23 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <button class="btn" onclick="exportarRelatorio('xlsx')" title="Exportar Excel">↓ Excel</button>
         <button class="btn" onclick="exportarRelatorioPDF()" title="Exportar PDF">↓ PDF</button>
         <button class="btn" onclick="enviarRelatorioEmail()" title="Enviar por email">✉ Email</button>
+      </div>
+      <div id="relFuncPicker" style="display:none;width:100%;margin-bottom:12px">
+        <!-- Linha de filtros -->
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+          <input class="search-input" id="relFuncSearch" placeholder="Nº ou nome..." oninput="filtrarFuncPicker()" style="flex:1;min-width:200px">
+          <select class="select-input" id="relFuncDepFilter" onchange="filtrarFuncPicker()" style="flex:0;min-width:180px">
+            <option value="">Todos os departamentos</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="relFuncSelectAll" onchange="toggleSelectAllFunc()"> Seleccionar todos
+          </label>
+          <button class="btn" onclick="seleccionarDepartamentoCompleto()" style="white-space:nowrap">Sel. departamento</button>
+        </div>
+        <!-- Lista de funcionários -->
+        <div id="relFuncList" style="border:1px solid var(--border);border-radius:8px;max-height:320px;overflow-y:auto;background:var(--bg2)"></div>
+        <!-- Contador de seleccionados -->
+        <div id="relFuncPickerLabel" style="font-size:12px;color:var(--muted2);margin-top:6px;padding:4px 0">Seleccionar funcionários...</div>
       </div>
       <div id="relatorioOutput"></div>
     </div>
@@ -2622,7 +2622,7 @@ async function popularFuncPicker() {
     // Popula lista
     listEl.innerHTML = funcs.map(f => `
       <label style="display:flex;align-items:center;gap:12px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
-        <input type="checkbox" class="func-picker-cb" value="${f.id}" data-nome="${f.nome_completo}" data-numero="${f.numero_funcionario}" data-dep="${f.departamento_id||''}" onchange="updatePickerLabel()">
+        <input type="checkbox" class="func-picker-cb" value="${f.id}" data-nome="${f.nome_completo}" data-numero="${f.numero_funcionario}" data-dep="${f.departamento||''}" onchange="updatePickerLabel()">
         <span style="font-family:var(--mono);font-size:12px;color:var(--muted2);width:52px">${f.numero_funcionario}</span>
         <span style="flex:1;font-weight:600">${f.nome_completo}</span>
         <span style="font-size:12px;color:var(--muted2)">${f.departamento||'—'}</span>
@@ -2631,11 +2631,11 @@ async function popularFuncPicker() {
 
     // Popula departamentos no filtro
     const deps = [];
-    const depIds = new Set();
+    const depNomes = new Set();
     funcs.forEach(f => {
-      if (f.departamento_id && !depIds.has(f.departamento_id)) {
-        depIds.add(f.departamento_id);
-        deps.push({ id: f.departamento_id, nome: f.departamento });
+      if (f.departamento && !depNomes.has(f.departamento)) {
+        depNomes.add(f.departamento);
+        deps.push({ id: f.departamento, nome: f.departamento });
       }
     });
     depFilter.innerHTML = '<option value="">Todos os departamentos</option>' +
