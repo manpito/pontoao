@@ -206,6 +206,7 @@ class RelatorioController
         $dados = [
             'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'funcionario' => [
+                'id' => (int) $func['id'],
                 'nome' => $func['nome_completo'],
                 'numero' => $func['numero_funcionario'],
                 'departamento' => $func['departamento'],
