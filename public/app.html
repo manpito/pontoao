@@ -300,6 +300,11 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .periodo-info strong { display: block; margin-bottom: 2px; }
 .periodo-info span { font-size: 11px; color: var(--muted2); }
 .rh-colaborador .col-vencimento, .supervisor .col-vencimento { display: none !important; }
+@media print {
+  .print-only { display: grid !important; }
+  .no-print { display: none !important; }
+}
+.print-only { display: none; }
 </style>
 </head>
 <body>
@@ -1068,6 +1073,56 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalAssociarDep')">Cancelar</button>
       <button class="btn btn-accent" onclick="guardarAssociacaoDep()">Associar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR MARCAÇÃO MANUAL -->
+<div class="overlay" id="modalEditarMarcacao">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalEditarMarcacaoTitle">Editar marcação</h3>
+      <button class="modal-close" onclick="fecharModal('modalEditarMarcacao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="emId">
+      <input type="hidden" id="emData">
+      <div id="emInfoOriginal" style="margin-bottom:16px;font-size:12px;color:var(--muted2);background:var(--bg);padding:10px;border-radius:6px"></div>
+      <div class="form-group"><label>Nova hora *</label><input type="time" id="emNovaHora"></div>
+      <div class="form-group"><label>Motivo da edição *</label><textarea id="emMotivo" rows="3" placeholder="Justificação obrigatória..."></textarea></div>
+    </div>
+    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
+      <button class="btn" onclick="fecharModal('modalEditarMarcacao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarEdicaoMarcacao()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL INSERIR MARCAÇÃO MANUAL -->
+<div class="overlay" id="modalInserirMarcacao">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalInserirTitle">Registar marcação manual</h3>
+      <button class="modal-close" onclick="fecharModal('modalInserirMarcacao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="imFuncId">
+      <input type="hidden" id="imData">
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="imTipo">
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+          <option value="inicio_intervalo">Início de Intervalo</option>
+          <option value="fim_intervalo">Fim de Intervalo</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Hora *</label><input type="time" id="imHora"></div>
+      <div class="form-group"><label>Motivo *</label><textarea id="imMotivo" rows="2" placeholder="Justificação obrigatória..."></textarea></div>
+    </div>
+    <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
+      <button class="btn" onclick="fecharModal('modalInserirMarcacao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarMarcacaoManual()">Registar</button>
     </div>
   </div>
 </div>
@@ -2486,6 +2541,24 @@ async function gerarRelatorio() {
     const res = await api('GET', url);
     if (res.erro) throw new Error(res.mensagem);
 
+    // Guardar info para o PDF
+    out.dataset.empresaNome = res.empresa?.nome || '';
+    out.dataset.empresaNif  = res.empresa?.nif || '';
+    out.dataset.lastUrl     = url;
+
+    const cabecalhoEmpresa = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid var(--border)">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${res.empresa?.nome || ''}</div>
+          <div style="font-size:12px;color:var(--muted2)">NIF: ${res.empresa?.nif || ''}</div>
+        </div>
+        <div style="text-align:right;font-size:11px;color:var(--muted2)">
+          <div>PontoAO · Sistema de Assiduidade</div>
+          <div>Lei n.º 7/15 (LGT Angola)</div>
+        </div>
+      </div>
+    `;
+
     let rows = '';
     let headers = '';
     let cardTitle = '';
@@ -2537,21 +2610,96 @@ async function gerarRelatorio() {
     } else if (tipo === 'marcacoes-diarias') {
       const f = res.funcionario;
       cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
-      headers = '<tr><th>Data</th><th>Dia</th><th>Hora</th><th>Tipo</th><th>Origem</th></tr>';
+      headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
+
+      let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, marcManuais = 0;
+
       rows = (res.dias||[]).map(d => {
-        if (!d.marcacoes.length) return `<tr><td>${d.data}</td><td>${d.dia_semana}</td><td colspan="3" class="empty">Sem marcações</td></tr>`;
-        return d.marcacoes.map((m, idx) => `<tr>
-          <td>${idx === 0 ? d.data : ''}</td>
-          <td>${idx === 0 ? d.dia_semana : ''}</td>
-          <td style="font-family:var(--mono)">${m.hora}</td>
-          <td><span class="badge ${m.tipo.startsWith('ENTRADA')?'badge-green':m.tipo.startsWith('SAÍDA')?'badge-red':'badge-blue'}">${m.tipo}</span></td>
-          <td style="font-size:11px;color:var(--muted2)">${m.origem}</td>
-        </tr>`).join('') + `<tr style="background:var(--bg-alt);font-size:11px"><td colspan="2"></td><td colspan="3"><strong>Resumo:</strong> Ent: ${d.resumo.primeira_entrada||'--:--'} | Sai: ${d.resumo.ultima_saida||'--:--'} | Total: ${d.resumo.total_horas}h</td></tr>`;
+        const r = d.resumo;
+        const ent = d.marcacoes.find(m => m.tipo === 'ENTRADA');
+        const sai = [...d.marcacoes].reverse().find(m => m.tipo === 'SAÍDA');
+        const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
+        const fimInt = d.marcacoes.find(m => m.tipo === 'FIM_INTERVALO');
+
+        if (ent) diasPresentes++;
+        totalHoras += r.total_horas || 0;
+        totalAtrasos += r.atraso || 0;
+
+        const fmtM = (m) => {
+          if (!m) return '--:--';
+          if (m.editada) marcManuais++;
+          let h = m.hora;
+          if (m.editada) {
+              const tooltip = `Editado em ${m.data_edicao} por ${m.editada_por || 'Sistema'}. Original: ${m.hora_original}. Motivo: ${m.motivo_edicao}`;
+              h += ` <span style="cursor:help;color:var(--warn);font-weight:700" title="${tooltip}">*</span>`;
+          }
+          return h;
+        };
+
+        let pStr = '--:--';
+        if (iniInt && fimInt) {
+          const diff = (parseInt(fimInt.hora.split(':')[0])*60 + parseInt(fimInt.hora.split(':')[1])) - (parseInt(iniInt.hora.split(':')[0])*60 + parseInt(iniInt.hora.split(':')[1]));
+          if (diff > 0) pStr = Math.floor(diff/60).toString().padStart(2,'0') + ':' + (diff%60).toString().padStart(2,'0');
+        }
+        const hTot = Math.floor(r.total_horas || 0);
+        const mTot = Math.round(((r.total_horas || 0) - hTot) * 60);
+        const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : '--:--';
+
+        let ocor = '';
+        if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
+        else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
+        else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
+        else if (!ent) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
+        else if (ent && !sai) ocor = '<span class="badge badge-warn">Falta Marcação</span>';
+        else if (r.atraso > 0) ocor = `<span class="badge badge-warn">Entrada Tardia (+${r.atraso}min)</span>`;
+
+        const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
+        let acts = '';
+        if (canEdit && r.tipo_dia === 'util') {
+          if (ent) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
+          if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
+          if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent" onclick="abrirModalInserirMarcacao(${f.id},'${d.data}','entrada')">+ Registar</button>`;
+        }
+
+        return `<tr>
+          <td><span style="font-family:var(--mono)">${d.data}</span></td>
+          <td>${d.dia_semana.slice(0,3)}</td>
+          <td style="text-align:center;font-family:var(--mono)">${fmtM(ent)}</td>
+          <td style="text-align:center;font-family:var(--mono)">${fmtM(sai)}</td>
+          <td style="text-align:center;color:var(--muted2)">${pStr}</td>
+          <td style="text-align:center"><strong>${tStr}</strong></td>
+          <td>${ocor}</td>
+          <td>${acts}</td>
+        </tr>`;
       }).join('');
+
       info = `Período: ${res.periodo.inicio} a ${res.periodo.fim}`;
+      const footer = `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
+          <div><div style="font-size:11px;color:var(--muted2)">TOTAL HORAS</div><div style="font-size:18px;font-weight:700">${totalHoras.toFixed(1)}h</div></div>
+          <div><div style="font-size:11px;color:var(--muted2)">DIAS PRESENTES</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${diasPresentes}</div></div>
+          <div><div style="font-size:11px;color:var(--muted2)">DIAS AUSENTES</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${diasAusentes}</div></div>
+          <div><div style="font-size:11px;color:var(--muted2)">ATRASOS</div><div style="font-size:18px;font-weight:700;color:var(--warn)">${totalAtrasos}min</div></div>
+        </div>
+        ${marcManuais > 0 ? `<div style="margin-top:10px;font-size:11px;color:var(--muted2)">* ${marcManuais} marcação(ões) ajustada(s) manualmente. Detalhes disponíveis no log de auditoria.</div>` : ''}
+        <div class="print-only" style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px">
+          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Colaborador</div>
+          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Supervisor / RH</div>
+          <div style="border-top:1px solid #000;padding-top:8px;text-align:center;font-size:11px;color:#000">Data: ____/____/______</div>
+        </div>
+      `;
+      out.innerHTML = `${cabecalhoEmpresa}
+        <div class="card">
+          <div class="card-head"><div class="card-title">${cardTitle} · ${inicio} → ${fim}</div><span style="font-size:11px;color:var(--muted2)">${info}</span></div>
+          <table class="tbl"><thead>${headers}</thead><tbody>${rows||'<tr><td colspan="8" class="empty">Sem dados.</td></tr>'}</tbody></table>
+        </div>
+        ${footer}`;
+      return;
     }
 
-    out.innerHTML = `<div class="card">
+    out.innerHTML = `
+    ${cabecalhoEmpresa}
+    <div class="card">
       <div class="card-head">
         <div class="card-title">${cardTitle} · ${inicio} → ${fim}</div>
         <span style="font-size:11px;color:var(--muted2)">${info}</span>
@@ -3081,7 +3229,8 @@ async function exportarRelatorioPDF() {
     return;
   }
 
-  const titulo = tipo === 'assiduidade' ? 'Relatório de Assiduidade' : 'Relatório de Horas Trabalhadas';
+  const titulo = tipo === 'assiduidade' ? 'Relatório de Assiduidade' : (tipo === 'horas' ? 'Relatório de Horas Trabalhadas' : 'Relatório de Marcações');
+
   const printContent = `
     <!DOCTYPE html>
     <html lang="pt">
@@ -3093,6 +3242,7 @@ async function exportarRelatorioPDF() {
         body { font-family: Arial, sans-serif; font-size: 11px; color: #1a1a1a; padding: 20px; }
         h1 { font-size: 16px; font-weight: 700; margin-bottom: 4px; color: #111; }
         .meta { font-size: 10px; color: #666; margin-bottom: 16px; border-bottom: 2px solid #111; padding-bottom: 8px; }
+        .cabecalho-pdf { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #000; }
         table { width: 100%; border-collapse: collapse; margin-top: 8px; }
         th { background: #1a1a1a; color: #fff; padding: 6px 8px; text-align: left; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
         td { padding: 5px 8px; border-bottom: 1px solid #e5e5e5; font-size: 10px; }
@@ -3108,10 +3258,22 @@ async function exportarRelatorioPDF() {
       </style>
     </head>
     <body>
+      <div class="cabecalho-pdf">
+        <div>
+          <div style="font-size:18px;font-weight:700">${out.dataset.empresaNome || ''}</div>
+          <div style="font-size:12px">NIF: ${out.dataset.empresaNif || ''}</div>
+        </div>
+        <div style="text-align:right;font-size:11px">
+          <div>PontoAO · Sistema de Assiduidade</div>
+          <div>Lei n.º 7/15 (LGT Angola)</div>
+        </div>
+      </div>
       <h1>${titulo}</h1>
       <div class="meta">Período: ${inicio} a ${fim} • Gerado em: ${new Date().toLocaleString('pt-PT')}</div>
-      ${out.querySelector('table') ? out.querySelector('table').outerHTML : out.innerHTML}
-      <div class="footer">PontoAO • Sistema de Controlo de Assiduidade • Lei n.º: 12/23, de 27 de Dezembro</div>
+      <div class="report-body">
+        ${Array.from(out.children).filter(c => !c.style.display.includes('flex') || !c.innerHTML.includes('NIF')).map(c => c.outerHTML).join('')}
+      </div>
+      <div class="footer">PontoAO • Sistema de Controlo de Assiduidade • Lei n.º 7/15 (LGT Angola)</div>
     </body>
     </html>
   `;
@@ -3314,6 +3476,69 @@ async function togglePortalFromList(id, activo) {
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem,'ok');
     loadFuncionarios();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+// ── MARCAÇÕES MANUAIS NO RELATÓRIO ──
+function abrirModalEditarMarcacao(id, tipoLabel, hora, data) {
+  document.getElementById('emId').value = id;
+  document.getElementById('emData').value = data;
+  document.getElementById('emNovaHora').value = hora;
+  document.getElementById('emMotivo').value = '';
+  document.getElementById('emInfoOriginal').innerHTML = `<strong>Editar ${tipoLabel}</strong><br>Data: ${data} · Hora actual: ${hora}`;
+  document.getElementById('modalEditarMarcacao').classList.add('open');
+}
+
+async function guardarEdicaoMarcacao() {
+  const id = document.getElementById('emId').value;
+  const data = document.getElementById('emData').value;
+  const hora = document.getElementById('emNovaHora').value;
+  const motivo = document.getElementById('emMotivo').value.trim();
+
+  if (!hora || !motivo) { toast('Preencha a nova hora e o motivo.','err'); return; }
+
+  try {
+    const res = await api('PUT', `/api/marcacoes/${id}`, {
+      data_hora: `${data} ${hora}:00`,
+      motivo_edicao: motivo
+    });
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Marcação actualizada com sucesso.','ok');
+    fecharModal('modalEditarMarcacao');
+    gerarRelatorio();
+  } catch(e) { toast(e.message,'err'); }
+}
+
+function abrirModalInserirMarcacao(funcId, data, tipoSugerido) {
+  document.getElementById('imFuncId').value = funcId;
+  document.getElementById('imData').value = data;
+  document.getElementById('imTipo').value = tipoSugerido;
+  document.getElementById('imHora').value = '08:00';
+  document.getElementById('imMotivo').value = '';
+  document.getElementById('modalInserirMarcacao').classList.add('open');
+}
+
+async function guardarMarcacaoManual() {
+  const funcId = document.getElementById('imFuncId').value;
+  const data = document.getElementById('imData').value;
+  const tipo = document.getElementById('imTipo').value;
+  const hora = document.getElementById('imHora').value;
+  const motivo = document.getElementById('imMotivo').value.trim();
+
+  if (!hora || !motivo) { toast('Preencha a hora e o motivo.','err'); return; }
+
+  try {
+    const res = await api('POST', '/api/marcacoes', {
+      funcionario_id: funcId,
+      tipo: tipo,
+      data_hora: `${data} ${hora}:00`,
+      origem: 'manual',
+      motivo_edicao: motivo // Although store() doesn't explicitly use it for the marcacao itself, it's good practice for manual entries
+    });
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Marcação registada com sucesso.','ok');
+    fecharModal('modalInserirMarcacao');
+    gerarRelatorio();
   } catch(e) { toast(e.message,'err'); }
 }
 
