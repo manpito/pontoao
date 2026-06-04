@@ -3422,7 +3422,9 @@ async function exportarRelatorioPDF() {
   const fim    = document.getElementById('relFim').value    || new Date().toISOString().slice(0,10);
 
   const out = document.getElementById('relatorioOutput');
-  if (!out || out.innerHTML.includes('spinner') || out.innerHTML.trim() === '') {
+  const isMarcacoes = tipo === 'marcacoes-diarias';
+  const hasContent = isMarcacoes ? getSelectedFuncs().length > 0 && document.getElementById('relMarcacoesAbas') : (out && !out.innerHTML.includes('spinner') && out.innerHTML.trim() !== '');
+  if (!hasContent) {
     toast('Gere primeiro o relatório antes de exportar para PDF.','inf');
     return;
   }
