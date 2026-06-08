@@ -779,13 +779,21 @@ class RelatorioController
         $ids      = array_column($funcionarios, 'id');
         $inStr    = implode(',', $ids);
 
-        $stmtM = $db->query("
+        $fimQuery = $dataFim . ' 23:59:59';
+        foreach ($funcionarios as $funcCheck) {
+            if ($this->periodoTemTurnoNocturno($db, (int)$funcCheck['id'], $dataInicio, $dataFim)) {
+                $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
+                break;
+            }
+        }
+        $stmtM = $db->prepare("
             SELECT funcionario_id, tipo, data_hora
             FROM marcacoes
             WHERE funcionario_id IN ({$inStr})
-              AND data_hora BETWEEN '{$dataInicio} 00:00:00' AND '{$dataFim} 23:59:59'
+              AND data_hora BETWEEN :ini AND :fim
             ORDER BY funcionario_id, data_hora ASC
         ");
+        $stmtM->execute([':ini' => $dataInicio . ' 00:00:00', ':fim' => $fimQuery]);
         $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
         // Buscar marcações em falta no período
@@ -798,6 +806,7 @@ class RelatorioController
         $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
 
         $resultado = [];
+        $escalaService = new \App\Services\EscalaService($db);
 
         foreach ($funcionarios as $func) {
             $marcFunc   = array_values(array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']));
@@ -805,6 +814,14 @@ class RelatorioController
             $marcPorDia = [];
             foreach ($marcFunc as $m) {
                 $dia = substr($m['data_hora'], 0, 10);
+                $hora = (int) substr($m['data_hora'], 11, 2);
+                if ($m['tipo'] === 'saida' && $hora < 12) {
+                    $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
+                    $turnoAnterior = $escalaService->calcularTurnoEm((int)$func['id'], $diaAnterior);
+                    if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
+                        $dia = $diaAnterior;
+                    }
+                }
                 $marcPorDia[$dia][] = $m;
             }
 
@@ -823,6 +840,12 @@ class RelatorioController
             foreach ($marcPorDia as $dia => $marcacoes) {
                 $diaSemana = (int) date('N', strtotime($dia));
                 if ($diaSemana >= 6 || isset($feriados[$dia])) continue;
+
+                $turnoHoras = $escalaService->calcularTurnoEm((int)$func['id'], $dia);
+                $horasEsperadasDiaTurno = $horasEsperadasDia; // fallback: valor do horário
+                if ($turnoHoras && $turnoHoras['tipo'] !== 'folga' && $turnoHoras['horas_efectivas'] !== null) {
+                    $horasEsperadasDiaTurno = (float) $turnoHoras['horas_efectivas'];
+                }
 
                 $entrada         = null;
                 $saida           = null;
@@ -852,9 +875,13 @@ class RelatorioController
 
                 if (!$entrada) continue;
 
-                $saidaEfetiva = $saida ?? ($entrada + ($horasEsperadasDia * 3600));
+                $saidaEfetiva = $saida ?? ($entrada + ($horasEsperadasDiaTurno * 3600));
                 $minutosTrabalhados = (int) round(($saidaEfetiva - $entrada) / 60) - $minutosIntervalo;
-                $minutosEsperados   = (int) ($horasEsperadasDia * 60);
+                $minutosEsperados   = (int) ($horasEsperadasDiaTurno * 60);
+
+                if ($turnoHoras && $turnoHoras['tipo'] === 'folga') {
+                    $minutosEsperados = 0;
+                }
 
                 // Calcular atraso (tolerância incluída)
                 $entradaPrevista = strtotime($dia . ' ' . $horaPadraoEntrada);
@@ -892,8 +919,8 @@ class RelatorioController
                     'minutos_intervalo'   => $minutosIntervalo,
                     'minutos_trabalhados' => $minutosTrabalhados,
                     'minutos_esperados'   => $minutosEsperados,
-                    'minutos_extra'       => max(0, $minutosTrabalhados - $minutosEsperados),
-                    'minutos_deficit'     => max(0, $minutosEsperados - $minutosTrabalhados),
+                    'minutos_extra'       => ($turnoHoras && $turnoHoras['tipo'] === 'folga') ? 0 : max(0, $minutosTrabalhados - $minutosEsperados),
+                    'minutos_deficit'     => ($turnoHoras && $turnoHoras['tipo'] === 'folga') ? 0 : max(0, $minutosEsperados - $minutosTrabalhados),
                     'atraso_min'          => $atrasoMin,
                     'saida_antecipada_min' => $saidaAntMin,
                 ];
