@@ -94,6 +94,11 @@ class RelatorioController
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
 
         // 3. Marcações com origem e auditoria
+        $fimQuery = $dataFim . ' 23:59:59';
+        if ($this->periodoTemTurnoNocturno($db, $funcId, $dataInicio, $dataFim)) {
+            $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
+        }
+
         $stmtM = $db->prepare("
             SELECT m.id, m.tipo, m.data_hora, m.origem,
                    m.editada, m.data_hora_original, m.motivo_edicao, m.data_edicao,
@@ -107,14 +112,24 @@ class RelatorioController
         $stmtM->execute([
             ':fid' => $funcId,
             ':ini' => $dataInicio . ' 00:00:00',
-            ':fim' => $dataFim    . ' 23:59:59'
+            ':fim' => $fimQuery
         ]);
         $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+
+        $escalaService = new \App\Services\EscalaService($db);
 
         // Agrupar por dia
         $marcPorDia = [];
         foreach ($marcacoesRaw as $m) {
             $dia = substr($m['data_hora'], 0, 10);
+            $hora = (int) substr($m['data_hora'], 11, 2);
+            if ($m['tipo'] === 'saida' && $hora < 12) {
+                $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
+                $turnoAnterior = $escalaService->calcularTurnoEm($funcId, $diaAnterior);
+                if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
+                    $dia = $diaAnterior;
+                }
+            }
             $marcPorDia[$dia][] = $m;
         }
 
@@ -123,8 +138,6 @@ class RelatorioController
         $atual = strtotime($dataInicio);
         $fim   = strtotime($dataFim);
         $nomesDias = [1 => 'Segunda-feira', 2 => 'Terça-feira', 3 => 'Quarta-feira', 4 => 'Quinta-feira', 5 => 'Sexta-feira', 6 => 'Sábado', 7 => 'Domingo'];
-
-        $escalaService = new \App\Services\EscalaService($db);
 
         while ($atual <= $fim) {
             $dataStr   = date('Y-m-d', $atual);
@@ -170,14 +183,22 @@ class RelatorioController
                 } elseif ($m['tipo'] === 'saida') {
                     $ultimaSaida = $hora;
                     if ($entradaTs) {
-                        $minutosTotais += (int)round(($ts - $entradaTs)/60);
+                        $diff = $ts - $entradaTs;
+                        if ($turno && $turno['atravessa_dia_civil'] && $diff < 0) {
+                             $diff += 86400;
+                        }
+                        $minutosTotais += (int)round($diff/60);
                         $entradaTs = null;
                     }
                 } elseif ($m['tipo'] === 'inicio_intervalo') {
                     $intervaloInicio = $ts;
                 } elseif ($m['tipo'] === 'fim_intervalo') {
                     if ($intervaloInicio) {
-                        $minutosTotais -= (int)round(($ts - $intervaloInicio)/60);
+                        $diffInt = $ts - $intervaloInicio;
+                        if ($turno && $turno['atravessa_dia_civil'] && $diffInt < 0) {
+                            $diffInt += 86400;
+                        }
+                        $minutosTotais -= (int)round($diffInt/60);
                         $intervaloInicio = null;
                     }
                 }
@@ -211,13 +232,21 @@ class RelatorioController
                 }
 
                 if ($turno['hora_saida'] && $ultimaSaida) {
-                    [$hP, $mP] = explode(':', $turno['hora_saida']);
-                    $minPrevisto = (int)$hP * 60 + (int)$mP;
-                    [$hR, $mR] = explode(':', $ultimaSaida);
-                    $minReal = (int)$hR * 60 + (int)$mR;
+                    if ($turno['atravessa_dia_civil']) {
+                        $tsPrevistoSaida = strtotime($dataStr . ' ' . $turno['hora_saida'] . ' +1 day');
+                        $tsRealSaida = strtotime($dataStr . ' ' . $ultimaSaida . ' +1 day');
+                        if ($tsPrevistoSaida - $tsRealSaida > 0) {
+                            $saidaAntecipadaMinutos = (int) round(($tsPrevistoSaida - $tsRealSaida) / 60);
+                        }
+                    } else {
+                        [$hP, $mP] = explode(':', $turno['hora_saida']);
+                        $minPrevisto = (int)$hP * 60 + (int)$mP;
+                        [$hR, $mR] = explode(':', $ultimaSaida);
+                        $minReal = (int)$hR * 60 + (int)$mR;
 
-                    if ($minPrevisto - $minReal > 0) {
-                        $saidaAntecipadaMinutos = $minPrevisto - $minReal;
+                        if ($minPrevisto - $minReal > 0) {
+                            $saidaAntecipadaMinutos = $minPrevisto - $minReal;
+                        }
                     }
                 }
             }
@@ -1446,6 +1475,26 @@ class RelatorioController
             ->withHeader('Content-Type', 'text/csv; charset=UTF-8')
             ->withHeader('Content-Disposition', "attachment; filename=\"{$filename}.csv\"")
             ->withHeader('Cache-Control', 'no-cache');
+    }
+
+    private function periodoTemTurnoNocturno(PDO $db, int $funcId, string $dataInicio, string $dataFim): bool
+    {
+        $stmt = $db->prepare("
+            SELECT COUNT(*)
+            FROM funcionario_escala fe
+            JOIN escala_turnos et ON fe.escala_id = et.escala_id
+            JOIN turnos t ON et.turno_id = t.id
+            WHERE fe.funcionario_id = :fid
+              AND fe.data_inicio <= :fim
+              AND (fe.data_fim IS NULL OR fe.data_fim >= :ini)
+              AND t.atravessa_dia_civil = 1
+        ");
+        $stmt->execute([
+            ':fid' => $funcId,
+            ':ini' => $dataInicio,
+            ':fim' => $dataFim
+        ]);
+        return (int)$stmt->fetchColumn() > 0;
     }
 
     private function json(ResponseInterface $response, int $status, array $data): ResponseInterface
