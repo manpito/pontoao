@@ -906,6 +906,27 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <div class="form-group"><label>Início intervalo</label><input type="time" id="tIniInt"></div>
           <div class="form-group"><label>Fim intervalo</label><input type="time" id="tFimInt"></div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Horas efectivas</label>
+            <input type="number" id="tHorasEfectivas" min="0" max="24" step="0.5" placeholder="Ex: 8">
+          </div>
+          <div class="form-group">
+            <label>Classificação legal</label>
+            <select id="tClassificacaoLegal">
+              <option value="nao_aplicavel">Não aplicável</option>
+              <option value="diurno">Diurno</option>
+              <option value="nocturno">Nocturno</option>
+              <option value="misto">Misto</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="tAtraviaDiaCivil" style="margin-right:6px">
+            Turno nocturno — atravessa meia-noite (ex: 18h-07h)
+          </label>
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -2966,6 +2987,9 @@ function abrirModalTurno(id = null) {
       document.getElementById("tSaida").value = t.hora_saida;
       document.getElementById("tIniInt").value = t.hora_inicio_intervalo;
       document.getElementById("tFimInt").value = t.hora_fim_intervalo;
+      document.getElementById("tHorasEfectivas").value = t.horas_efectivas ?? "";
+      document.getElementById("tClassificacaoLegal").value = t.classificacao_legal ?? "nao_aplicavel";
+      document.getElementById("tAtraviaDiaCivil").checked = !!t.atravessa_dia_civil;
     }
   } else {
     document.getElementById("tNome").value = "";
@@ -2974,6 +2998,9 @@ function abrirModalTurno(id = null) {
     document.getElementById("tSaida").value = "17:00";
     document.getElementById("tIniInt").value = "12:00";
     document.getElementById("tFimInt").value = "13:00";
+    document.getElementById("tHorasEfectivas").value = "";
+    document.getElementById("tClassificacaoLegal").value = "nao_aplicavel";
+    document.getElementById("tAtraviaDiaCivil").checked = false;
   }
   toggleCamposTurno();
   document.getElementById("modalTurno").classList.add("open");
@@ -2992,7 +3019,10 @@ async function guardarTurno() {
     hora_entrada: document.getElementById("tEntrada").value,
     hora_saida: document.getElementById("tSaida").value,
     hora_inicio_intervalo: document.getElementById("tIniInt").value || null,
-    hora_fim_intervalo: document.getElementById("tFimInt").value || null
+    hora_fim_intervalo: document.getElementById("tFimInt").value || null,
+    horas_efectivas: document.getElementById("tHorasEfectivas").value !== "" ? parseFloat(document.getElementById("tHorasEfectivas").value) : null,
+    classificacao_legal: document.getElementById("tClassificacaoLegal").value,
+    atravessa_dia_civil: document.getElementById("tAtraviaDiaCivil").checked
   };
   if (!payload.nome) { toast("O nome é obrigatório.", "err"); return; }
   try {
