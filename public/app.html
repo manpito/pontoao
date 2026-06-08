@@ -708,7 +708,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
             <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Exporta dados de processamento salarial no formato compatível com o módulo RH do Primavera Professional V10.</p>
             <div class="form-group"><label>Mês</label><input type="month" id="expMes" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none"></div>
             <div class="form-group"><label>Departamento (opcional)</label><select id="expDep" class="select-input" style="width:100%"><option value="">Todos</option></select></div>
-            <button class="btn btn-accent" onclick="exportarPrimavera()" style="width:100%">↓ Descarregar CSV Primavera</button>
+            <button class="btn btn-accent" onclick="exportarPrimavera()" style="width:100%">↓ Exportar para Primavera V10 (.txt)</button>
           </div>
         </div>
         <div class="card">
@@ -3322,7 +3322,7 @@ function exportarPrimavera() {
   if (!mes) { toast('Seleccione o mês.','err'); return; }
   let url = `/api/exportacao/primavera?mes=${mes}`;
   if (dep) url += `&departamento_id=${dep}`;
-  downloadApi(url, `primavera_${mes}.csv`);
+  downloadApi(url, `exportacao_primavera_${mes}.txt`);
 }
 
 function exportarFuncionarios() {
