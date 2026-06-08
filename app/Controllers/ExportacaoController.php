@@ -37,142 +37,197 @@ class ExportacaoController
      */
     public function primavera(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $params = $request->getQueryParams();
-        $mes    = $params['mes'] ?? date('Y-m');
-        $depId  = !empty($params['departamento_id']) ? (int) $params['departamento_id'] : null;
-
-        [$ano, $mesNum] = explode('-', $mes);
-        $dataInicio = "{$mes}-01";
+        $params     = $request->getQueryParams();
+        $mes        = $params['mes'] ?? date('Y-m');
+        $dataInicio = $mes . '-01';
         $dataFim    = $mes . '-' . date('t', strtotime($dataInicio));
+        $db         = $this->db();
 
-        $db = $this->db();
-
-        // Buscar funcionários activos
-        $where = ["f.estado = 'activo'"];
-        $bind  = [];
-        if ($depId) { $where[] = 'f.departamento_id = :did'; $bind[':did'] = $depId; }
-
-        $stmtF = $db->prepare("
-            SELECT f.id, f.numero_funcionario, f.nome_completo, f.nif, f.niss,
-                   f.vencimento_base_aoa, f.num_dependentes, f.tipo_contrato,
-                   h.horas_dia AS horas_esperadas_dia
+        // 2.2 — Buscar funcionários activos
+        $stmtF = $db->query("
+            SELECT f.id, f.numero_funcionario
             FROM funcionarios f
-            LEFT JOIN funcionario_horario fh ON fh.funcionario_id = f.id AND fh.data_fim IS NULL
-            LEFT JOIN horarios h ON fh.horario_id = h.id
-            WHERE " . implode(' AND ', $where) . "
+            WHERE f.estado = 'activo'
             ORDER BY f.numero_funcionario ASC
         ");
-        $stmtF->execute($bind);
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
-        // Buscar feriados do mês
+        if (empty($funcionarios)) {
+            $response->getBody()->write("");
+            return $response
+                ->withStatus(200)
+                ->withHeader('Content-Type', 'text/plain; charset=UTF-8')
+                ->withHeader('Content-Disposition', 'attachment; filename="exportacao_primavera_' . $mes . '.txt"');
+        }
+
+        $ids   = array_column($funcionarios, 'id');
+        $inStr = implode(',', array_map('intval', $ids));
+
+        // 2.3 — Buscar feriados do período
         $feriados = [];
-        $stmtFer = $db->query("SELECT data FROM feriados WHERE data BETWEEN '{$dataInicio}' AND '{$dataFim}'");
+        $stmtFer = $db->prepare("SELECT data FROM feriados WHERE data BETWEEN :ini AND :fim");
+        $stmtFer->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
         foreach ($stmtFer->fetchAll(PDO::FETCH_COLUMN) as $d) {
             $feriados[$d] = true;
         }
 
-        // Buscar marcações do mês (todos os funcionários)
-        $ids   = array_column($funcionarios, 'id');
-        if (empty($ids)) {
-            return $this->csvResponse("exportacao_primavera_{$mes}.csv", $this->primaveraHeader(), []);
+        // 2.4 — Buscar faltas classificadas do período
+        $stmtMF = $db->prepare("
+            SELECT mf.funcionario_id, mf.data, mf.estado
+            FROM marcacoes_em_falta mf
+            WHERE mf.funcionario_id IN ({$inStr})
+              AND mf.data BETWEEN :ini AND :fim
+              AND mf.estado != 'pendente'
+        ");
+        $stmtMF->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        $faltasRaw = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+        $faltasMap = [];
+        foreach ($faltasRaw as $f) {
+            $faltasMap[$f['funcionario_id']][$f['data']] = $f['estado'];
         }
-        $inStr = implode(',', $ids);
 
-        $stmtM = $db->query("
+        // 2.5 — Buscar marcações do período
+        $fimQuery = $dataFim . ' 23:59:59';
+        if ($this->periodoTemTurnoNocturnoGlobal($db, $ids, $dataInicio, $dataFim)) {
+            $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
+        }
+        $stmtM = $db->prepare("
             SELECT funcionario_id, tipo, data_hora
             FROM marcacoes
             WHERE funcionario_id IN ({$inStr})
-              AND data_hora BETWEEN '{$dataInicio} 00:00:00' AND '{$dataFim} 23:59:59'
+              AND data_hora BETWEEN :ini AND :fim
             ORDER BY funcionario_id, data_hora ASC
         ");
-        $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+        $stmtM->execute([':ini' => $dataInicio . ' 00:00:00', ':fim' => $fimQuery]);
+        $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
+        $marcacoesMap = [];
+        foreach ($marcacoesRaw as $m) {
+            $marcacoesMap[$m['funcionario_id']][] = $m;
+        }
 
-        // Buscar justificações aprovadas do mês
-        $stmtJ = $db->query("
-            SELECT funcionario_id, data_inicio, data_fim
-            FROM justificacoes
-            WHERE funcionario_id IN ({$inStr})
-              AND estado = 'aprovada'
-              AND data_inicio <= '{$dataFim}' AND data_fim >= '{$dataInicio}'
+        // 2.6 — Buscar férias aprovadas do período
+        $stmtFP = $db->prepare("
+            SELECT fp.funcionario_id, fp.data_inicio, fp.data_fim
+            FROM ferias_pedidos fp
+            WHERE fp.funcionario_id IN ({$inStr})
+              AND fp.estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND fp.data_inicio <= :fim AND fp.data_fim >= :ini
         ");
-        $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
+        $stmtFP->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        $feriasRaw = $stmtFP->fetchAll(PDO::FETCH_ASSOC);
+        $feriasMap = [];
+        foreach ($feriasRaw as $f) {
+            $feriasMap[$f['funcionario_id']][] = $f;
+        }
 
+        // 2.7 — Processar e gerar linhas
+        $escalaService = new \App\Services\EscalaService($db);
         $linhas = [];
 
         foreach ($funcionarios as $func) {
-            $marcFunc = array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']);
-            $justFunc = array_filter($justificacoes, fn($j) => $j['funcionario_id'] == $func['id']);
+            $fId = (int)$func['id'];
+            $codFunc = (string)$func['numero_funcionario'];
 
+            $marcFunc = $marcacoesMap[$fId] ?? [];
             $marcPorDia = [];
             foreach ($marcFunc as $m) {
                 $dia = substr($m['data_hora'], 0, 10);
+                $hora = (int) substr($m['data_hora'], 11, 2);
+                if ($m['tipo'] === 'saida' && $hora < 12) {
+                    $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
+                    $turnoAnterior = $escalaService->calcularTurnoEm($fId, $diaAnterior);
+                    if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
+                        $dia = $diaAnterior;
+                    }
+                }
                 $marcPorDia[$dia][] = $m;
             }
 
-            $diasTrabalhados     = 0;
-            $minutosExtra        = 0;
-            $faltasInjustificadas = 0;
-            $faltasJustificadas  = 0;
-            $horasEsperadasDia   = (float) ($func['horas_esperadas_dia'] ?? 8);
-
             $atual = strtotime($dataInicio);
-            $fim   = strtotime($dataFim);
+            $fimTs = strtotime($dataFim);
 
-            while ($atual <= $fim) {
-                $dataStr   = date('Y-m-d', $atual);
+            while ($atual <= $fimTs) {
+                $dataStr = date('Y-m-d', $atual);
                 $diaSemana = (int) date('N', $atual);
-                $atual     = strtotime('+1 day', $atual);
+                $isUtil = ($diaSemana < 6 && !isset($feriados[$dataStr]));
 
-                if ($diaSemana >= 6 || isset($feriados[$dataStr])) continue;
-
-                if (!empty($marcPorDia[$dataStr])) {
-                    $diasTrabalhados++;
-
-                    // Calcular horas extra do dia
-                    $entrada = null; $saida = null; $intervalo = 0; $iniInt = null;
-                    foreach ($marcPorDia[$dataStr] as $m) {
-                        $ts = strtotime($m['data_hora']);
-                        match ($m['tipo']) {
-                            'entrada'          => $entrada = $ts,
-                            'saida'            => $saida = $ts,
-                            'inicio_intervalo' => $iniInt = $ts,
-                            'fim_intervalo'    => $intervalo += $iniInt ? (int)(($ts - $iniInt) / 60) : 0,
-                            default            => null
-                        };
+                // Faltas (marcacoes_em_falta)
+                if (isset($faltasMap[$fId][$dataStr])) {
+                    $estado = $faltasMap[$fId][$dataStr];
+                    $map = [
+                        'injustificada_falta'    => ['F03', 1.0],
+                        'injustificada_meio_dia' => ['F08', 0.5],
+                        'justificada_trabalho'   => ['F10', 1.0],
+                        'justificada_motivo'     => ['F10', 1.0],
+                    ];
+                    if (isset($map[$estado])) {
+                        $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, $map[$estado][0], (float)$map[$estado][1]);
                     }
-                    if ($entrada && $saida) {
-                        $minutos = (int)(($saida - $entrada) / 60) - $intervalo;
-                        $minutosExtra += max(0, $minutos - (int)($horasEsperadasDia * 60));
-                    }
-                } else {
-                    // Verificar justificação
-                    $justificado = false;
-                    foreach ($justFunc as $j) {
-                        if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim']) {
-                            $justificado = true; break;
+                }
+
+                // Férias (ferias_pedidos)
+                if (isset($feriasMap[$fId])) {
+                    foreach ($feriasMap[$fId] as $fp) {
+                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim'] && $isUtil) {
+                            $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F50', 1.0);
+                            break;
                         }
                     }
-                    if ($justificado) $faltasJustificadas++; else $faltasInjustificadas++;
                 }
-            }
 
-            $linhas[] = [
-                $func['numero_funcionario'],
-                $func['nome_completo'],
-                $func['nif'] ?? '',
-                $func['niss'] ?? '',
-                number_format((float)$func['vencimento_base_aoa'], 2, '.', ''),
-                $diasTrabalhados,
-                number_format($minutosExtra / 60, 2, '.', ''),
-                $faltasInjustificadas,
-                $faltasJustificadas,
-                $func['num_dependentes'],
-                $func['tipo_contrato'],
-            ];
+                // Atrasos e Horas Extra
+                $mDia = $marcPorDia[$dataStr] ?? [];
+                $turno = $escalaService->calcularTurnoEm($fId, $dataStr);
+
+                if ($turno) {
+                    $entrada = null; $saida = null; $minutosIntervalo = 0; $iniInt = null;
+                    foreach ($mDia as $m) {
+                        $ts = strtotime($m['data_hora']);
+                        if ($m['tipo'] === 'entrada' && !$entrada) $entrada = $ts;
+                        elseif ($m['tipo'] === 'saida') $saida = $ts;
+                        elseif ($m['tipo'] === 'inicio_intervalo') $iniInt = $ts;
+                        elseif ($m['tipo'] === 'fim_intervalo' && $iniInt) {
+                            $minutosIntervalo += (int) round(($ts - $iniInt) / 60);
+                            $iniInt = null;
+                        }
+                    }
+
+                    if ($entrada) {
+                        // Atrasos
+                        if ($turno['tipo'] !== 'folga' && $turno['hora_entrada']) {
+                            $tolerancia = $turno['tolerancia_entrada_min'] ?? 10;
+                            $entradaPrevista = strtotime($dataStr . ' ' . $turno['hora_entrada']);
+                            $atrasoMinutos = (int) round(($entrada - $entradaPrevista) / 60);
+                            if ($atrasoMinutos > $tolerancia) {
+                                $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', ($atrasoMinutos - $tolerancia) / 60);
+                            }
+                        }
+
+                        // Horas Extra
+                        $horasEfectivas = ($turno['tipo'] === 'folga') ? 0 : ($turno['horas_efectivas'] ?? 8);
+                        $saidaCalc = $saida ?? ($entrada + ($horasEfectivas * 3600));
+                        $minutosTrabalhados = (int) round(($saidaCalc - $entrada) / 60) - $minutosIntervalo;
+                        $minutosEsperados   = (int) ($horasEfectivas * 60);
+                        $minutosExtra = max(0, $minutosTrabalhados - $minutosEsperados);
+
+                        if ($minutosExtra > 0) {
+                            $codigo = ($diaSemana >= 6 || isset($feriados[$dataStr])) ? 'H04' : 'H02';
+                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, $codigo, $minutosExtra / 60);
+                        }
+                    }
+                }
+
+                $atual = strtotime('+1 day', $atual);
+            }
         }
 
-        return $this->csvResponse("exportacao_primavera_{$mes}.csv", $this->primaveraHeader(), $linhas);
+        // 2.8 — Retornar o ficheiro
+        $conteudo = implode("\r\n", $linhas);
+        $response->getBody()->write($conteudo);
+        return $response
+            ->withStatus(200)
+            ->withHeader('Content-Type', 'text/plain; charset=UTF-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="exportacao_primavera_' . $mes . '.txt"');
     }
 
     /**
@@ -267,5 +322,37 @@ class ExportacaoController
             ->withHeader('Content-Type', 'text/csv; charset=UTF-8')
             ->withHeader('Content-Disposition', "attachment; filename=\"{$filename}\"")
             ->withHeader('Cache-Control', 'no-cache');
+    }
+
+    private function formatarLinhaPrimavera(
+        string $tipo,
+        string $codFunc,
+        string $dataStr,
+        string $codigo,
+        float $quantidade
+    ): string {
+        $codPadded  = str_pad($codFunc, 10, '0', STR_PAD_LEFT);
+        $data       = date('dmY', strtotime($dataStr));
+        $intParte   = (int) $quantidade;
+        $decParte   = (int) round(($quantidade - $intParte) * 1000);
+        $qtd        = sprintf('%03d.%03d', $intParte, $decParte);
+        return $tipo . $codPadded . $data . $codigo . $qtd . '0000';
+    }
+
+    private function periodoTemTurnoNocturnoGlobal(PDO $db, array $ids, string $dataInicio, string $dataFim): bool
+    {
+        $inStr = implode(',', array_map('intval', $ids));
+        $stmt = $db->prepare("
+            SELECT COUNT(*)
+            FROM funcionario_escala fe
+            JOIN escala_turnos et ON fe.escala_id = et.escala_id
+            JOIN turnos t ON et.turno_id = t.id
+            WHERE fe.funcionario_id IN ({$inStr})
+              AND fe.data_inicio <= :fim
+              AND (fe.data_fim IS NULL OR fe.data_fim >= :ini)
+              AND t.atravessa_dia_civil = 1
+        ");
+        $stmt->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        return (int)$stmt->fetchColumn() > 0;
     }
 }
