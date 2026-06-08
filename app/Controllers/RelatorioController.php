@@ -839,7 +839,15 @@ class RelatorioController
 
             foreach ($marcPorDia as $dia => $marcacoes) {
                 $diaSemana = (int) date('N', strtotime($dia));
-                if ($diaSemana >= 6 || isset($feriados[$dia])) continue;
+
+                $tipoDia = 'util';
+                if (isset($feriados[$dia])) {
+                    $tipoDia = 'feriado';
+                } elseif ($diaSemana === 6) {
+                    $tipoDia = 'sabado';
+                } elseif ($diaSemana === 7) {
+                    $tipoDia = 'domingo';
+                }
 
                 $turnoHoras = $escalaService->calcularTurnoEm((int)$func['id'], $dia);
                 $horasEsperadasDiaTurno = $horasEsperadasDia; // fallback: valor do horário
@@ -884,12 +892,18 @@ class RelatorioController
                 }
 
                 // Calcular atraso (tolerância incluída)
-                $entradaPrevista = strtotime($dia . ' ' . $horaPadraoEntrada);
+                $entradaRef = ($turnoHoras && $turnoHoras['hora_entrada']) ? substr($turnoHoras['hora_entrada'], 0, 5) : substr($horaPadraoEntrada, 0, 5);
+                $saidaRef   = ($turnoHoras && $turnoHoras['hora_saida'])   ? substr($turnoHoras['hora_saida'], 0, 5)   : substr($horaPadraoSaida, 0, 5);
+
+                $entradaPrevista = strtotime($dia . ' ' . $entradaRef);
                 $atrasoMin = max(0, (int) round(($entrada - $entradaPrevista) / 60) - $tolerancia);
 
                 // Calcular saída antecipada
-                $saidaPrevista  = strtotime($dia . ' ' . $horaPadraoSaida);
-                $saidaAntMin    = $saida ? max(0, (int) round(($saidaPrevista - $saida) / 60)) : 0;
+                $saidaPrevista = strtotime($dia . ' ' . $saidaRef);
+                if ($turnoHoras && $turnoHoras['atravessa_dia_civil']) {
+                    $saidaPrevista = strtotime($dia . ' ' . $saidaRef . ' +1 day');
+                }
+                $saidaAntMin = $saida ? max(0, (int) round(($saidaPrevista - $saida) / 60)) : 0;
 
                 $totalMinutosEfetivos  += $minutosTrabalhados;
                 $totalMinutosEsperados += $minutosEsperados;
@@ -923,6 +937,7 @@ class RelatorioController
                     'minutos_deficit'     => ($turnoHoras && $turnoHoras['tipo'] === 'folga') ? 0 : max(0, $minutosEsperados - $minutosTrabalhados),
                     'atraso_min'          => $atrasoMin,
                     'saida_antecipada_min' => $saidaAntMin,
+                    'tipo_dia'            => $tipoDia,
                 ];
             }
 
