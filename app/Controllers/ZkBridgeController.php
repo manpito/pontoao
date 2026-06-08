@@ -46,7 +46,7 @@ class ZkBridgeController
         }
 
         $response->getBody()->write("OK");
-        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
+        return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -100,7 +100,7 @@ class ZkBridgeController
             'mensagem'    => "OK: {$processados} marcação(ões) registada(s).",
         ]));
 
-        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     }
 
     // -------------------------------------------------------------------------
@@ -130,7 +130,7 @@ class ZkBridgeController
             'total'        => count($utilizadores),
         ]));
 
-        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json');
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     }
 
     // -------------------------------------------------------------------------
@@ -297,7 +297,7 @@ class ZkBridgeController
 
         if ($table !== 'ATTLOG' || empty($raw)) {
             $response->getBody()->write("OK");
-            return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
+            return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
         }
 
         $processados = 0;
@@ -341,7 +341,7 @@ class ZkBridgeController
         }
 
         $response->getBody()->write("OK: {$processados}");
-        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
+        return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -350,8 +350,12 @@ class ZkBridgeController
 
     public function admsGetRequest(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $response->getBody()->write("OK");
-        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
+        $params = $request->getQueryParams();
+        $sn     = $params['SN'] ?? '';
+        $cmd = "C:1:DATA QUERY ATTLOG StartTime=2026-01-01 00:00:00\nOK";
+        $this->log("GETREQUEST SN={$sn} -> DATA QUERY ATTLOG");
+        $response->getBody()->write($cmd);
+        return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -361,7 +365,7 @@ class ZkBridgeController
     public function admsDeviceCmd(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $response->getBody()->write("OK");
-        return  $response->withStatus($status)->withHeader('Content-Type', 'text/plain');
+        return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
 
     // -------------------------------------------------------------------------
@@ -522,6 +526,6 @@ class ZkBridgeController
     {
 
         $response->getBody()->write(json_encode($data, JSON_UNESCAPED_UNICODE));
-        return  $response->withStatus($status)->withHeader('Content-Type', 'application/json; charset=UTF-8');
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json; charset=UTF-8');
     }
 }
