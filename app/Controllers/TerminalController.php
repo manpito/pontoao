@@ -231,24 +231,22 @@ class TerminalController
             return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Terminal não encontrado.']);
         }
 
-        $start = microtime(true);
-        $fp    = @fsockopen($rel['ip'], (int) $rel['porta'], $errno, $errstr, 2);
-        $end   = microtime(true);
-
-        if ($fp) {
-            fclose($fp);
-            $latencia = round(($end - $start) * 1000, 2);
+        $stmt2 = $db->prepare("SELECT TIMESTAMPDIFF(SECOND, ultimo_heartbeat, NOW()) as seg_atras FROM relogios WHERE id = :id");
+        $stmt2->execute([':id' => $id]);
+        $hb = $stmt2->fetch(PDO::FETCH_ASSOC);
+        $segAtras = $hb ? (int) $hb['seg_atras'] : PHP_INT_MAX;
+        if ($segAtras <= 7200) {
+            $minAtras = round($segAtras / 60, 1);
             return $this->json($response, 200, [
                 'online'   => true,
-                'latencia' => $latencia . 'ms',
-                'mensagem' => "Terminal online ({$latencia}ms)."
+                'latencia' => $minAtras . 'min',
+                'mensagem' => "Terminal online (último contacto há {$minAtras} min)."
             ]);
         }
-
         return $this->json($response, 200, [
             'online'   => false,
-            'erro'     => $errstr ?: 'Connection timed out',
-            'mensagem' => 'Terminal offline ou inacessível.'
+            'erro'     => 'Sem heartbeat recente',
+            'mensagem' => 'Terminal offline — sem contacto há mais de 2 horas.'
         ]);
     }
 
