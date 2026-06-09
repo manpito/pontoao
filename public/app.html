@@ -488,6 +488,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="rejeitado">Rejeitados</option>
           <option value="">Todos</option>
         </select>
+        <button class="btn btn-accent" onclick="abrirModalNovoFerias()">+ Novo pedido</button>
       </div>
       <div class="card">
         <div class="card-head"><div class="card-title">Pedidos de férias</div></div>
@@ -504,6 +505,31 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="card">
         <div class="card-head"><div class="card-title">Lista</div></div>
         <div id="depTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <div class="overlay" id="modalNovoFerias">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>Novo pedido de férias</h3>
+          <button class="modal-close" onclick="fecharModal('modalNovoFerias')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>Funcionário *</label>
+            <select id="nfFuncionario">
+              <option value="">— Seleccionar —</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Data início *</label><input type="date" id="nfInicio"></div>
+            <div class="form-group"><label>Data fim *</label><input type="date" id="nfFim"></div>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" onclick="fecharModal('modalNovoFerias')">Cancelar</button>
+          <button class="btn btn-accent" onclick="guardarNovoFerias()">Submeter</button>
+        </div>
       </div>
     </div>
 
@@ -1884,6 +1910,40 @@ async function acaoFerias(id, accao) {
     loadFerias();
     loadFeriasCount();
   } catch(e) { toast(e.message,'err'); }
+}
+
+async function abrirModalNovoFerias() {
+  const sel = document.getElementById('nfFuncionario');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  try {
+    const res = await api('GET', '/api/funcionarios?estado=activo&per_page=200');
+    (res.dados||[]).forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.id;
+      opt.textContent = f.nome_completo + ' (' + f.numero_funcionario + ')';
+      sel.appendChild(opt);
+    });
+  } catch(_) {}
+  document.getElementById('nfInicio').value = '';
+  document.getElementById('nfFim').value = '';
+  document.getElementById('modalNovoFerias').classList.add('open');
+}
+
+async function guardarNovoFerias() {
+  const funcionarioId = document.getElementById('nfFuncionario').value;
+  const dataInicio    = document.getElementById('nfInicio').value;
+  const dataFim       = document.getElementById('nfFim').value;
+  if (!funcionarioId) { toast('Selecciona um funcionário.', 'err'); return; }
+  if (!dataInicio || !dataFim) { toast('Preenche as datas.', 'err'); return; }
+  if (dataFim < dataInicio) { toast('A data de fim não pode ser anterior à de início.', 'err'); return; }
+  try {
+    const res = await api('POST', '/api/ferias', { funcionario_id: parseInt(funcionarioId), data_inicio: dataInicio, data_fim: dataFim });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Pedido submetido.', 'ok');
+    fecharModal('modalNovoFerias');
+    loadFerias();
+    loadFeriasCount();
+  } catch(e) { toast(e.message, 'err'); }
 }
 
 // ── DEPARTAMENTOS ──
