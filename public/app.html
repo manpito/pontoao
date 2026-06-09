@@ -3223,7 +3223,10 @@ async function verDetalheEscala(id) {
       <td>${a.data_inicio}</td>
       <td>${a.data_fim || "—"}</td>
       <td>${a.posicao_inicial}</td>
-      <td><button class="btn btn-sm btn-danger" onclick="removerAtribuicaoEscala(${e.id}, ${a.funcionario_id})">Remover</button></td>
+      <td>
+        <button class="btn btn-sm" onclick="editarAtribuicaoEscala(${e.id}, ${a.funcionario_id}, '${a.data_inicio}', ${a.posicao_inicial})">Editar</button>
+        <button class="btn btn-sm btn-danger" onclick="removerAtribuicaoEscala(${e.id}, ${a.funcionario_id})">Remover</button>
+      </td>
     </tr>`).join("");
     atribsHtml += (atribs.length ? "" : "<tr><td colspan=\"5\" class=\"empty\">Sem funcionários atribuídos.</td></tr>") + "</tbody></table></div>";
     document.getElementById("escalaAtribuicoes").innerHTML = atribsHtml;
@@ -3244,6 +3247,7 @@ async function adicionarTurnoAEscala(escalaId, posicao, turnoId) {
 }
 
 async function abrirModalAtribuicao() {
+  document.querySelector("#modalAtribuicao .modal-head h3").textContent = "Atribuir funcionário";
   const sel = document.getElementById("aFunc");
   try {
     const res = await api("GET", "/api/funcionarios?estado=activo");
@@ -3274,6 +3278,21 @@ async function guardarAtribuicao() {
     fecharModal("modalAtribuicao");
     verDetalheEscala(escalaId);
   } catch(e) { toast(e.message, "err"); }
+}
+
+async function editarAtribuicaoEscala(escalaId, funcId, dataInicio, posicao) {
+  const sel = document.getElementById("aFunc");
+  try {
+    const res = await api("GET", "/api/funcionarios?estado=activo");
+    sel.innerHTML = (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join("");
+  } catch(_) {}
+  document.getElementById("aEscalaId").value = escalaId;
+  document.getElementById("aFunc").value = funcId;
+  document.getElementById("aDataInicio").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("aDataFim").value = "";
+  document.getElementById("aPosicao").value = posicao;
+  document.querySelector("#modalAtribuicao .modal-head h3").textContent = "Editar atribuição";
+  document.getElementById("modalAtribuicao").classList.add("open");
 }
 
 async function removerAtribuicaoEscala(escalaId, funcId) {
