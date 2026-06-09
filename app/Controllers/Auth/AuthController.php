@@ -115,9 +115,16 @@ class AuthController
             ':expira' => $expira,
         ]);
 
-        return $this->json(200, [
+        $isSecure  = ($_ENV['APP_ENV'] ?? 'production') !== 'development';
+        $cookieVal = 'refresh_token=' . $refreshToken
+            . '; HttpOnly'
+            . '; Path=/api/auth/refresh'
+            . '; Max-Age=' . $this->auth->getRefreshTtl()
+            . ($isSecure ? '; Secure' : '')
+            . '; SameSite=Strict';
+
+        $response = $this->json(200, [
             'access_token'  => $accessToken,
-            'refresh_token' => $refreshToken,
             'expires_in'    => (int) ($_ENV['JWT_ACCESS_TTL'] ?? 3600),
             'utilizador'    => [
                 'id'            => $user['id'],
@@ -128,6 +135,8 @@ class AuthController
                 'funcionario_id' => $user['funcionario_id'] ? (int) $user['funcionario_id'] : null,
             ],
         ]);
+
+        return $response->withHeader('Set-Cookie', $cookieVal);
     }
 
     /**
@@ -135,9 +144,9 @@ class AuthController
      */
     public function logout(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $sub  = TenantResolver::resolve();
-        $body = $request->getParsedBody();
-        $token = $body['refresh_token'] ?? '';
+        $sub   = TenantResolver::resolve();
+        $body  = $request->getParsedBody();
+        $token = $_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '');
 
         if ($token) {
             Database::tenant($sub)->prepare(
@@ -145,7 +154,9 @@ class AuthController
             )->execute([':hash' => $this->auth->hashRefreshToken($token)]);
         }
 
-        return $this->json(200, ['mensagem' => 'Sessão terminada.']);
+        $clearCookie = 'refresh_token=; HttpOnly; Path=/api/auth/refresh; Max-Age=0; SameSite=Strict';
+        return $this->json(200, ['mensagem' => 'Sessão terminada.'])
+            ->withHeader('Set-Cookie', $clearCookie);
     }
 
     /**
@@ -155,7 +166,7 @@ class AuthController
     {
         $sub   = TenantResolver::resolve();
         $body  = $request->getParsedBody();
-        $token = $body['refresh_token'] ?? '';
+        $token = $_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '');
 
         if (empty($token)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'refresh_token em falta.']);
