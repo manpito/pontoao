@@ -277,7 +277,7 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->post("/escalas/{id}/atribuicoes",               [\App\Controllers\EscalaController::class, "atribuir"])
           ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
 
-    $group->delete("/escalas/{id}/atribuicoes/{funcionario_id}", [\App\Controllers\EscalaController::class, "removerAtribuicao"])
+    $group->delete("/escalas/{id}/atribuicoes/{atribuicao_id}", [\App\Controllers\EscalaController::class, "removerAtribuicao"])
           ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager"]));
 
     // --- Excepções e Cobertura ---

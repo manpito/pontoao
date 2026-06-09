@@ -282,13 +282,12 @@ class EscalaController
      */
     public function removerAtribuicao(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $eid = (int) $args['id'];
-        $fid = (int) $args['funcionario_id'];
+        $atribuicaoId = (int) $args['atribuicao_id'];
         $sub = TenantResolver::resolve();
         $db  = Database::tenant($sub);
 
-        $db->prepare("UPDATE funcionario_escala SET data_fim = CURDATE() WHERE escala_id = :eid AND funcionario_id = :fid AND data_fim IS NULL")
-           ->execute([':eid' => $eid, ':fid' => $fid]);
+        $db->prepare("UPDATE funcionario_escala SET data_fim = CURDATE() WHERE id = :aid AND data_fim IS NULL")
+           ->execute([':aid' => $atribuicaoId]);
 
         return $this->json($response, 200, ['mensagem' => 'Atribuição encerrada.']);
     }

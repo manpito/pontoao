@@ -3230,7 +3230,7 @@ async function verDetalheEscala(id) {
       <td>${a.posicao_inicial}</td>
       <td>
         <button class="btn btn-sm" onclick="editarAtribuicaoEscala(${e.id}, ${a.funcionario_id}, '${a.data_inicio}', ${a.posicao_inicial})">Editar</button>
-        <button class="btn btn-sm btn-danger" onclick="removerAtribuicaoEscala(${e.id}, ${a.funcionario_id})">Remover</button>
+        <button class="btn btn-sm btn-danger" onclick="removerAtribuicaoEscala(${e.id}, ${a.id})">Remover</button>
       </td>
     </tr>`).join("");
     atribsHtml += (atribs.length ? "" : "<tr><td colspan=\"5\" class=\"empty\">Sem funcionários atribuídos.</td></tr>") + "</tbody></table></div>";
@@ -3300,10 +3300,10 @@ async function editarAtribuicaoEscala(escalaId, funcId, dataInicio, posicao) {
   document.getElementById("modalAtribuicao").classList.add("open");
 }
 
-async function removerAtribuicaoEscala(escalaId, funcId) {
+async function removerAtribuicaoEscala(escalaId, atribuicaoId) {
   if (!confirm("Deseja encerrar esta atribuição?")) return;
   try {
-    const res = await api("DELETE", `/api/escalas/${escalaId}/atribuicoes/${funcId}`);
+    const res = await api("DELETE", `/api/escalas/${escalaId}/atribuicoes/${atribuicaoId}`);
     if (res.erro) throw new Error(res.mensagem);
     toast(res.mensagem, "ok");
     verDetalheEscala(escalaId);
