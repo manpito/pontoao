@@ -57,8 +57,8 @@ class TerminalController
         }
 
         $stmt = $db->prepare("
-            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, default_departamento_id, activo, api_key_hash)
-            VALUES (:nome, :loc, :ip, :porta, :modelo, :dep_id, 1, :key)
+            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, device_id, default_departamento_id, activo, api_key_hash)
+            VALUES (:nome, :loc, :ip, :porta, :modelo, :device_id, :dep_id, 1, :key)
         ");
 
         $stmt->execute([
@@ -67,6 +67,7 @@ class TerminalController
             ':ip'      => $ip,
             ':porta'   => (int) ($body['porta'] ?? 4370),
             ':modelo'  => $body['modelo'] ?? 'zkteco',
+            ':device_id' => trim($body['device_id'] ?? '') ?: null,
             ':dep_id'  => $body['default_departamento_id'] ? (int) $body['default_departamento_id'] : null,
             ':key'     => hash('sha256', bin2hex(random_bytes(16))) // API key inicial aleatória
         ]);
@@ -124,7 +125,7 @@ class TerminalController
         $stmt = $db->prepare("
             UPDATE relogios
             SET nome = :nome, localizacao = :loc, ip = :ip, porta = :porta,
-                modelo = :modelo, default_departamento_id = :dep_id
+                modelo = :modelo, device_id = :device_id, default_departamento_id = :dep_id
             WHERE id = :id
         ");
 
@@ -134,6 +135,7 @@ class TerminalController
             ':ip'      => $ip,
             ':porta'   => (int) ($body['porta'] ?? 4370),
             ':modelo'  => $body['modelo'] ?? 'zkteco',
+            ':device_id' => trim($body['device_id'] ?? '') ?: null,
             ':dep_id'  => $body['default_departamento_id'] ? (int) $body['default_departamento_id'] : null,
             ':id'      => $id
         ]);

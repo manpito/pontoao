@@ -1120,6 +1120,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="outro">Outro</option>
         </select>
       </div>
+      <div class="form-group"><label>Número de Série (SN)</label><input id="termDeviceId" placeholder="Ex: 5450251100118"></div>
       <div class="form-group"><label>Departamento por defeito</label><select id="termDepDefault"><option value="">Nenhum</option></select></div>
     </div>
     <div class="modal-foot">
@@ -2389,6 +2390,7 @@ async function abrirModalTerminal(id = null) {
       document.getElementById('termPorta').value = t.porta || 4370;
       document.getElementById('termModelo').value = t.modelo || 'zkteco';
       document.getElementById('termDepDefault').value = t.default_departamento_id || '';
+      document.getElementById('termDeviceId').value = t.device_id || '';
     }
   } else {
     document.getElementById('termNome').value = '';
@@ -2398,6 +2400,7 @@ async function abrirModalTerminal(id = null) {
     document.getElementById('termPorta').value = 4370;
     document.getElementById('termModelo').value = 'zkteco';
     document.getElementById('termDepDefault').value = '';
+    document.getElementById('termDeviceId').value = '';
   }
   document.getElementById('modalTerminal').classList.add('open');
 }
@@ -2411,7 +2414,8 @@ async function guardarTerminal() {
     ip: document.getElementById('termIp').value.trim(),
     porta: parseInt(document.getElementById('termPorta').value),
     modelo: document.getElementById('termModelo').value,
-    default_departamento_id: document.getElementById('termDepDefault').value || null
+    default_departamento_id: document.getElementById('termDepDefault').value || null,
+    device_id: document.getElementById('termDeviceId').value.trim() || null
   };
 
   if (!payload.nome || !payload.ip) { toast('Nome e IP são obrigatórios.', 'err'); return; }
