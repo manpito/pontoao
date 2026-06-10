@@ -1239,9 +1239,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 
 <script>
 // ── STATE ──
-let TOKEN   = localStorage.getItem('rh_token')   || '';
-let REFRESH = localStorage.getItem('rh_refresh')  || '';
-let USER    = JSON.parse(localStorage.getItem('rh_user') || 'null');
+let TOKEN   = '';
+let USER    = null;
 let TENANT  = new URLSearchParams(location.search).get('tenant') || '';
 let _funcionarios = [];
 let _editMarcacaoId = null;
@@ -1268,10 +1267,8 @@ async function doLogin() {
     const res = await api('POST', '/api/auth/login', { email, password: pass });
     if (res.erro) throw new Error(res.mensagem);
     if (!['super_admin_tenant','rh_manager','rh_colaborador','supervisor'].includes(res.utilizador?.perfil)) throw new Error('Sem permissão de acesso ao painel RH.');
-    TOKEN = res.access_token; REFRESH = res.refresh_token; USER = res.utilizador;
-    localStorage.setItem('rh_token', TOKEN);
-    localStorage.setItem('rh_refresh', REFRESH);
-    localStorage.setItem('rh_user', JSON.stringify(USER));
+    TOKEN = res.access_token;
+    USER = res.utilizador;
     showApp();
   } catch(e) {
     errEl.textContent = e.message; errEl.style.display = 'block';
@@ -1279,11 +1276,8 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  try { await api('POST', '/api/auth/logout', { refresh_token: REFRESH }); } catch(_) {}
-  localStorage.removeItem('rh_token');
-  localStorage.removeItem('rh_refresh');
-  localStorage.removeItem('rh_user');
-  TOKEN = REFRESH = ''; USER = null;
+  try { await api('POST', '/api/auth/logout', {}); } catch(_) {}
+  TOKEN = ''; USER = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
 }
@@ -1297,7 +1291,6 @@ function showApp() {
     const payload = JSON.parse(atob(TOKEN.split('.')[1]));
     USER.nome   = payload.nome  || USER.nome;
     USER.perfil = payload.perfil || USER.perfil;
-    localStorage.setItem('rh_user', JSON.stringify(USER));
   } catch(_) {}
   document.getElementById('sbName').textContent  = USER.nome;
   document.getElementById('sbRole').textContent  = labelPerfil(USER.perfil);
@@ -2566,11 +2559,11 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res  = await fetch(path, opts);
   const data = await res.json();
-  if (res.status === 401 && REFRESH) {
+  if (res.status === 401) {
     try {
-      const r  = await fetch('/api/auth/refresh', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({refresh_token:REFRESH}) });
+      const r  = await fetch('/api/auth/refresh', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
       const rd = await r.json();
-      if (rd.access_token) { TOKEN = rd.access_token; localStorage.setItem('rh_token',TOKEN); return api(method,path,body); }
+      if (rd.access_token) { TOKEN = rd.access_token; return api(method,path,body); }
     } catch(_) {}
     doLogout();
   }

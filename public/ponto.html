@@ -779,9 +779,8 @@ function localDate(d) {
 
 // ── CONFIG ──
 const API = '';
-let accessToken  = localStorage.getItem('pt_token') || '';
-let refreshToken = localStorage.getItem('pt_refresh') || '';
-let currentUser  = JSON.parse(localStorage.getItem('pt_user') || 'null');
+let accessToken  = '';
+let currentUser  = null;
 let geoPos       = null;
 let geofencingActivo = false;
 let geofencingLat    = null;
@@ -800,7 +799,6 @@ let qrInterval   = null;
       const payload = JSON.parse(atob(accessToken.split('.')[1]));
       if (payload.funcionario_id) currentUser.funcionario_id = payload.funcionario_id;
       currentUser.nome = payload.nome || currentUser.nome;
-      localStorage.setItem('pt_user', JSON.stringify(currentUser));
     } catch(_) {}
     mostrarPortal();
   }
@@ -837,7 +835,6 @@ async function doLogin() {
     if (res.erro) throw new Error(res.mensagem);
 
     accessToken  = res.access_token;
-    refreshToken = res.refresh_token;
     currentUser  = res.utilizador;
 
     // Extrair funcionario_id do token JWT
@@ -845,10 +842,6 @@ async function doLogin() {
       const payload = JSON.parse(atob(accessToken.split('.')[1]));
       if (payload.funcionario_id) currentUser.funcionario_id = payload.funcionario_id;
     } catch(_) {}
-
-    localStorage.setItem('pt_token',   accessToken);
-    localStorage.setItem('pt_refresh', refreshToken);
-    localStorage.setItem('pt_user',    JSON.stringify(currentUser));
 
     mostrarPortal();
   } catch(e) {
@@ -861,9 +854,8 @@ async function doLogin() {
 }
 
 async function doLogout() {
-  try { await api('POST', '/api/auth/logout', { refresh_token: refreshToken }); } catch(_) {}
-  localStorage.clear();
-  accessToken = refreshToken = '';
+  try { await api('POST', '/api/auth/logout', {}, true); } catch(_) {}
+  accessToken = '';
   currentUser = null;
   document.getElementById('portal').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
@@ -1164,17 +1156,17 @@ async function api(method, path, body) {
   const data = await res.json();
 
   // Auto-refresh token expirado
-  if (res.status === 401 && refreshToken) {
+  if (res.status === 401) {
     try {
       const r = await fetch(API + '/api/auth/refresh', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken })
+        body: JSON.stringify({})
       });
       const rd = await r.json();
       if (rd.access_token) {
         accessToken = rd.access_token;
-        localStorage.setItem('pt_token', accessToken);
         return api(method, path, body);
       }
     } catch(_) {}
