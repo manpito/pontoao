@@ -85,8 +85,9 @@ class MarcacaoFaltaController
         }
 
         if (!empty($params['search'])) {
-            $where[] = '(f.nome_completo LIKE :search OR f.numero_funcionario LIKE :search)';
-            $bind[':search'] = '%' . $params['search'] . '%';
+            $where[] = '(f.nome_completo LIKE :search_nome OR f.numero_funcionario LIKE :search_num)';
+            $bind[':search_nome'] = '%' . $params['search'] . '%';
+            $bind[':search_num'] = '%' . $params['search'] . '%';
         }
 
         $whereStr = $where ? 'WHERE ' . implode(' AND ', $where) : '';
