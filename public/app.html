@@ -454,7 +454,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <select class="select-input" id="faltaFiltroDep" onchange="carregarMarcacoesFalta()" style="flex:0;width:180px">
           <option value="">Todos os departamentos</option>
         </select>
-        <input class="search-input" placeholder="Nº ou nome" id="faltaFiltroFunc" style="flex:0;width:160px">
+        <input class="search-input" placeholder="Nº ou nome" id="faltaFiltroFunc" oninput="carregarMarcacoesFalta()" style="flex:0;width:160px">
         <input class="search-input" type="date" id="faltaFiltroInicio" style="flex:0;width:150px">
         <input class="search-input" type="date" id="faltaFiltroFim" style="flex:0;width:150px">
         <button class="btn btn-accent" onclick="carregarMarcacoesFalta()">Filtrar</button>
