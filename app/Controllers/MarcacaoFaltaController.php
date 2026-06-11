@@ -25,6 +25,23 @@ class MarcacaoFaltaController
     /**
      * GET /api/marcacoes-falta
      */
+    /**
+     * GET /api/relatorios/tenant-info
+     */
+    private function getTenantInfo(): array
+    {
+        $sub  = TenantResolver::resolve() ?? ($_SERVER['HTTP_X_TENANT'] ?? null);
+        $stmt = Database::master()->prepare(
+            "SELECT nome_empresa, nif FROM tenants WHERE subdominio = :sub LIMIT 1"
+        );
+        $stmt->execute([':sub' => $sub]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return [
+            'nome' => $row['nome_empresa'] ?? '',
+            'nif'  => $row['nif'] ?? '',
+        ];
+    }
+
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $params = $request->getQueryParams();
@@ -62,6 +79,16 @@ class MarcacaoFaltaController
             $bind[':fid'] = (int) $params['funcionario_id'];
         }
 
+        if (!empty($params['departamento_id'])) {
+            $where[] = 'f.departamento_id = :dep_id';
+            $bind[':dep_id'] = (int) $params['departamento_id'];
+        }
+
+        if (!empty($params['search'])) {
+            $where[] = '(f.nome_completo LIKE :search OR f.numero_funcionario LIKE :search)';
+            $bind[':search'] = '%' . $params['search'] . '%';
+        }
+
         $whereStr = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $stmt = $db->prepare("
@@ -69,9 +96,11 @@ class MarcacaoFaltaController
                 mf.*,
                 f.nome_completo AS funcionario_nome,
                 f.numero_funcionario AS funcionario_numero,
+                d.nome AS departamento_nome,
                 m.data_hora AS data_hora_entrada
             FROM marcacoes_em_falta mf
             JOIN funcionarios f ON mf.funcionario_id = f.id
+            LEFT JOIN departamentos d ON f.departamento_id = d.id
             LEFT JOIN marcacoes m ON mf.marcacao_entrada_id = m.id
             {$whereStr}
             ORDER BY mf.data DESC, f.nome_completo ASC
@@ -79,7 +108,10 @@ class MarcacaoFaltaController
         $stmt->execute($bind);
         $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        return $this->json(200, ['dados' => $dados]);
+        return $this->json(200, [
+            'dados' => $dados,
+            'empresa' => $this->getTenantInfo()
+        ]);
     }
 
     /**
@@ -183,9 +215,11 @@ class MarcacaoFaltaController
         ]);
 
         // Criar marcações quando aplicável
-        $stmtMf = $db->prepare("SELECT funcionario_id, data FROM marcacoes_em_falta WHERE id = :id");
+        $stmtMf = $db->prepare("SELECT funcionario_id, data, marcacao_entrada_id FROM marcacoes_em_falta WHERE id = :id");
         $stmtMf->execute([':id' => $id]);
         $mf = $stmtMf->fetch(PDO::FETCH_ASSOC);
+
+        $tipoMarcacao = $mf['marcacao_entrada_id'] ? 'saida' : 'entrada';
 
         if (in_array($estado, ['justificada_trabalho', 'justificada_outras']) && !empty($horaEntrada)) {
             $dataHoraEntrada = $mf['data'] . ' ' . $horaEntrada . ':00';
@@ -193,15 +227,15 @@ class MarcacaoFaltaController
             $dup = $db->prepare("
                 SELECT id FROM marcacoes
                 WHERE funcionario_id = :fid
-                  AND tipo = 'entrada'
+                  AND tipo = :tipo
                   AND ABS(TIMESTAMPDIFF(SECOND, data_hora, :dh)) < 60
             ");
-            $dup->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraEntrada]);
+            $dup->execute([':fid' => $mf['funcionario_id'], ':tipo' => $tipoMarcacao, ':dh' => $dataHoraEntrada]);
             if (!$dup->fetch()) {
                 $db->prepare("
                     INSERT INTO marcacoes (funcionario_id, tipo, data_hora, data_hora_original, origem, editada_por)
-                    VALUES (:fid, 'entrada', :dh, :dh, 'manual', :uid)
-                ")->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraEntrada, ':uid' => $userId]);
+                    VALUES (:fid, :tipo, :dh, :dh, 'manual', :uid)
+                ")->execute([':fid' => $mf['funcionario_id'], ':tipo' => $tipoMarcacao, ':dh' => $dataHoraEntrada, ':uid' => $userId]);
             }
         }
 
