@@ -805,6 +805,10 @@ class RelatorioController
         ");
         $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
 
+        $stmtCfg = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
+        $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+        $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
+
         $resultado = [];
         $escalaService = new \App\Services\EscalaService($db);
 
@@ -885,6 +889,16 @@ class RelatorioController
 
                 $saidaEfetiva = $saida ?? ($entrada + ($horasEsperadasDiaTurno * 3600));
                 $minutosTrabalhados = (int) round(($saidaEfetiva - $entrada) / 60) - $minutosIntervalo;
+
+                // Ajuste se a entrada antecipada não deve contar (configuração horas_extra_entrada_antecipada)
+                if (!$contarEntradaAntecipada && $turnoHoras && $turnoHoras['hora_entrada']) {
+                    $entradaPrevista = strtotime($dia . ' ' . substr($turnoHoras['hora_entrada'], 0, 5));
+                    if ($entrada < $entradaPrevista) {
+                        $minutosAntecipados = (int) round(($entradaPrevista - $entrada) / 60);
+                        $minutosTrabalhados -= $minutosAntecipados;
+                    }
+                }
+
                 $minutosEsperados   = (int) ($horasEsperadasDiaTurno * 60);
 
                 if ($turnoHoras && $turnoHoras['tipo'] === 'folga') {

@@ -326,7 +326,8 @@ INSERT INTO `configuracoes` (`chave`, `valor`, `tipo`, `descricao`) VALUES
 ('notif_ausencia_horas',    '2',                'integer', 'Horas sem marcação para disparar alerta'),
 ('timezone',                'Africa/Luanda',    'string',  'Fuso horário'),
 ('moeda',                   'AOA',              'string',  'Moeda (Kwanza Angolano)'),
-('logo_empresa',            NULL,               'string',  'URL do logótipo da empresa');
+('logo_empresa',            NULL,               'string',  'URL do logótipo da empresa'),
+('horas_extra_entrada_antecipada', '0', 'boolean', 'Contar tempo de entrada antecipada como horas extra');
 
 
 ALTER TABLE `periodos_mensais` 
