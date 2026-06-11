@@ -135,7 +135,7 @@ class MarcacaoFaltaController
             return $this->json(400, ['erro' => true, 'mensagem' => 'O estado é obrigatório.']);
         }
 
-        $estadosValidos = ['justificada_trabalho', 'justificada_motivo', 'injustificada_meio_dia', 'injustificada_falta'];
+        $estadosValidos = ['justificada_trabalho', 'justificada_motivo', 'justificada_outras', 'injustificada_meio_dia', 'injustificada_falta'];
         if (!in_array($estado, $estadosValidos)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Estado de classificação inválido.']);
         }
@@ -187,7 +187,7 @@ class MarcacaoFaltaController
         $stmtMf->execute([':id' => $id]);
         $mf = $stmtMf->fetch(PDO::FETCH_ASSOC);
 
-        if ($estado === 'justificada_trabalho' && !empty($horaEntrada)) {
+        if (in_array($estado, ['justificada_trabalho', 'justificada_outras']) && !empty($horaEntrada)) {
             $dataHoraEntrada = $mf['data'] . ' ' . $horaEntrada . ':00';
             // verificar duplicado
             $dup = $db->prepare("
@@ -205,7 +205,7 @@ class MarcacaoFaltaController
             }
         }
 
-        if ($estado === 'justificada_trabalho' && !empty($horaSaida)) {
+        if (in_array($estado, ['justificada_trabalho', 'justificada_outras']) && !empty($horaSaida)) {
             $dataHoraSaida = $mf['data'] . ' ' . $horaSaida . ':00';
             // verificar duplicado
             $dup = $db->prepare("
