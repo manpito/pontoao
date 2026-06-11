@@ -1080,6 +1080,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <select id="cfEstado" onchange="toggleCfHorario()">
           <option value="justificada_trabalho">Justificada — Trabalho externo</option>
           <option value="justificada_motivo">Justificada — Motivo pessoal</option>
+          <option value="justificada_outras">Justificada — Outras situações</option>
           <option value="injustificada_meio_dia">Injustificada — Meio dia</option>
           <option value="injustificada_falta">Injustificada — Falta</option>
         </select>
@@ -1823,7 +1824,10 @@ async function carregarMarcacoesFalta() {
         <td>${nota}</td>
         <td><span class="badge badge-${badgeClass}">${labelEstadoFalta(m.estado)}</span></td>
         <td>
-          ${m.estado === 'pendente' ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}')">Classificar</button>` : '—'}
+          ${m.estado === 'pendente'
+            ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}')">Classificar</button>`
+            : `<button class="btn btn-sm" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}', '${m.estado}', '${(m.nota_classificacao||'').replace(/'/g, "\\'")}')">Editar</button>`
+          }
         </td>
       </tr>`;
     }).join('');
@@ -1840,25 +1844,28 @@ function labelEstadoFalta(e) {
     pendente: 'Pendente',
     justificada_trabalho: 'Trabalho Externo',
     justificada_motivo: 'Motivo Pessoal',
+    justificada_outras: 'Outras justificadas',
     injustificada_meio_dia: 'Meio Dia',
     injustificada_falta: 'Falta'
   };
   return labels[e] || e;
 }
 
-function abrirModalClassificar(id, nome, data, nota) {
+function abrirModalClassificar(id, nome, data, nota, estadoActual = 'justificada_trabalho', notaActual = '') {
   document.getElementById('cfId').value = id;
   document.getElementById('cfInfoFuncionario').innerHTML = `<strong>${nome}</strong> · ${data} · ${nota}`;
-  document.getElementById('cfNota').value = '';
-  document.getElementById('cfEstado').value = 'justificada_trabalho';
+  document.getElementById('cfNota').value = notaActual;
+  document.getElementById('cfEstado').value = estadoActual;
   document.getElementById('cfHorarioExtra').style.display = 'none';
   document.getElementById('cfHoraEntrada').value = '';
   document.getElementById('cfHoraSaida').value = '';
+  toggleCfHorario();
+  document.querySelector('#modalClassificarFalta .modal-head h3').textContent = estadoActual === 'justificada_trabalho' || estadoActual === 'pendente' ? 'Classificar marcação em falta' : 'Editar classificação';
   document.getElementById('modalClassificarFalta').classList.add('open');
 }
 
 function toggleCfHorario() {
-  const mostrar = document.getElementById('cfEstado').value === 'justificada_trabalho';
+  const mostrar = ['justificada_trabalho', 'justificada_outras'].includes(document.getElementById('cfEstado').value);
   document.getElementById('cfHorarioExtra').style.display = mostrar ? 'block' : 'none';
 }
 
