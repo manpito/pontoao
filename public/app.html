@@ -1927,7 +1927,7 @@ function exportarFaltasPDF() {
     <head>
       <meta charset="UTF-8">
       <title>Relatório de Marcações em Falta${periodo}</title>
-      <style>
+      ${'<'}style>
         body { font-family: sans-serif; background: #fff; color: #000; font-size: 12px; padding: 20px; }
         .cabecalho-pdf { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #eee; }
         .tbl { width: 100%; border-collapse: collapse; margin-top: 10px; }
@@ -1941,7 +1941,7 @@ function exportarFaltasPDF() {
         @media print {
             .no-print { display: none !important; }
         }
-      </style>
+      ${'</'}style>
     </head>
     <body>
       <div class="cabecalho-pdf">
@@ -1957,7 +1957,7 @@ function exportarFaltasPDF() {
         </div>
       </div>
       ${table.outerHTML}
-      <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); };</script>
+      ${'<'}script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); };${'</'}script>
     </body>
     </html>
   `;
@@ -3690,7 +3690,7 @@ async function exportarRelatorioPDF() {
     <head>
       <meta charset="UTF-8">
       <title>${titulo} • ${inicio} → ${fim}</title>
-      <style>
+      ${'<'}style>
         :root {
           --bg: #fff; --s1: #fff; --s2: #f8f9fa; --s3: #f1f3f5;
           --border: #dee2e6; --accent: #00a86b; --blue: #0056b3;
@@ -3720,7 +3720,7 @@ async function exportarRelatorioPDF() {
           body { padding: 10px; }
           @page { margin: 15mm; size: A4 portrait; }
         }
-      </style>
+      ${'</'}style>
     </head>
     <body>
       ${tipo !== 'marcacoes-diarias' ? `
