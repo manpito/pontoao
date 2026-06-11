@@ -2078,7 +2078,7 @@ async function loadDepartamentos() {
       <td>${d.total_funcionarios}</td>
       <td><span class="badge badge-${d.activo?'green':'gray'}">${d.activo?'Activo':'Inactivo'}</span></td>
       <td>
-        <button class="btn btn-sm" onclick="abrirModalEditarDep(${d.id}, '${d.nome.replace(/'/g, "\\'")}', '${(d.codigo||'').replace(/'/g, "\\'")}')">Editar</button>
+        <button class="btn btn-sm" onclick="abrirModalEditarDep(${d.id}, '${d.nome.split(String.fromCharCode(39)).join('&#39;')}', '${(d.codigo||\'\').split(String.fromCharCode(39)).join('&#39;')}')">Editar</button>
       </td>
     </tr>`).join('');
     document.getElementById('depTable').innerHTML = `<table class="tbl">
