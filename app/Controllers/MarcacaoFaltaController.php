@@ -128,6 +128,8 @@ class MarcacaoFaltaController
 
         $estado = $body['estado'] ?? '';
         $nota   = $body['nota_classificacao'] ?? null;
+        $horaEntrada = $body['hora_entrada'] ?? null; // formato HH:MM
+        $horaSaida   = $body['hora_saida']   ?? null; // formato HH:MM
 
         if (empty($estado)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'O estado é obrigatório.']);
@@ -179,6 +181,47 @@ class MarcacaoFaltaController
             ':classificador' => $userId,
             ':id'            => $id
         ]);
+
+        // Criar marcações quando aplicável
+        $stmtMf = $db->prepare("SELECT funcionario_id, data FROM marcacoes_em_falta WHERE id = :id");
+        $stmtMf->execute([':id' => $id]);
+        $mf = $stmtMf->fetch(PDO::FETCH_ASSOC);
+
+        if ($estado === 'justificada_trabalho' && !empty($horaEntrada)) {
+            $dataHoraEntrada = $mf['data'] . ' ' . $horaEntrada . ':00';
+            // verificar duplicado
+            $dup = $db->prepare("
+                SELECT id FROM marcacoes
+                WHERE funcionario_id = :fid
+                  AND tipo = 'entrada'
+                  AND ABS(TIMESTAMPDIFF(SECOND, data_hora, :dh)) < 60
+            ");
+            $dup->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraEntrada]);
+            if (!$dup->fetch()) {
+                $db->prepare("
+                    INSERT INTO marcacoes (funcionario_id, tipo, data_hora, data_hora_original, origem, editada_por)
+                    VALUES (:fid, 'entrada', :dh, :dh, 'manual', :uid)
+                ")->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraEntrada, ':uid' => $userId]);
+            }
+        }
+
+        if ($estado === 'justificada_trabalho' && !empty($horaSaida)) {
+            $dataHoraSaida = $mf['data'] . ' ' . $horaSaida . ':00';
+            // verificar duplicado
+            $dup = $db->prepare("
+                SELECT id FROM marcacoes
+                WHERE funcionario_id = :fid
+                  AND tipo = 'saida'
+                  AND ABS(TIMESTAMPDIFF(SECOND, data_hora, :dh)) < 60
+            ");
+            $dup->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraSaida]);
+            if (!$dup->fetch()) {
+                $db->prepare("
+                    INSERT INTO marcacoes (funcionario_id, tipo, data_hora, data_hora_original, origem, editada_por)
+                    VALUES (:fid, 'saida', :dh, :dh, 'manual', :uid)
+                ")->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraSaida, ':uid' => $userId]);
+            }
+        }
 
         return $this->json(200, ['mensagem' => 'Marcação classificada com sucesso.']);
     }
