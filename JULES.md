@@ -318,3 +318,8 @@ Registar automaticamente: login falhado, token JWT inválido ou expirado, acesso
     - `</style>`  → `${'</'}style>`
     - `<script>`  → `${'<'}script>`
     - `</script>` → `${'</'}script>`
+12. **Aspas dentro de atributos `onclick` em template literals** — ao gerar botões com `onclick="funcao('${variavel}')"` dentro de template literals JS, NUNCA interpolar variáveis que possam conter aspas simples, vírgulas, ou HTML. Calcular sempre o valor numa variável JS separada antes do template literal e usar essa variável na interpolação. Exemplo correcto:
+const labelFalta = tipoFalta === 'saida' ? 'Falta de saída' : 'Falta de entrada';
+// depois no template:
+onclick="abrirModal(${m.id}, '${labelFalta}')"
+Nunca fazer: `onclick="abrirModal(${m.id}, '${condicao ? 'valor1' : 'valor2'}')"` — as aspas internas quebram o HTML.
