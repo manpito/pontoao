@@ -313,3 +313,8 @@ Registar automaticamente: login falhado, token JWT inválido ou expirado, acesso
 9. **Tabelas novas** — quando criares tabelas novas, adicionar também ao ficheiro `database/migrations/tenant/001_tenant_schema.sql` para que novos tenants criados no futuro também as tenham.
 
 10. **O `app.html` tem 1874+ linhas** — é um ficheiro grande com toda a lógica frontend. A variável `USER` contém os dados do utilizador autenticado após o login, incluindo `USER.perfil`.
+11. **Tags HTML dentro de template literals JS** — ao gerar HTML dinâmico com `window.open()`, `innerHTML`, ou qualquer template literal que contenha HTML completo, as tags `<style>`, `</style>`, `<script>`, `</script>` DEVEM ser escapadas para evitar que o browser as interprete durante o parse do HTML principal, quebrando toda a aplicação. Usar obrigatoriamente a seguinte notação:
+    - `<style>`   → `${'<'}style>`
+    - `</style>`  → `${'</'}style>`
+    - `<script>`  → `${'<'}script>`
+    - `</script>` → `${'</'}script>`
