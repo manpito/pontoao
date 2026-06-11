@@ -1077,7 +1077,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div id="cfInfoFuncionario" style="margin-bottom:16px;font-size:13px;color:var(--muted2)"></div>
       <div class="form-group">
         <label>Classificação *</label>
-        <select id="cfEstado">
+        <select id="cfEstado" onchange="toggleCfHorario()">
           <option value="justificada_trabalho">Justificada — Trabalho externo</option>
           <option value="justificada_motivo">Justificada — Motivo pessoal</option>
           <option value="injustificada_meio_dia">Injustificada — Meio dia</option>
@@ -1087,6 +1087,18 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="form-group">
         <label>Nota (opcional)</label>
         <textarea id="cfNota" rows="3" placeholder="Justificação ou observação..."></textarea>
+      </div>
+      <div id="cfHorarioExtra" style="display:none">
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group">
+            <label>Hora de entrada</label>
+            <input type="time" id="cfHoraEntrada">
+          </div>
+          <div class="form-group">
+            <label>Hora de saída (opcional)</label>
+            <input type="time" id="cfHoraSaida">
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-foot">
@@ -1839,14 +1851,24 @@ function abrirModalClassificar(id, nome, data, nota) {
   document.getElementById('cfInfoFuncionario').innerHTML = `<strong>${nome}</strong> · ${data} · ${nota}`;
   document.getElementById('cfNota').value = '';
   document.getElementById('cfEstado').value = 'justificada_trabalho';
+  document.getElementById('cfHorarioExtra').style.display = 'none';
+  document.getElementById('cfHoraEntrada').value = '';
+  document.getElementById('cfHoraSaida').value = '';
   document.getElementById('modalClassificarFalta').classList.add('open');
+}
+
+function toggleCfHorario() {
+  const mostrar = document.getElementById('cfEstado').value === 'justificada_trabalho';
+  document.getElementById('cfHorarioExtra').style.display = mostrar ? 'block' : 'none';
 }
 
 async function guardarClassificacao() {
   const id = document.getElementById('cfId').value;
   const payload = {
     estado: document.getElementById('cfEstado').value,
-    nota_classificacao: document.getElementById('cfNota').value.trim()
+    nota_classificacao: document.getElementById('cfNota').value.trim(),
+    hora_entrada: document.getElementById('cfHoraEntrada').value || null,
+    hora_saida:   document.getElementById('cfHoraSaida').value   || null
   };
   try {
     const res = await api('PUT', `/api/marcacoes-falta/${id}`, payload);
