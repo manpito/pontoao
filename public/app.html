@@ -447,12 +447,18 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="pendente">Pendente</option>
           <option value="justificada_trabalho">Justificada — Trabalho externo</option>
           <option value="justificada_motivo">Justificada — Motivo pessoal</option>
+          <option value="justificada_outras">Outras justificadas</option>
           <option value="injustificada_meio_dia">Injustificada — Meio dia</option>
           <option value="injustificada_falta">Injustificada — Falta</option>
         </select>
+        <select class="select-input" id="faltaFiltroDep" onchange="carregarMarcacoesFalta()" style="flex:0;width:180px">
+          <option value="">Todos os departamentos</option>
+        </select>
+        <input class="search-input" placeholder="Nº ou nome" id="faltaFiltroFunc" style="flex:0;width:160px">
         <input class="search-input" type="date" id="faltaFiltroInicio" style="flex:0;width:150px">
         <input class="search-input" type="date" id="faltaFiltroFim" style="flex:0;width:150px">
         <button class="btn btn-accent" onclick="carregarMarcacoesFalta()">Filtrar</button>
+        <button class="btn" onclick="exportarFaltasPDF()">↓ PDF</button>
       </div>
       <div class="card">
         <div id="marcacoesFaltaTable"><div class="empty"><span class="spinner"></span></div></div>
@@ -1440,7 +1446,7 @@ function nav(page) {
   document.getElementById('page-' + page)?.classList.add('active');
   const loaders = {
     dashboard: loadDashboard, presenca: loadPresenca,
-    marcacoes: loadMarcacoes, 'marcacoes-falta': carregarMarcacoesFalta, funcionarios: loadFuncionarios,
+    marcacoes: loadMarcacoes, 'marcacoes-falta': () => { carregarMarcacoesFalta(); loadDepartamentos(); }, funcionarios: loadFuncionarios,
     ferias: loadFerias, departamentos: loadDepartamentos,
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
@@ -1804,16 +1810,26 @@ async function carregarMarcacoesFalta() {
   const estado = document.getElementById('faltaFiltroEstado').value;
   const inicio = document.getElementById('faltaFiltroInicio').value;
   const fim    = document.getElementById('faltaFiltroFim').value;
+  const dep    = document.getElementById('faltaFiltroDep').value;
+  const func   = document.getElementById('faltaFiltroFunc').value.trim();
 
   let url = '/api/marcacoes-falta?';
   if (estado) url += `&estado=${estado}`;
   if (inicio) url += `&data_inicio=${inicio}`;
   if (fim)    url += `&data_fim=${fim}`;
+  if (dep)    url += `&departamento_id=${dep}`;
+  if (func)   url += `&search=${encodeURIComponent(func)}`;
 
   try {
     const res = await api('GET', url);
+    const tableEl = document.getElementById('marcacoesFaltaTable');
+    if (res.empresa) {
+        tableEl.dataset.empresaNome = res.empresa.nome || '';
+        tableEl.dataset.empresaNif  = res.empresa.nif  || '';
+    }
     const rows = (res.dados||[]).map(m => {
-      let nota = m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada';
+      const tipoFalta = m.marcacao_entrada_id ? 'saida' : 'entrada';
+      let nota = tipoFalta === 'saida' ? 'Falta de saída' : 'Falta de entrada';
       if (m.nota_classificacao) nota += ` <br><small style="color:var(--muted2)">Nota: ${m.nota_classificacao}</small>`;
 
       const badgeClass = m.estado === 'pendente' ? 'warn' : (m.estado.startsWith('justificada') ? 'green' : 'red');
@@ -1821,20 +1837,21 @@ async function carregarMarcacoesFalta() {
       return `<tr>
         <td><span style="font-family:var(--mono)">${m.data}</span></td>
         <td><strong>${m.funcionario_nome}</strong><br><span style="font-size:11px;color:var(--muted2)">${m.funcionario_numero}</span></td>
+        <td>${m.departamento_nome || '—'}</td>
         <td>${nota}</td>
         <td><span class="badge badge-${badgeClass}">${labelEstadoFalta(m.estado)}</span></td>
         <td>
           ${m.estado === 'pendente'
-            ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}')">Classificar</button>`
-            : `<button class="btn btn-sm" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${m.marcacao_entrada_id ? 'Falta de saída' : 'Falta de entrada'}', '${m.estado}', '${(m.nota_classificacao||'').replace(/'/g, "\\'")}')">Editar</button>`
+            ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${nota}', 'justificada_trabalho', '', '${tipoFalta}')">Classificar</button>`
+            : `<button class="btn btn-sm" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${nota}', '${m.estado}', '${(m.nota_classificacao||'').replace(/'/g, "\\'")}', '${tipoFalta}')">Editar</button>`
           }
         </td>
       </tr>`;
     }).join('');
 
-    el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Observação</th><th>Estado</th><th>Acções</th></tr></thead>
-      <tbody>${rows||'<tr><td colspan="5" class="empty">Sem marcações em falta.</td></tr>'}</tbody>
+    el.innerHTML = `<table class="tbl" id="tblFaltas">
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Departamento</th><th>Observação</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Sem marcações em falta.</td></tr>'}</tbody>
     </table>`;
   } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar marcações em falta.</div>'; }
 }
@@ -1851,7 +1868,9 @@ function labelEstadoFalta(e) {
   return labels[e] || e;
 }
 
-function abrirModalClassificar(id, nome, data, nota, estadoActual = 'justificada_trabalho', notaActual = '') {
+let cfTipoFalta = 'entrada';
+function abrirModalClassificar(id, nome, data, nota, estadoActual = 'justificada_trabalho', notaActual = '', tipoFalta = 'entrada') {
+  cfTipoFalta = tipoFalta;
   document.getElementById('cfId').value = id;
   document.getElementById('cfInfoFuncionario').innerHTML = `<strong>${nome}</strong> · ${data} · ${nota}`;
   document.getElementById('cfNota').value = notaActual;
@@ -1859,6 +1878,10 @@ function abrirModalClassificar(id, nome, data, nota, estadoActual = 'justificada
   document.getElementById('cfHorarioExtra').style.display = 'none';
   document.getElementById('cfHoraEntrada').value = '';
   document.getElementById('cfHoraSaida').value = '';
+
+  document.querySelector('#cfHorarioExtra .form-group:first-child label').textContent =
+    tipoFalta === 'saida' ? 'Hora de saída' : 'Hora de entrada';
+
   toggleCfHorario();
   document.querySelector('#modalClassificarFalta .modal-head h3').textContent = estadoActual === 'justificada_trabalho' || estadoActual === 'pendente' ? 'Classificar marcação em falta' : 'Editar classificação';
   document.getElementById('modalClassificarFalta').classList.add('open');
@@ -1874,8 +1897,8 @@ async function guardarClassificacao() {
   const payload = {
     estado: document.getElementById('cfEstado').value,
     nota_classificacao: document.getElementById('cfNota').value.trim(),
-    hora_entrada: document.getElementById('cfHoraEntrada').value || null,
-    hora_saida:   document.getElementById('cfHoraSaida').value   || null
+    hora_entrada: cfTipoFalta === 'entrada' ? (document.getElementById('cfHoraEntrada').value || null) : null,
+    hora_saida:   cfTipoFalta === 'saida'   ? (document.getElementById('cfHoraEntrada').value || null) : (document.getElementById('cfHoraSaida').value || null)
   };
   try {
     const res = await api('PUT', `/api/marcacoes-falta/${id}`, payload);
@@ -1885,6 +1908,63 @@ async function guardarClassificacao() {
     carregarMarcacoesFalta();
     verificarMarcacoesPendentes();
   } catch(e) { toast(e.message, 'err'); }
+}
+
+function exportarFaltasPDF() {
+  const table = document.getElementById('tblFaltas');
+  const tableEl = document.getElementById('marcacoesFaltaTable');
+  if (!table || !tableEl) return;
+
+  const nomeEmpresa = tableEl.dataset.empresaNome || '';
+  const nifEmpresa  = tableEl.dataset.empresaNif  || '';
+  const dataInicio  = document.getElementById('faltaFiltroInicio').value;
+  const dataFim     = document.getElementById('faltaFiltroFim').value;
+  const periodo     = (dataInicio && dataFim) ? ` • ${dataInicio} → ${dataFim}` : '';
+
+  const printContent = `
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+      <meta charset="UTF-8">
+      <title>Relatório de Marcações em Falta${periodo}</title>
+      <style>
+        body { font-family: sans-serif; background: #fff; color: #000; font-size: 12px; padding: 20px; }
+        .cabecalho-pdf { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #eee; }
+        .tbl { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .tbl th, .tbl td { border: 1px solid #eee; padding: 8px; text-align: left; }
+        .tbl th { background: #f8f9fa; font-weight: bold; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        .badge-warn { background: #fff3cd; color: #856404; }
+        .badge-green { background: #d4edda; color: #155724; }
+        .badge-red { background: #f8d7da; color: #721c24; }
+        .no-print, .btn, .toolbar, .sidebar, .modal-foot, .modal-head, .modal-close { display: none !important; }
+        @media print {
+            .no-print { display: none !important; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="cabecalho-pdf">
+        <div>
+          <div style="font-size:18px;font-weight:700">${nomeEmpresa}</div>
+          <div style="font-size:12px">NIF: ${nifEmpresa}</div>
+        </div>
+        <div style="text-align:right;font-size:11px">
+          <div>PontoAO · Sistema de Assiduidade</div>
+          <div>Lei n.º 7/15 (LGT Angola)</div>
+          <div style="margin-top:4px;font-weight:700">Relatório de Marcações em Falta</div>
+          <div>Gerado em: ${new Date().toLocaleString()}</div>
+        </div>
+      </div>
+      ${table.outerHTML}
+      <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); };</script>
+    </body>
+    </html>
+  `;
+
+  const win = window.open('', '_blank');
+  win.document.write(printContent);
+  win.document.close();
 }
 
 // ── FÉRIAS ──
@@ -1976,9 +2056,21 @@ async function guardarNovoFerias() {
 
 // ── DEPARTAMENTOS ──
 async function loadDepartamentos() {
-  document.getElementById('depTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const table = document.getElementById('depTable');
+  if (table) table.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   try {
     const res = await api('GET', '/api/departamentos');
+
+    // Popular select na página de faltas
+    const selectFalta = document.getElementById('faltaFiltroDep');
+    if (selectFalta) {
+      const currentVal = selectFalta.value;
+      selectFalta.innerHTML = '<option value="">Todos os departamentos</option>' +
+        (res.dados||[]).map(d => `<option value="${d.id}">${d.nome}</option>`).join('');
+      selectFalta.value = currentVal;
+    }
+
+    if (!table) return;
     const rows = (res.dados||[]).map(d => `<tr>
       <td><strong>${d.nome}</strong></td>
       <td><span style="font-family:var(--mono);color:var(--muted2)">${d.codigo||'—'}</span></td>
