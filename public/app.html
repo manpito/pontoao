@@ -1830,6 +1830,7 @@ async function carregarMarcacoesFalta() {
     const rows = (res.dados||[]).map(m => {
       const tipoFalta = m.marcacao_entrada_id ? 'saida' : 'entrada';
       const labelFalta = tipoFalta === 'saida' ? 'Falta de saída' : 'Falta de entrada';
+      const notaFalta = (m.nota_classificacao||'').split("'").join("&#39;");
       let nota = tipoFalta === 'saida' ? 'Falta de saída' : 'Falta de entrada';
       if (m.nota_classificacao) nota += ` <br><small style="color:var(--muted2)">Nota: ${m.nota_classificacao}</small>`;
 
@@ -1844,7 +1845,7 @@ async function carregarMarcacoesFalta() {
         <td>
           ${m.estado === 'pendente'
             ? `<button class="btn btn-sm btn-accent" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${labelFalta}', 'justificada_trabalho', '', '${tipoFalta}')">Classificar</button>`
-            : `<button class="btn btn-sm" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${labelFalta}', '${m.estado}', '${(m.nota_classificacao||'').replace(/'/g, "\\'")}', '${tipoFalta}')">Editar</button>`
+            : `<button class="btn btn-sm" onclick="abrirModalClassificar(${m.id}, '${m.funcionario_nome}', '${m.data}', '${labelFalta}', '${m.estado}', '${notaFalta}', '${tipoFalta}')">Editar</button>`
         </td>
       </tr>`;
     }).join('');
