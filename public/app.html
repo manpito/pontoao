@@ -744,7 +744,19 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <div class="card-body">
             <p style="font-size:13px;color:var(--muted2);margin-bottom:20px">Exporta dados de processamento salarial no formato compatível com o módulo RH do Primavera Professional V10.</p>
             <div class="form-group"><label>Mês</label><input type="month" id="expMes" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-family:var(--sans);font-size:13px;color:var(--text);outline:none"></div>
-            <div class="form-group"><label>Departamento (opcional)</label><select id="expDep" class="select-input" style="width:100%"><option value="">Todos</option></select></div>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input class="search-input" placeholder="Nº ou nome" id="expSearch" oninput="filtrarFuncionariosExp()" style="flex:1">
+              <select class="select-input" id="expDepFiltro" onchange="filtrarFuncionariosExp()" style="flex:0;width:160px">
+                <option value="">Todos os departamentos</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+              <label style="font-size:12px;color:var(--muted2);display:flex;gap:6px;align-items:center;cursor:pointer">
+                <input type="checkbox" id="expSelTodos" onchange="toggleSelTodosExp()"> Seleccionar todos
+              </label>
+              <span id="expSelCount" style="font-size:12px;color:var(--muted2)">0 seleccionados</span>
+            </div>
+            <div id="expFuncList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px;margin-bottom:20px"></div>
             <button class="btn btn-accent" onclick="exportarPrimavera()" style="width:100%">↓ Exportar para Primavera V10 (.txt)</button>
           </div>
         </div>
@@ -3576,21 +3588,56 @@ async function atribuirSubstituto(id) {
 }
 
 // ── EXPORTAÇÁO ──
+let _expFuncionarios = [];
+
+function filtrarFuncionariosExp() {
+  const search = document.getElementById('expSearch').value.trim().toLowerCase();
+  const dep = document.getElementById('expDepFiltro').value;
+  const list = document.getElementById('expFuncList');
+  const filtered = _expFuncionarios.filter(f =>
+    (!dep || String(f.departamento_id) === dep) &&
+    (!search || f.nome_completo.toLowerCase().includes(search) || f.numero_funcionario.includes(search))
+  );
+  list.innerHTML = filtered.map(f => `
+    <label style="display:flex;gap:8px;align-items:center;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px">
+      <input type="checkbox" class="exp-func-cb" value="${f.id}" onchange="actualizarContadorExp()">
+      <span style="font-family:var(--mono);color:var(--muted2);font-size:11px">${f.numero_funcionario}</span>
+      ${f.nome_completo}
+    </label>
+  `).join('');
+  actualizarContadorExp();
+}
+
+function toggleSelTodosExp() {
+  const checked = document.getElementById('expSelTodos').checked;
+  document.querySelectorAll('.exp-func-cb').forEach(cb => cb.checked = checked);
+  actualizarContadorExp();
+}
+
+function actualizarContadorExp() {
+  const count = document.querySelectorAll('.exp-func-cb:checked').length;
+  document.getElementById('expSelCount').textContent = count + ' seleccionado' + (count !== 1 ? 's' : '');
+}
+
 async function loadExportacao() {
   document.getElementById('expMes').value = new Date().toISOString().slice(0,7);
   try {
-    const res = await api('GET', '/api/departamentos');
-    document.getElementById('expDep').innerHTML = '<option value="">Todos</option>' +
-      (res.dados||[]).map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
+    const resF = await api('GET', '/api/funcionarios?estado=activo');
+    _expFuncionarios = resF.dados || [];
+    // popular select de departamentos
+    document.getElementById('expDepFiltro').innerHTML = '<option value="">Todos os departamentos</option>' +
+      [...new Map(_expFuncionarios.filter(f=>f.departamento_id).map(f=>[f.departamento_id,{id:f.departamento_id,nome:f.departamento}])).values()]
+      .map(d=>`<option value="${d.id}">${d.nome}</option>`).join('');
+    filtrarFuncionariosExp();
   } catch(_) {}
 }
 
 function exportarPrimavera() {
   const mes = document.getElementById('expMes').value;
-  const dep = document.getElementById('expDep').value;
   if (!mes) { toast('Seleccione o mês.','err'); return; }
+  const ids = [...document.querySelectorAll('.exp-func-cb:checked')].map(cb => cb.value);
   let url = `/api/exportacao/primavera?mes=${mes}`;
-  if (dep) url += `&departamento_id=${dep}`;
+  if (ids.length > 0) url += `&funcionario_ids=${ids.join(',')}`;
   downloadApi(url, `exportacao_primavera_${mes}.txt`);
 }
 
