@@ -235,10 +235,16 @@ class RelatorioController
                 if ($tipoDia === 'util') {
                     $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
                 } elseif (in_array($tipoDia, ['sabado', 'domingo', 'feriado'])) {
-                    if ($regimeEscala === 'turnos' && $turno && $turno['tipo'] !== 'folga') {
-                        // regime de turnos: fins de semana com turno são dias normais
-                        $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
+                    if ($regimeEscala === 'turnos') {
+                        if ($turno && $turno['tipo'] !== 'folga') {
+                            // regime de turnos: fins de semana com turno são dias normais
+                            $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
+                        } else {
+                            // regime de turnos: trabalhou num dia de folga = extraordinário
+                            $minutosExtraExtraordinario = $minutosTotais;
+                        }
                     } else {
+                        // regime normal: fins de semana são sempre extraordinário
                         $minutosExtraExtraordinario = $minutosTotais;
                     }
                 }
