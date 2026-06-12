@@ -334,3 +334,5 @@ ALTER TABLE `periodos_mensais`
 ADD COLUMN IF NOT EXISTS `data_inicio` DATE NULL AFTER `mes`,
 ADD COLUMN IF NOT EXISTS `data_fim` DATE NULL AFTER `data_inicio`,
 ADD COLUMN IF NOT EXISTS `fechado_em` DATETIME NULL AFTER `data_fecho`;
+
+ALTER TABLE escalas ADD COLUMN regime ENUM('normal','turnos') NOT NULL DEFAULT 'normal';
