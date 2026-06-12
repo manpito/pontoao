@@ -1683,6 +1683,7 @@ function editarFunc(id) {
   document.getElementById('fTelefone').value   = f.telefone || '';
   document.getElementById('fDep').value        = f.departamento_id || '';
   document.getElementById('fCargo').value      = f.cargo_id || '';
+  document.getElementById('fHorario').value    = f.horario_id || '';
 
   // Carregar dados da escala
   const canManageEscala = USER.perfil === 'super_admin_tenant' || USER.perfil === 'rh_manager';
