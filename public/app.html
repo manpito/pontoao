@@ -2858,12 +2858,15 @@ async function popularFuncPicker() {
 function gerarHTMLRelatorioIndividual(res) {
   const f = res.funcionario;
   const cardTitle = `Marcações Diárias: ${f.nome} (${f.numero})`;
-  const headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
+  const headers = '<tr><th>DATA</th><th>DIA</th><th style="text-align:center">ENT.</th><th style="text-align:center">SAÍDA</th><th style="text-align:center">PAUSA</th><th style="text-align:center">TEMPO</th><th style="text-align:center">EXTRA</th><th>OCORRÊNCIA</th><th>ACÇÕES</th></tr>';
 
   let totalHoras = 0, diasPresentes = 0, diasAusentes = 0, totalAtrasos = 0, totalSaidasAntecipadas = 0, marcManuais = 0;
+  let totalExtra = 0, totalExtraExtraordinario = 0;
 
   const rows = (res.dias||[]).map(d => {
     const r = d.resumo;
+    totalExtra += r.minutos_extra || 0;
+    totalExtraExtraordinario += r.minutos_extra_extraordinario || 0;
     const ent = d.marcacoes.find(m => m.tipo === 'ENTRADA');
     const sai = [...d.marcacoes].reverse().find(m => m.tipo === 'SAÍDA');
     const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
@@ -2894,6 +2897,14 @@ function gerarHTMLRelatorioIndividual(res) {
     const mTot = Math.round(((r.total_horas || 0) - hTot) * 60);
     const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : '--:--';
 
+    const eMin = (r.minutos_extra || 0) + (r.minutos_extra_extraordinario || 0);
+    const eStr = eMin > 0
+      ? Math.floor(eMin/60).toString().padStart(2,'0') + ':' + (eMin%60).toString().padStart(2,'0')
+      : '--:--';
+    const eStyle = r.minutos_extra_extraordinario > 0
+      ? 'color:var(--danger);font-weight:700'
+      : r.minutos_extra > 0 ? 'color:var(--accent);font-weight:700' : 'color:var(--muted2)';
+
     let ocor = '';
     if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
     else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
@@ -2904,6 +2915,8 @@ function gerarHTMLRelatorioIndividual(res) {
         let badges = [];
         if (r.atraso_minutos > 0) badges.push(`<span class="badge" style="background:rgba(255,235,59,.15);color:#d4af37">Entrada Tardia (+${r.atraso_minutos}min)</span>`);
         if (r.saida_antecipada_minutos > 0) badges.push(`<span class="badge badge-warn">Saída Antecipada (-${r.saida_antecipada_minutos}min)</span>`);
+        if ((r.minutos_extra || 0) > 0) badges.push(`<span class="badge" style="background:rgba(0,156,191,.15);color:var(--accent)">+${r.minutos_extra}min extra</span>`);
+        if ((r.minutos_extra_extraordinario || 0) > 0) badges.push(`<span class="badge" style="background:rgba(239,68,68,.15);color:var(--danger)">+${r.minutos_extra_extraordinario}min extraordinário</span>`);
         ocor = badges.join(' ');
     }
 
@@ -2923,6 +2936,7 @@ function gerarHTMLRelatorioIndividual(res) {
       <td style="text-align:center;font-family:var(--mono)" title="${r.hora_prevista_saida ? 'Previsto: ' + r.hora_prevista_saida : ''}">${fmtM(sai)}</td>
       <td style="text-align:center;color:var(--muted2)">${pStr}</td>
       <td style="text-align:center"><strong>${tStr}</strong></td>
+      <td style="font-family:var(--mono);text-align:center;${eStyle}">${eStr}</td>
       <td>${ocor}</td>
       <td>${acts}</td>
     </tr>`;
@@ -2943,13 +2957,18 @@ function gerarHTMLRelatorioIndividual(res) {
     </div>
   `;
 
+  const hEx = Math.floor(totalExtra/60), mEx = totalExtra%60;
+  const hExE = Math.floor(totalExtraExtraordinario/60), mExE = totalExtraExtraordinario%60;
+
   const footer = `
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:16px;margin-top:20px;padding:16px;background:var(--s2);border-radius:8px">
       <div><div style="font-size:11px;color:var(--muted2)">TOTAL HORAS</div><div style="font-size:18px;font-weight:700">${totalHoras.toFixed(1)}h</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">DIAS PRESENTES</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${diasPresentes}</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">DIAS AUSENTES</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${diasAusentes}</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">ATRASOS</div><div style="font-size:18px;font-weight:700;color:var(--warn)">${totalAtrasos}min</div></div>
       <div><div style="font-size:11px;color:var(--muted2)">SAÍDAS ANTECIPADAS</div><div style="font-size:18px;font-weight:700;color:#ff8c00">${totalSaidasAntecipadas}min</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">HORAS EXTRA</div><div style="font-size:18px;font-weight:700;color:var(--accent)">${hEx}:${mEx.toString().padStart(2,'0')}</div></div>
+      <div><div style="font-size:11px;color:var(--muted2)">HORAS EXTRAORDINÁRIAS</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${hExE}:${mExE.toString().padStart(2,'0')}</div></div>
     </div>
     ${marcManuais > 0 ? `<div style="margin-top:10px;font-size:11px;color:var(--muted2)">* ${marcManuais} marcação(ões) ajustada(s) manualmente. Detalhes disponíveis no log de auditoria.</div>` : ''}
     <div class="print-only" style="margin-top:40px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:40px">
@@ -2962,7 +2981,7 @@ function gerarHTMLRelatorioIndividual(res) {
   return `${cabecalhoEmpresa}
     <div class="card">
       <div class="card-head"><div class="card-title">${cardTitle} · ${res.periodo.inicio} → ${res.periodo.fim}</div><span style="font-size:11px;color:var(--muted2)">${info}</span></div>
-      <table class="tbl"><thead>${headers}</thead><tbody>${rows||'<tr><td colspan="8" class="empty">Sem dados.</td></tr>'}</tbody></table>
+      <table class="tbl"><thead>${headers}</thead><tbody>${rows||'<tr><td colspan="9" class="empty">Sem dados.</td></tr>'}</tbody></table>
     </div>
     ${footer}`;
 }
