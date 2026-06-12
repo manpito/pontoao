@@ -66,15 +66,16 @@ class EscalaController
         }
 
         $stmt = $db->prepare("
-            INSERT INTO escalas (nome, descricao, departamento_id, tamanho_ciclo)
-            VALUES (:nome, :descricao, :dep_id, :ciclo)
+            INSERT INTO escalas (nome, descricao, departamento_id, tamanho_ciclo, regime)
+            VALUES (:nome, :descricao, :dep_id, :ciclo, :regime)
         ");
 
         $stmt->execute([
             ':nome'      => $nome,
             ':descricao' => $body['descricao'] ?? null,
             ':dep_id'    => $body['departamento_id'] ?: null,
-            ':ciclo'     => $ciclo
+            ':ciclo'     => $ciclo,
+            ':regime'    => in_array($body['regime'] ?? '', ['normal','turnos']) ? $body['regime'] : 'normal',
         ]);
 
         return $this->json($response, 201, ['mensagem' => 'Escala criada com sucesso.', 'id' => $db->lastInsertId()]);
@@ -130,7 +131,7 @@ class EscalaController
 
         $stmt = $db->prepare("
             UPDATE escalas SET
-                nome = :nome, descricao = :descricao, departamento_id = :dep_id, tamanho_ciclo = :ciclo
+                nome = :nome, descricao = :descricao, departamento_id = :dep_id, tamanho_ciclo = :ciclo, regime = :regime
             WHERE id = :id
         ");
 
@@ -139,6 +140,7 @@ class EscalaController
             ':descricao' => $body['descricao'] ?? null,
             ':dep_id'    => $body['departamento_id'] ?: null,
             ':ciclo'     => $ciclo,
+            ':regime'    => in_array($body['regime'] ?? '', ['normal','turnos']) ? $body['regime'] : 'normal',
             ':id'        => $id
         ]);
 

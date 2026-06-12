@@ -118,6 +118,20 @@ class RelatorioController
 
         $escalaService = new \App\Services\EscalaService($db);
 
+        $regimeEscala = 'normal';
+        $escalaAtual = $escalaService->calcularTurnoEm($funcId, date('Y-m-d'));
+        if ($escalaAtual) {
+            $stmtReg = $db->prepare("
+                SELECT e.regime FROM escalas e
+                JOIN funcionario_escala fe ON fe.escala_id = e.id
+                WHERE fe.funcionario_id = :fid AND fe.activo = 1
+                LIMIT 1
+            ");
+            $stmtReg->execute([':fid' => $funcId]);
+            $rowReg = $stmtReg->fetch(PDO::FETCH_ASSOC);
+            if ($rowReg) $regimeEscala = $rowReg['regime'];
+        }
+
         // Agrupar por dia
         $marcPorDia = [];
         foreach ($marcacoesRaw as $m) {
@@ -224,7 +238,12 @@ class RelatorioController
                 if ($tipoDia === 'util') {
                     $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
                 } elseif (in_array($tipoDia, ['sabado', 'domingo', 'feriado'])) {
-                    $minutosExtraExtraordinario = $minutosTotais;
+                    if ($regimeEscala === 'turnos' && $turno && $turno['tipo'] !== 'folga') {
+                        // regime de turnos: fins de semana com turno são dias normais
+                        $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
+                    } else {
+                        $minutosExtraExtraordinario = $minutosTotais;
+                    }
                 }
             }
 

@@ -1021,6 +1021,13 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <label>Tamanho do ciclo *</label>
         <input type="number" id="eCiclo" min="1" max="60" placeholder="Ex: 7 para 5/2, 5 para call center">
       </div>
+      <div class="form-group">
+        <label>Regime *</label>
+        <select id="eRegime">
+          <option value="normal">Normal (Segunda a Sexta)</option>
+          <option value="turnos">Turnos Rotativos (24/7)</option>
+        </select>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalEscala')">Cancelar</button>
@@ -3265,6 +3272,7 @@ async function carregarEscalas() {
       <td><strong>${e.nome}</strong></td>
       <td>${e.departamento_nome || "—"}</td>
       <td style="font-family:var(--mono)">${e.tamanho_ciclo} dias</td>
+      <td>${e.regime === 'turnos' ? 'Turnos Rotativos' : 'Normal'}</td>
       <td>
         <button class="btn btn-sm" onclick="verDetalheEscala(${e.id})">Detalhes</button>
         <button class="btn btn-sm" onclick="abrirModalEscala(${e.id})">Editar</button>
@@ -3272,8 +3280,8 @@ async function carregarEscalas() {
       </td>
     </tr>`).join("");
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Nome</th><th>Departamento</th><th>Ciclo</th><th>Acções</th></tr></thead>
-      <tbody>${rows||"<tr><td colspan=\"4\" class=\"empty\">Sem escalas configuradas.</td></tr>"}</tbody>
+      <thead><tr><th>Nome</th><th>Departamento</th><th>Ciclo</th><th>Regime</th><th>Acções</th></tr></thead>
+      <tbody>${rows||"<tr><td colspan=\"5\" class=\"empty\">Sem escalas configuradas.</td></tr>"}</tbody>
     </table>`;
   } catch(e) { el.innerHTML = "<div class=\"empty\">Erro ao carregar escalas.</div>"; }
 }
@@ -3295,12 +3303,14 @@ async function abrirModalEscala(id = null) {
       document.getElementById("eDesc").value = e.descricao || "";
       document.getElementById("eDepSelector").value = e.departamento_id || "";
       document.getElementById("eCiclo").value = e.tamanho_ciclo;
+      document.getElementById("eRegime").value = e.regime || "normal";
     }
   } else {
     document.getElementById("eNome").value = "";
     document.getElementById("eDesc").value = "";
     document.getElementById("eDepSelector").value = "";
     document.getElementById("eCiclo").value = "7";
+    document.getElementById("eRegime").value = "normal";
   }
   document.getElementById("modalEscala").classList.add("open");
 }
@@ -3311,7 +3321,8 @@ async function guardarEscala() {
     nome: document.getElementById("eNome").value.trim(),
     descricao: document.getElementById("eDesc").value,
     departamento_id: document.getElementById("eDepSelector").value || null,
-    tamanho_ciclo: parseInt(document.getElementById("eCiclo").value)
+    tamanho_ciclo: parseInt(document.getElementById("eCiclo").value),
+    regime: document.getElementById("eRegime").value
   };
   if (!payload.nome || !payload.tamanho_ciclo) { toast("Nome e tamanho do ciclo são obrigatórios.", "err"); return; }
   try {
