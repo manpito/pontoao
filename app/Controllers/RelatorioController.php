@@ -124,7 +124,7 @@ class RelatorioController
             $stmtReg = $db->prepare("
                 SELECT e.regime FROM escalas e
                 JOIN funcionario_escala fe ON fe.escala_id = e.id
-                WHERE fe.funcionario_id = :fid AND fe.activo = 1
+                WHERE fe.funcionario_id = :fid AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
                 LIMIT 1
             ");
             $stmtReg->execute([':fid' => $funcId]);
