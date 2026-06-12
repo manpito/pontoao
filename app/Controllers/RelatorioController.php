@@ -119,18 +119,15 @@ class RelatorioController
         $escalaService = new \App\Services\EscalaService($db);
 
         $regimeEscala = 'normal';
-        $escalaAtual = $escalaService->calcularTurnoEm($funcId, date('Y-m-d'));
-        if ($escalaAtual) {
-            $stmtReg = $db->prepare("
-                SELECT e.regime FROM escalas e
-                JOIN funcionario_escala fe ON fe.escala_id = e.id
-                WHERE fe.funcionario_id = :fid AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
-                LIMIT 1
-            ");
-            $stmtReg->execute([':fid' => $funcId]);
-            $rowReg = $stmtReg->fetch(PDO::FETCH_ASSOC);
+        $stmtReg = $db->prepare("
+        SELECT e.regime FROM escalas e
+        JOIN funcionario_escala fe ON fe.escala_id = e.id
+        WHERE fe.funcionario_id = :fid AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
+        LIMIT 1
+        ");
+        $stmtReg->execute([':fid' => $funcId]);
+        $rowReg = $stmtReg->fetch(PDO::FETCH_ASSOC);
             if ($rowReg) $regimeEscala = $rowReg['regime'];
-        }
 
         // Agrupar por dia
         $marcPorDia = [];
