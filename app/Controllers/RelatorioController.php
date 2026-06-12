@@ -204,6 +204,11 @@ class RelatorioController
                 }
             }
 
+            $minutosEsperados = 0;
+            if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
+                $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+            }
+
             $tipoDia = 'util';
             if (isset($feriados[$dataStr])) {
                 $tipoDia = 'feriado';
@@ -211,6 +216,16 @@ class RelatorioController
                 $tipoDia = 'sabado';
             } elseif ($diaSemana === 7) {
                 $tipoDia = 'domingo';
+            }
+
+            $minutosExtra = 0;
+            $minutosExtraExtraordinario = 0;
+            if ($minutosTotais > 0) {
+                if ($tipoDia === 'util') {
+                    $minutosExtra = max(0, $minutosTotais - $minutosEsperados);
+                } elseif (in_array($tipoDia, ['sabado', 'domingo', 'feriado'])) {
+                    $minutosExtraExtraordinario = $minutosTotais;
+                }
             }
 
             // Cálculo de atrasos e saídas antecipadas
@@ -263,7 +278,10 @@ class RelatorioController
                     'ultima_saida'              => $ultimaSaida,
                     'atraso_minutos'            => $atrasoMinutos,
                     'saida_antecipada_minutos'  => $saidaAntecipadaMinutos,
-                    'total_horas'               => round($minutosTotais/60, 2)
+                    'total_horas'               => round($minutosTotais/60, 2),
+                    'minutos_esperados'              => $minutosEsperados,
+                    'minutos_extra'                  => $minutosExtra,
+                    'minutos_extra_extraordinario'   => $minutosExtraExtraordinario,
                 ]
             ];
 
