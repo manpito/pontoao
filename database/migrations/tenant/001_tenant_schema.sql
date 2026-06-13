@@ -337,3 +337,24 @@ ADD COLUMN IF NOT EXISTS `fechado_em` DATETIME NULL AFTER `data_fecho`;
 
 ALTER TABLE escalas ADD COLUMN regime ENUM('normal','turnos') NOT NULL DEFAULT 'normal';
 ALTER TABLE utilizadores ADD COLUMN deve_alterar_password TINYINT(1) NOT NULL DEFAULT 1;
+
+-- Tabela: pedidos_horas_extra
+CREATE TABLE IF NOT EXISTS pedidos_horas_extra (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    funcionario_id  INT UNSIGNED NOT NULL,
+    data            DATE NOT NULL,
+    minutos         SMALLINT UNSIGNED NOT NULL,
+    tipo            ENUM('normal','excepcional') NOT NULL DEFAULT 'normal',
+    motivo          TEXT NOT NULL,
+    estado          ENUM('pendente','aprovado_rh','aprovado','rejeitado') NOT NULL DEFAULT 'pendente',
+    rejeitado_motivo TEXT NULL,
+    submetido_por   INT UNSIGNED NULL,
+    aprovado_rh_por INT UNSIGNED NULL,
+    aprovado_por    INT UNSIGNED NULL,
+    data_pedido     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    data_aprovacao  DATETIME NULL,
+    PRIMARY KEY (id),
+    KEY idx_funcionario_data (funcionario_id, data),
+    KEY idx_estado (estado),
+    CONSTRAINT fk_phe_funcionario FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE
+);

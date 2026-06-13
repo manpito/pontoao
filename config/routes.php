@@ -205,6 +205,22 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->put('/ferias/{id}/aprovar', [\App\Controllers\FeriasController::class, 'aprovar'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
 
+    // --- Pedidos de Horas Extra ---
+    $group->get('/pedidos-horas-extra',                    [\App\Controllers\PedidoHorasExtraController::class, 'index'])
+          ->add(AuthMiddleware::class);
+
+    $group->post('/pedidos-horas-extra',                   [\App\Controllers\PedidoHorasExtraController::class, 'store'])
+          ->add(AuthMiddleware::class);
+
+    $group->get('/pedidos-horas-extra/pendentes',          [\App\Controllers\PedidoHorasExtraController::class, 'pendentes'])
+          ->add(AuthMiddleware::class);
+
+    $group->put('/pedidos-horas-extra/{id}/aprovar',       [\App\Controllers\PedidoHorasExtraController::class, 'aprovar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->put('/pedidos-horas-extra/{id}/rejeitar',      [\App\Controllers\PedidoHorasExtraController::class, 'rejeitar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
     // --- Feriados ---
     $group->get('/feriados',            [\App\Controllers\FeriadoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
