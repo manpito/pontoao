@@ -44,12 +44,31 @@ class ExportacaoController
         $db         = $this->db();
 
         // 2.2 — Buscar funcionários activos
-        $stmtF = $db->query("
+        $idsParam = $params['funcionario_ids'] ?? '';
+        $depId    = $params['departamento_id'] ?? '';
+
+        $where = ["f.estado = 'activo'"];
+        $bind  = [];
+
+        if (!empty($idsParam)) {
+            $ids = array_filter(array_map('intval', explode(',', $idsParam)));
+            if (!empty($ids)) {
+                $inStr = implode(',', $ids);
+                $where[] = "f.id IN ({$inStr})";
+            }
+        } elseif (!empty($depId)) {
+            $where[] = 'f.departamento_id = :dep_id';
+            $bind[':dep_id'] = (int) $depId;
+        }
+
+        $whereStr = implode(' AND ', $where);
+        $stmtF = $db->prepare("
             SELECT f.id, f.numero_funcionario
             FROM funcionarios f
-            WHERE f.estado = 'activo'
+            WHERE {$whereStr}
             ORDER BY f.numero_funcionario ASC
         ");
+        $stmtF->execute($bind);
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
         if (empty($funcionarios)) {
