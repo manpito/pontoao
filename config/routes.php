@@ -82,6 +82,9 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->get('/auth/me',       [AuthController::class, 'me'])
           ->add(AuthMiddleware::class);
 
+    $group->post('/auth/alterar-password', [\App\Controllers\Auth\AuthController::class, 'alterarPassword'])
+          ->add(AuthMiddleware::class);
+
     // --- Funcionários ---
     $group->get('/funcionarios',        [\App\Controllers\FuncionarioController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));

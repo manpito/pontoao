@@ -133,6 +133,7 @@ class AuthController
                 'email'         => $user['email'],
                 'perfil'        => $user['perfil'],
                 'funcionario_id' => $user['funcionario_id'] ? (int) $user['funcionario_id'] : null,
+                'deve_alterar_password' => (bool) $user['deve_alterar_password'],
             ],
         ]);
 
@@ -174,7 +175,7 @@ class AuthController
 
         $db   = Database::tenant($sub);
         $stmt = $db->prepare("
-            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`
+            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`, u.`deve_alterar_password`
             FROM `utilizador_tokens` t
             JOIN `utilizadores` u ON t.`utilizador_id` = u.`id`
             WHERE t.`token_hash` = :hash AND t.`revogado` = 0 AND t.`expira_em` > NOW()
@@ -195,7 +196,11 @@ class AuthController
             'perfil' => $row['perfil'],
         ], $sub);
 
-        return $this->json(200, ['access_token' => $accessToken, 'expires_in' => (int) ($_ENV['JWT_ACCESS_TTL'] ?? 3600)]);
+        return $this->json(200, [
+            'access_token' => $accessToken,
+            'expires_in' => (int) ($_ENV['JWT_ACCESS_TTL'] ?? 3600),
+            'deve_alterar_password' => (bool) $row['deve_alterar_password']
+        ]);
     }
 
     /**
@@ -205,6 +210,43 @@ class AuthController
     {
         $user = $request->getAttribute('auth_user');
         return $this->json(200, ['utilizador' => (array) $user]);
+    }
+
+    /**
+     * POST /api/auth/alterar-password
+     */
+    public function alterarPassword(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $userId = $request->getAttribute('auth_user_id');
+        $sub    = TenantResolver::resolve();
+        $body   = $request->getParsedBody();
+
+        $atual = $body['password_atual'] ?? '';
+        $nova  = $body['password_nova'] ?? '';
+
+        if (strlen($nova) < 8) {
+            return $this->json(400, ['erro' => true, 'mensagem' => 'A nova password deve ter pelo menos 8 caracteres.']);
+        }
+
+        try {
+            $db = Database::tenant($sub);
+        } catch (\RuntimeException $e) {
+            return $this->json(500, ['erro' => true, 'mensagem' => $e->getMessage()]);
+        }
+
+        $stmt = $db->prepare("SELECT password_hash FROM utilizadores WHERE id = :id");
+        $stmt->execute([':id' => $userId]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !password_verify($atual, $user['password_hash'])) {
+            return $this->json(401, ['erro' => true, 'mensagem' => 'Password actual incorrecta.']);
+        }
+
+        $newHash = password_hash($nova, PASSWORD_ARGON2ID);
+        $stmt = $db->prepare("UPDATE utilizadores SET password_hash = :hash, deve_alterar_password = 0 WHERE id = :id");
+        $stmt->execute([':hash' => $newHash, ':id' => $userId]);
+
+        return $this->json(200, ['mensagem' => 'Password alterada com sucesso.']);
     }
 
     private function json(int $status, array $data): ResponseInterface
