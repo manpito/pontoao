@@ -1469,7 +1469,8 @@ function nav(page) {
     ferias: loadFerias, departamentos: loadDepartamentos,
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
-    configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas
+    configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas,
+    exportacao: loadExportacao
   };
   loaders[page]?.();
 }
@@ -3601,8 +3602,9 @@ function filtrarFuncionariosExp() {
   list.innerHTML = filtered.map(f => `
     <label style="display:flex;gap:8px;align-items:center;padding:6px 8px;cursor:pointer;border-radius:6px;font-size:13px">
       <input type="checkbox" class="exp-func-cb" value="${f.id}" onchange="actualizarContadorExp()">
-      <span style="font-family:var(--mono);color:var(--muted2);font-size:11px">${f.numero_funcionario}</span>
-      ${f.nome_completo}
+      <span style="font-family:var(--mono);color:var(--muted2);font-size:11px;min-width:40px">${f.numero_funcionario}</span>
+      <strong style="flex:1">${f.nome_completo}</strong>
+      <span style="font-size:11px;color:var(--muted2)">${f.departamento || ''}</span>
     </label>
   `).join('');
   actualizarContadorExp();
