@@ -352,6 +352,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="sb-section">Recursos Humanos</div>
     <button class="nav-item" onclick="nav('funcionarios')" id="nav-funcionarios"><span class="ni">◻</span> Funcionários</button>
     <button class="nav-item" onclick="nav('ferias')" id="nav-ferias"><span class="ni">◈</span> Férias <span class="nav-badge" id="feriasBadge" style="display:none">0</span></button>
+    <button class="nav-item" onclick="nav('horas-extra')" id="nav-horas-extra"><span class="ni">⏱</span> Horas Extra <span class="nav-badge" id="horasExtraBadge" style="display:none">0</span></button>
     <button class="nav-item" onclick="nav('departamentos')" id="nav-departamentos"><span class="ni">◫</span> Departamentos</button>
     <button class="nav-item" onclick="nav('cargos')" id="nav-cargos"><span class="ni">◈</span> Cargos</button>
     <button class="nav-item" onclick="nav('horarios')" id="nav-horarios"><span class="ni">◷</span> Horários</button>
@@ -504,6 +505,26 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="card">
         <div class="card-head"><div class="card-title">Pedidos de férias</div></div>
         <div id="feriasTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+
+    <!-- HORAS EXTRA -->
+    <div class="page" id="page-horas-extra">
+      <div class="page-header">
+        <div><div class="page-title">Horas Extra</div><div class="page-sub">Pedidos e aprovações</div></div>
+      </div>
+      <div class="toolbar">
+        <select class="select-input" id="heEstadoFiltro">
+          <option value="">Todos os estados</option>
+          <option value="pendente">Pendente</option>
+          <option value="aprovado_rh">Aprovado RH</option>
+          <option value="aprovado">Aprovado</option>
+          <option value="rejeitado">Rejeitado</option>
+        </select>
+        <button class="btn btn-accent" onclick="carregarPedidosHorasExtra()">Filtrar</button>
+      </div>
+      <div class="card">
+        <div id="horasExtraTable"><div class="empty"><span class="spinner"></span></div></div>
       </div>
     </div>
 
@@ -1336,6 +1357,7 @@ function showApp() {
   document.getElementById('dashDate').textContent = fmtDate(new Date());
   loadDashboard();
   loadFeriasCount();
+  carregarHorasExtraCount();
   carregarSelectores();
   applyPermissions();
 
@@ -1423,6 +1445,7 @@ function applyPermissions() {
   hide('nav-marcacoes-falta', ['rh_colaborador', 'funcionario'].includes(p));
   hide('nav-funcionarios', p === 'supervisor');
   hide('nav-ferias', false);
+  hide('nav-horas-extra', ['supervisor', 'funcionario'].includes(p));
   hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-horarios', p === 'supervisor');
   hide('nav-relatorios', p === 'supervisor');
@@ -1466,7 +1489,7 @@ function nav(page) {
   const loaders = {
     dashboard: loadDashboard, presenca: loadPresenca,
     marcacoes: loadMarcacoes, 'marcacoes-falta': () => { carregarMarcacoesFalta(); loadDepartamentos(); }, funcionarios: loadFuncionarios,
-    ferias: loadFerias, departamentos: loadDepartamentos,
+    ferias: loadFerias, 'horas-extra': carregarPedidosHorasExtra, departamentos: loadDepartamentos,
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: carregarEscalas,
@@ -2041,6 +2064,75 @@ async function acaoFerias(id, accao) {
     loadFerias();
     loadFeriasCount();
   } catch(e) { toast(e.message,'err'); }
+}
+
+// ── HORAS EXTRA ──
+async function carregarPedidosHorasExtra() {
+  const el = document.getElementById('horasExtraTable');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const estado = document.getElementById('heEstadoFiltro').value;
+  try {
+    const res = await api('GET', '/api/pedidos-horas-extra' + (estado ? `?estado=${estado}` : ''));
+    const pedidos = res.dados || [];
+    const rows = pedidos.map(p => {
+      const isPendente = p.estado === 'pendente';
+      const isAprovadoRH = p.estado === 'aprovado_rh';
+      const podeAprovar = (isPendente && USER.perfil === 'rh_colaborador') || (isAprovadoRH && USER.perfil === 'rh_manager') || (isPendente && USER.perfil === 'rh_manager' && p.minutos <= 120);
+      const badgeClass = p.estado === 'aprovado' ? 'green' : (p.estado === 'rejeitado' ? 'red' : 'warn');
+
+      return `<tr>
+        <td><span style="font-family:var(--mono)">${p.data}</span></td>
+        <td><strong>${p.funcionario_nome}</strong></td>
+        <td>${p.minutos} min</td>
+        <td><span class="badge badge-gray">${p.tipo}</span></td>
+        <td>${p.motivo}</td>
+        <td><span class="badge badge-${badgeClass}">${p.estado}</span></td>
+        <td>
+          ${podeAprovar ? `<button class="btn btn-sm btn-accent" onclick="aprovarPedidoHE(${p.id})">Aprovar</button>` : ''}
+          ${isPendente || isAprovadoRH ? `<button class="btn btn-sm btn-danger" onclick="rejeitarPedidoHE(${p.id})">Rejeitar</button>` : ''}
+        </td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Minutos</th><th>Tipo</th><th>Motivo</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" class="empty">Nenhum pedido encontrado.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar pedidos.</div>'; }
+}
+
+async function carregarHorasExtraCount() {
+  try {
+    const res = await api('GET', '/api/pedidos-horas-extra/pendentes');
+    const n = res.total || 0;
+    const badge = document.getElementById('horasExtraBadge');
+    if (badge) {
+      badge.textContent = n;
+      badge.style.display = n > 0 ? 'inline' : 'none';
+    }
+  } catch(_) {}
+}
+
+async function aprovarPedidoHE(id) {
+  try {
+    const res = await api('PUT', `/api/pedidos-horas-extra/${id}/aprovar`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Pedido aprovado.', 'ok');
+    carregarPedidosHorasExtra();
+    carregarHorasExtraCount();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function rejeitarPedidoHE(id) {
+  const motivo = prompt('Motivo da rejeição:');
+  if (!motivo) return;
+  try {
+    const res = await api('PUT', `/api/pedidos-horas-extra/${id}/rejeitar`, { motivo_rejeicao: motivo });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem || 'Pedido rejeitado.', 'ok');
+    carregarPedidosHorasExtra();
+    carregarHorasExtraCount();
+  } catch(e) { toast(e.message, 'err'); }
 }
 
 async function abrirModalNovoFerias() {

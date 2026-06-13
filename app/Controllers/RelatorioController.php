@@ -118,6 +118,19 @@ class RelatorioController
 
         $escalaService = new \App\Services\EscalaService($db);
 
+        // Carregar pedidos de horas extra aprovados do período
+        $stmtPHE = $db->prepare("
+            SELECT data, minutos FROM pedidos_horas_extra
+            WHERE funcionario_id = :fid
+              AND estado = 'aprovado'
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtPHE->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $horasExtraAprovadas = [];
+        foreach ($stmtPHE->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $horasExtraAprovadas[$r['data']] = (int) $r['minutos'];
+        }
+
         $regimeEscala = 'normal';
         $stmtReg = $db->prepare("
         SELECT e.regime FROM escalas e
@@ -269,6 +282,40 @@ class RelatorioController
                 }
 
                 if ($turno['hora_saida'] && $ultimaSaida) {
+                    $horaCorteSaida = substr($turno['hora_saida'], 0, 5);
+
+                    // Lógica de arredondamento automático de horas extra não aprovadas
+                    if ($ultimaSaida > $horaCorteSaida) {
+                        $tsCorte = strtotime($dataStr . ' ' . $horaCorteSaida . ($turno['atravessa_dia_civil'] ? ' +1 day' : ''));
+                        $tsReal  = strtotime($dataStr . ' ' . $ultimaSaida . ($turno['atravessa_dia_civil'] ? ' +1 day' : ''));
+                        $minutosExtraReais = (int) round(($tsReal - $tsCorte) / 60);
+                        $minutosAprovados = $horasExtraAprovadas[$dataStr] ?? 0;
+
+                        if ($minutosExtraReais > $minutosAprovados) {
+                            $novaHoraSaida = date('H:i', strtotime($horaCorteSaida . " +{$minutosAprovados} minutes"));
+
+                            // Actualizar marcação de saída na DB (a última saída do dia)
+                            $db->prepare("
+                                UPDATE marcacoes SET data_hora = :nova, editada = 1,
+                                    motivo_edicao = 'Arredondamento automático - horas extra não aprovadas',
+                                    data_edicao = NOW()
+                                WHERE funcionario_id = :fid AND tipo = 'saida'
+                                  AND DATE(data_hora) = :data
+                                  AND data_hora = (SELECT max_dh FROM (SELECT MAX(data_hora) as max_dh FROM marcacoes WHERE funcionario_id = :fid2 AND tipo = 'saida' AND DATE(data_hora) = :data2) t)
+                            ")->execute([
+                                ':nova'  => ($turno['atravessa_dia_civil'] && $novaHoraSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr) . ' ' . $novaHoraSaida . ':00',
+                                ':fid'   => $funcId,
+                                ':data'  => $turno['atravessa_dia_civil'] && $ultimaSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr,
+                                ':fid2'  => $funcId,
+                                ':data2' => $turno['atravessa_dia_civil'] && $ultimaSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr
+                            ]);
+
+                            $ultimaSaida = $novaHoraSaida;
+                            // Recalcular minutos totais do dia para o relatório
+                            $minutosTotais -= ($minutosExtraReais - $minutosAprovados);
+                        }
+                    }
+
                     if ($turno['atravessa_dia_civil']) {
                         $tsPrevistoSaida = strtotime($dataStr . ' ' . $turno['hora_saida'] . ' +1 day');
                         $tsRealSaida = strtotime($dataStr . ' ' . $ultimaSaida . ' +1 day');

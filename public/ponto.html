@@ -741,6 +741,12 @@ body::before {
         <button class="btn-sm" onclick="abrirPedidoFerias()">Pedir férias</button>
       </div>
 
+      <div class="card">
+        <div class="card-title">Horas extra</div>
+        <div id="horasExtraStatus" style="font-size:13px;color:var(--muted);margin-bottom:12px">A carregar...</div>
+        <button class="btn-sm" onclick="abrirPedidoHorasExtra()">Pedir horas extra</button>
+      </div>
+
     </div>
 
     <!-- HISTÓRICO SEMANA -->
@@ -779,6 +785,19 @@ body::before {
       <input type="date" id="feriasFim" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:var(--sans);font-size:15px;color:var(--text);outline:none">
     </div>
     <button class="btn btn-primary" onclick="submeterFerias()">Submeter pedido</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="horasExtraModal">
+  <div class="modal">
+    <button class="modal-close" onclick="fecharHorasExtra()">✕</button>
+    <h3>Pedido de horas extra</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Máximo 2h (normal) ou 4h (excepcional, requer aprovação adicional).</p>
+    <div class="field"><label>Data</label><input type="date" id="heData"></div>
+    <div class="field"><label>Minutos (máx. 240)</label><input type="number" id="heMinutos" min="1" max="240" placeholder="Ex: 60"></div>
+    <div class="field"><label>Motivo</label><textarea id="heMotivo" rows="3" placeholder="Descreva o motivo..."></textarea></div>
+    <div class="login-error" id="heErro" style="display:none"></div>
+    <button class="btn btn-primary" id="heBtnSubmit" onclick="submeterHorasExtra()">Submeter pedido</button>
   </div>
 </div>
 
@@ -930,6 +949,7 @@ async function mostrarPortal() {
   iniciarGeo();
   await carregarHistorico();
   await carregarFerias();
+  carregarStatusHorasExtra();
 }
 
 async function carregarConfigs() {
@@ -1091,6 +1111,53 @@ async function carregarFerias() {
       document.getElementById('feriasGozados').textContent   = dados.dias_gozados   ?? '—';
       document.getElementById('feriasPendentes').textContent = dados.dias_pendentes ?? '—';
     }
+  } catch(_) {}
+}
+
+function abrirPedidoHorasExtra() {
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('heData').value = hoje;
+  document.getElementById('heMinutos').value = '';
+  document.getElementById('heMotivo').value = '';
+  document.getElementById('heErro').style.display = 'none';
+  document.getElementById('horasExtraModal').classList.add('open');
+}
+
+function fecharHorasExtra() {
+  document.getElementById('horasExtraModal').classList.remove('open');
+}
+
+async function submeterHorasExtra() {
+  const data    = document.getElementById('heData').value;
+  const minutos = parseInt(document.getElementById('heMinutos').value);
+  const motivo  = document.getElementById('heMotivo').value.trim();
+  const erroEl  = document.getElementById('heErro');
+  const btn     = document.getElementById('heBtnSubmit');
+  erroEl.style.display = 'none';
+  if (!data || !minutos || !motivo) { erroEl.textContent = 'Preencha todos os campos.'; erroEl.style.display = 'block'; return; }
+  if (minutos > 240) { erroEl.textContent = 'O máximo permitido é 240 minutos (4h).'; erroEl.style.display = 'block'; return; }
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/pedidos-horas-extra', { data, minutos, motivo });
+    if (res.erro) throw new Error(res.mensagem);
+    fecharHorasExtra();
+    carregarStatusHorasExtra();
+  } catch(e) {
+    erroEl.textContent = e.message || 'Erro ao submeter pedido.';
+    erroEl.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+
+async function carregarStatusHorasExtra() {
+  const fid = currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id;
+  try {
+    const res = await api('GET', `/api/pedidos-horas-extra?funcionario_id=${fid}`);
+    const pedidos = res.dados || [];
+    const pendentes = pedidos.filter(p => p.estado === 'pendente').length;
+    const aprovados = pedidos.filter(p => p.estado === 'aprovado').length;
+    document.getElementById('horasExtraStatus').textContent =
+      pendentes > 0 ? `${pendentes} pedido(s) pendente(s)` :
+      aprovados > 0 ? `${aprovados} pedido(s) aprovado(s)` : 'Sem pedidos recentes.';
   } catch(_) {}
 }
 
