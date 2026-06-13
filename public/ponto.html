@@ -659,12 +659,34 @@ body::before {
   </div>
 </div>
 
+<div id="modalAlterarPassword" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--card);border-radius:16px;padding:32px;width:100%;max-width:400px;margin:20px">
+    <h2 style="margin-bottom:8px;font-size:18px">Alterar password</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:24px" id="alterarPassSub">Por segurança, defina uma nova password para a sua conta.</p>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">PASSWORD ACTUAL</label>
+      <input type="password" id="passAtual" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">NOVA PASSWORD</label>
+      <input type="password" id="passNova" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;box-sizing:border-box">
+    </div>
+    <div style="margin-bottom:24px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">CONFIRMAR NOVA PASSWORD</label>
+      <input type="password" id="passConfirm" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;box-sizing:border-box">
+    </div>
+    <div id="alterarPassErro" style="display:none;color:#ef4444;font-size:13px;margin-bottom:16px"></div>
+    <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="width:100%;background:var(--accent);color:#07090d;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
+  </div>
+</div>
+
 <!-- PORTAL -->
 <div id="portal">
   <header class="header">
     <div class="header-logo"><div class="dot"></div><span>Ponto AO</span></div>
     <div class="header-user">
       <div class="header-name">Olá, <strong id="headerName">—</strong></div>
+      <button class="btn-sm" onclick="mostrarModalAlterarPassword(false)" style="padding:6px 12px;font-size:11px">Password</button>
       <button class="btn-logout" onclick="doLogout()">Sair</button>
     </div>
   </header>
@@ -844,12 +866,49 @@ async function doLogin() {
     } catch(_) {}
 
     mostrarPortal();
+    if (res.utilizador.deve_alterar_password) {
+      mostrarModalAlterarPassword(true);
+    }
   } catch(e) {
     errEl.textContent = e.message || 'Erro de autenticação.';
     errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
     btn.innerHTML = 'Entrar';
+  }
+}
+
+function mostrarModalAlterarPassword(obrigatorio = false) {
+  document.getElementById('alterarPassSub').textContent = obrigatorio
+    ? 'Por segurança, deve alterar a password antes de continuar.'
+    : 'Altere a sua password para manter a conta segura.';
+  document.getElementById('passAtual').value = '';
+  document.getElementById('passNova').value = '';
+  document.getElementById('passConfirm').value = '';
+  document.getElementById('alterarPassErro').style.display = 'none';
+  document.getElementById('modalAlterarPassword').style.display = 'flex';
+}
+
+async function submeterAlteracaoPassword() {
+  const atual    = document.getElementById('passAtual').value;
+  const nova     = document.getElementById('passNova').value;
+  const confirm  = document.getElementById('passConfirm').value;
+  const erroEl   = document.getElementById('alterarPassErro');
+  const btn      = document.getElementById('alterarPassBtn');
+  erroEl.style.display = 'none';
+  if (!atual || !nova || !confirm) { erroEl.textContent = 'Preencha todos os campos.'; erroEl.style.display = 'block'; return; }
+  if (nova.length < 8) { erroEl.textContent = 'A nova password deve ter pelo menos 8 caracteres.'; erroEl.style.display = 'block'; return; }
+  if (nova !== confirm) { erroEl.textContent = 'As passwords não coincidem.'; erroEl.style.display = 'block'; return; }
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/auth/alterar-password', { password_atual: atual, password_nova: nova });
+    if (res.erro) throw new Error(res.mensagem);
+    document.getElementById('modalAlterarPassword').style.display = 'none';
+  } catch(e) {
+    erroEl.textContent = e.message || 'Erro ao alterar password.';
+    erroEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
   }
 }
 

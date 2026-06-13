@@ -336,3 +336,4 @@ ADD COLUMN IF NOT EXISTS `data_fim` DATE NULL AFTER `data_inicio`,
 ADD COLUMN IF NOT EXISTS `fechado_em` DATETIME NULL AFTER `data_fecho`;
 
 ALTER TABLE escalas ADD COLUMN regime ENUM('normal','turnos') NOT NULL DEFAULT 'normal';
+ALTER TABLE utilizadores ADD COLUMN deve_alterar_password TINYINT(1) NOT NULL DEFAULT 1;
