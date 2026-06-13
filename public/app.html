@@ -3035,7 +3035,7 @@ function gerarHTMLRelatorioIndividual(res) {
 
     const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
     let acts = '';
-    if (canEdit && r.tipo_dia === 'util') {
+    if (canEdit && (r.tipo_dia === 'util' || (r.primeira_entrada || r.ultima_saida))) {
       if (ent) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
       if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
       if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','entrada')">+ Registar</button>`;
