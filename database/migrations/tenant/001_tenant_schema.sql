@@ -358,3 +358,7 @@ CREATE TABLE IF NOT EXISTS pedidos_horas_extra (
     KEY idx_estado (estado),
     CONSTRAINT fk_phe_funcionario FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE
 );
+
+ALTER TABLE escala_excepcoes
+    ADD COLUMN tipo ENUM('substituicao','atribuicao_directa') NOT NULL DEFAULT 'substituicao' AFTER id,
+    MODIFY COLUMN funcionario_ausente_id INT UNSIGNED NULL;

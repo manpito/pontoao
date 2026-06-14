@@ -39,12 +39,18 @@ class EscalaExcecoesController
                        f_sub.numero_funcionario as funcionario_substituto_numero,
                        t.nome as turno_nome
                 FROM escala_excepcoes exc
-                JOIN funcionarios f_aus ON exc.funcionario_ausente_id = f_aus.id
+                LEFT JOIN funcionarios f_aus ON exc.funcionario_ausente_id = f_aus.id
                 LEFT JOIN funcionarios f_sub ON exc.funcionario_substituto_id = f_sub.id
                 JOIN turnos t ON exc.turno_id = t.id
                 WHERE 1=1";
 
         $bind = [];
+
+        // Filtro opcional por tipo (ex: atribuicao_directa)
+        if (!empty($params['tipo'])) {
+            $sql .= " AND exc.tipo = :tipo";
+            $bind[':tipo'] = $params['tipo'];
+        }
 
         if (!empty($params['data_inicio'])) {
             $sql .= " AND exc.data >= :data_inicio";
@@ -85,14 +91,21 @@ class EscalaExcecoesController
         $user = $request->getAttribute('auth_user');
 
         $data = $body['data'] ?? '';
-        $ausenteId = (int) ($body['funcionario_ausente_id'] ?? 0);
+        $tipo = $body['tipo'] ?? 'substituicao';
+        // Suporte a substituicao e atribuicao_directa
+        if (!in_array($tipo, ['substituicao', 'atribuicao_directa'])) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Tipo inválido.']);
+        }
+
+        $data = $body['data'] ?? '';
+        $ausenteId = (int) ($body['funcionario_ausente_id'] ?? ($body['funcionario_id'] ?? 0));
         $substitutoId = !empty($body['funcionario_substituto_id']) ? (int) $body['funcionario_substituto_id'] : null;
         $turnoId = (int) ($body['turno_id'] ?? 0);
         $motivo = $body['motivo'] ?? '';
         $descricao = $body['descricao'] ?? null;
 
-        if (!$data || !$ausenteId || !$turnoId || !$motivo) {
-            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Data, funcionário ausente, turno e motivo são obrigatórios.']);
+        if (!$data || !$ausenteId || !$turnoId || ($tipo === 'substituicao' && !$motivo)) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Data, funcionário, turno e motivo são obrigatórios.']);
         }
 
         if ($substitutoId !== null && $substitutoId === $ausenteId) {
@@ -116,24 +129,30 @@ class EscalaExcecoesController
             }
         }
 
-        // Validar se funcionário tem escala activa que inclua esse turno nessa data
-        $escalaService = new EscalaService($db);
-        $turnoCalculado = $escalaService->calcularTurnoEm($ausenteId, $data);
+        if ($tipo === 'substituicao') {
+            // Validar se funcionário tem escala activa que inclua esse turno nessa data
+            $escalaService = new EscalaService($db);
+            $turnoCalculado = $escalaService->calcularTurnoEm($ausenteId, $data);
 
-        if (!$turnoCalculado) {
-            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'O funcionário ausente não tem escala activa na data seleccionada.']);
-        }
+            if (!$turnoCalculado) {
+                return $this->json($response, 400, ['erro' => true, 'mensagem' => 'O funcionário ausente não tem escala activa na data seleccionada.']);
+            }
 
-        if ($turnoCalculado['turno_id'] !== $turnoId) {
-             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'O turno seleccionado não corresponde ao turno previsto para o funcionário nesta data.']);
+            if ($turnoCalculado['turno_id'] !== $turnoId) {
+                 return $this->json($response, 400, ['erro' => true, 'mensagem' => 'O turno seleccionado não corresponde ao turno previsto para o funcionário nesta data.']);
+            }
+        } else {
+            $substitutoId = null;
+            if (!$motivo) $motivo = 'outro';
         }
 
         $stmt = $db->prepare("
-            INSERT INTO escala_excepcoes (data, funcionario_ausente_id, funcionario_substituto_id, turno_id, motivo, descricao, criado_por)
-            VALUES (:data, :ausente, :substituto, :turno, :motivo, :descricao, :criado_por)
+            INSERT INTO escala_excepcoes (tipo, data, funcionario_ausente_id, funcionario_substituto_id, turno_id, motivo, descricao, criado_por)
+            VALUES (:tipo, :data, :ausente, :substituto, :turno, :motivo, :descricao, :criado_por)
         ");
 
         $stmt->execute([
+            ':tipo'       => $tipo,
             ':data'       => $data,
             ':ausente'    => $ausenteId,
             ':substituto' => $substitutoId,

@@ -35,6 +35,39 @@ class EscalaService
         $dt = new DateTimeImmutable($data);
         $dataStr = $dt->format('Y-m-d');
 
+        // Consultar atribuições directas (atribuicao_directa)
+        $stmt = $this->pdo->prepare("
+            SELECT exc.turno_id, t.nome as turno_nome, t.tipo as turno_tipo,
+                   t.hora_entrada, t.hora_saida, t.hora_inicio_intervalo,
+                   t.hora_fim_intervalo, t.horas_efectivas,
+                   t.atravessa_dia_civil, t.classificacao_legal
+            FROM escala_excepcoes exc
+            JOIN turnos t ON t.id = exc.turno_id
+            WHERE exc.data = :data
+              AND exc.tipo = 'atribuicao_directa'
+              AND exc.funcionario_ausente_id = :fid
+            LIMIT 1
+        ");
+        $stmt->execute(['data' => $dataStr, 'fid' => $funcionarioId]);
+        $atribuicaoDirecta = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($atribuicaoDirecta) {
+            return [
+                'turno_id'            => (int) $atribuicaoDirecta['turno_id'],
+                'turno_nome'          => $atribuicaoDirecta['turno_nome'],
+                'tipo'                => $atribuicaoDirecta['turno_tipo'],
+                'hora_entrada'        => $atribuicaoDirecta['hora_entrada'],
+                'hora_saida'          => $atribuicaoDirecta['hora_saida'],
+                'hora_inicio_intervalo' => $atribuicaoDirecta['hora_inicio_intervalo'],
+                'hora_fim_intervalo'  => $atribuicaoDirecta['hora_fim_intervalo'],
+                'horas_efectivas'     => $atribuicaoDirecta['horas_efectivas'] !== null ? (float) $atribuicaoDirecta['horas_efectivas'] : null,
+                'atravessa_dia_civil' => (bool) $atribuicaoDirecta['atravessa_dia_civil'],
+                'classificacao_legal' => $atribuicaoDirecta['classificacao_legal'],
+                'escala_id'           => 0,
+                'posicao_no_ciclo'    => 0,
+                'substituicao'        => null
+            ];
+        }
+
         // 1. Verificar se existe uma excepção onde o funcionário é substituto
         $stmt = $this->pdo->prepare("
             SELECT exc.*, t.nome as turno_nome, t.tipo as turno_tipo, t.hora_entrada, t.hora_saida,
