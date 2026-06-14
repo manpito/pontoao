@@ -74,8 +74,9 @@ function bootstrap_db(): PDO
 
         CREATE TABLE escala_excepcoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL DEFAULT 'substituicao',
             data TEXT NOT NULL,
-            funcionario_ausente_id INTEGER NOT NULL,
+            funcionario_ausente_id INTEGER,
             funcionario_substituto_id INTEGER,
             turno_id INTEGER NOT NULL,
             motivo TEXT NOT NULL,
