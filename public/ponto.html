@@ -676,7 +676,10 @@ body::before {
       <input type="password" id="passConfirm" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;box-sizing:border-box">
     </div>
     <div id="alterarPassErro" style="display:none;color:#ef4444;font-size:13px;margin-bottom:16px"></div>
-    <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="width:100%;background:var(--accent);color:#07090d;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
+    <div style="display:flex;gap:10px">
+      <button onclick="document.getElementById('modalAlterarPassword').style.display='none'" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;cursor:pointer">Cancelar</button>
+      <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="flex:2;background:var(--accent);color:#07090d;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
+    </div>
   </div>
 </div>
 
