@@ -365,6 +365,8 @@ body {
 }
 .panel-action:hover { background: var(--accent-dim); }
 
+.modal-action { background: none; border: none; padding: 0; display: flex; align-items: center; justify-content: center; }
+
 /* === TABLE === */
 .data-table {
   width: 100%;
@@ -1441,7 +1443,11 @@ async function criarTenant() {
       errEl.style.display = 'block';
     } else {
       closeModal('modalNovoTenant');
-      toast(`Empresa "${body.nome_empresa}" criada com sucesso!`, 'success');
+      document.getElementById('cred_empresa').textContent  = body.nome_empresa;
+      document.getElementById('cred_url').textContent      = 'https://rh.ftl-angola.net/app.html?tenant=' + body.subdominio;
+      document.getElementById('cred_email').textContent    = body.admin_email;
+      document.getElementById('cred_password').textContent = body.admin_password;
+      openModal('modalCredenciais');
       campos.forEach(id => document.getElementById(id).value = '');
       loadTenants();
       if (document.getElementById('view-dashboard').style.display !== 'none') loadDashboard();
@@ -1571,7 +1577,7 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
 document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => { if (e.target === overlay && overlay.id !== 'loginOverlay') closeModal(overlay.id); });
+  overlay.addEventListener('click', e => { if (e.target === overlay && overlay.id !== 'loginOverlay' && overlay.id !== 'modalCredenciais') closeModal(overlay.id); });
 });
 
 function toast(msg, type = 'success') {
@@ -1587,6 +1593,41 @@ function toast(msg, type = 'success') {
   `;
   document.getElementById('toastContainer').appendChild(el);
   setTimeout(() => { el.style.opacity='0'; el.style.transform='translateX(16px)'; el.style.transition='.3s'; setTimeout(()=>el.remove(),300); }, 3500);
+}
+
+async function copiarEFechar() {
+    const empresa  = document.getElementById('cred_empresa').textContent;
+    const url      = document.getElementById('cred_url').textContent;
+    const email    = document.getElementById('cred_email').textContent;
+    const password = document.getElementById('cred_password').textContent;
+
+    const bloco = `PontoAO — Credenciais de Acesso
+================================
+Empresa: ${empresa}
+URL de Acesso: ${url}
+Email: ${email}
+Password: ${password}
+
+IMPORTANTE: Altere a password no primeiro acesso.`;
+
+    try {
+        await navigator.clipboard.writeText(bloco);
+        toast('Credenciais copiadas para a clipboard.', 'success');
+    } catch(e) {
+        toast('Não foi possível copiar automaticamente. Copie manualmente.', 'warn');
+    }
+    closeModal('modalCredenciais');
+}
+
+async function copiarCampo(elementId, btnId) {
+    const valor = document.getElementById(elementId).textContent;
+    const btn   = document.getElementById(btnId);
+    try {
+        await navigator.clipboard.writeText(valor);
+        const original = btn.innerHTML;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><polyline points="20,6 9,17 4,12"/></svg>';
+        setTimeout(() => { btn.innerHTML = original; }, 2000);
+    } catch(e) {}
 }
 </script>
 
@@ -1632,6 +1673,66 @@ function toast(msg, type = 'success') {
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalEditarTenant')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarEdicaoTenant()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- === MODAL: CREDENCIAIS PÓS-CRIAÇÃO === -->
+<div class="modal-overlay" id="modalCredenciais">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="3" style="width:20px;height:20px"><polyline points="20,6 9,17 4,12"/></svg>
+      <div class="modal-title">Empresa Criada — Credenciais de Acesso</div>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--yellow-dim); border:1px solid rgba(234,179,8,.3); border-radius:var(--radius); padding:10px 12px; font-size:12px; color:var(--yellow); margin-bottom:20px; line-height:1.4;">
+        Esta é a única vez que a password é apresentada. Copie antes de fechar.
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <label style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px; display:block;">Empresa</label>
+          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-primary); background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
+            <span id="cred_empresa"></span>
+            <button id="btnCopy_empresa" class="modal-action" style="color:var(--accent); cursor:pointer;" onclick="copiarCampo('cred_empresa', 'btnCopy_empresa')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px; display:block;">URL de Acesso</label>
+          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-primary); background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
+            <span id="cred_url"></span>
+            <button id="btnCopy_url" class="modal-action" style="color:var(--accent); cursor:pointer;" onclick="copiarCampo('cred_url', 'btnCopy_url')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px; display:block;">Email do Administrador</label>
+          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-primary); background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
+            <span id="cred_email"></span>
+            <button id="btnCopy_email" class="modal-action" style="color:var(--accent); cursor:pointer;" onclick="copiarCampo('cred_email', 'btnCopy_email')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-family:var(--font-mono); font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px; display:block;">Password</label>
+          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-primary); background:var(--bg-raised); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
+            <span id="cred_password" style="user-select: all;"></span>
+            <button id="btnCopy_password" class="modal-action" style="color:var(--accent); cursor:pointer;" onclick="copiarCampo('cred_password', 'btnCopy_password')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" style="width:100%; justify-content:center;" onclick="copiarEFechar()">Copiar Tudo e Fechar</button>
     </div>
   </div>
 </div>
