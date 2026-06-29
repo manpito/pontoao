@@ -366,6 +366,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="sb-section">Horários Avançados</div>
     <button class="nav-item" onclick="nav('turnos')" id="nav-turnos"><span class="ni">⏱</span> Turnos</button>
     <button class="nav-item" onclick="nav('escalas')" id="nav-escalas"><span class="ni">↻</span> Escalas</button>
+    <button class="nav-item" onclick="nav('calendario')" id="nav-calendario"><span class="ni">📅</span> Calendário</button>
 
     <hr class="sb-divider">
     <div class="sb-section">Sistema</div>
@@ -718,6 +719,18 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div class="card-head"><div class="card-title">Turnos configurados</div></div>
         <div id="turnosTable"><div class="empty"><span class="spinner"></span></div></div>
       </div>
+    </div>
+
+    <!-- CALENDÁRIO -->
+    <div class="page" id="page-calendario">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Calendário Laboral</div>
+          <div class="page-sub">Ancoragem anual para regime normal e feriados</div>
+        </div>
+        <button class="btn btn-accent" id="btnNovoAno" onclick="abrirModalAno()">+ Novo ano laboral</button>
+      </div>
+      <div id="anosLaboraisContent"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
     <!-- ESCALAS -->
@@ -1269,6 +1282,47 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   </div>
 </div>
 
+<!-- MODAL ANO LABORAL -->
+<div class="overlay" id="modalAno">
+  <div class="modal">
+    <div class="modal-head"><h3>Novo ano laboral</h3><button class="modal-close" onclick="fecharModal('modalAno')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label>Ano (YYYY) *</label><input type="number" id="alAno" placeholder="2024"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Data início período *</label><input type="date" id="alDataInicio"></div>
+        <div class="form-group"><label>Data fim período *</label><input type="date" id="alDataFim"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Dia início semana (1=Seg)</label><input type="number" id="alSemanaInicio" value="1" min="1" max="7"></div>
+        <div class="form-group"><label>Dia fim semana (7=Dom)</label><input type="number" id="alSemanaFim" value="5" min="1" max="7"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAno')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarAno()">Criar ano</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL FERIADO PONTUAL -->
+<div class="overlay" id="modalNovoFeriadoPontual">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-head"><h3>Novo feriado pontual</h3><button class="modal-close" onclick="fecharModal('modalNovoFeriadoPontual')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="fpAno">
+      <div class="form-group"><label>Nome *</label><input id="fpNome" placeholder="Ex: Tolerância de Ponto"></div>
+      <div class="form-group"><label>Data *</label><input type="date" id="fpData"></div>
+      <div class="form-group">
+        <label><input type="checkbox" id="fpMeioDia"> Meio-dia</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalNovoFeriadoPontual')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarFeriadoPontual()">Criar feriado</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL ACESSO PORTAL -->
 <div class="overlay" id="modalAcessoPortal">
   <div class="modal" style="max-width:420px">
@@ -1458,6 +1512,7 @@ function applyPermissions() {
   hide('nav-importacao', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-turnos', p === 'supervisor');
   hide('nav-escalas', p === 'supervisor');
+  hide('nav-calendario', p === 'supervisor');
   hide('nav-periodos', p === 'supervisor');
   hide('nav-terminais', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
   hide('nav-logs-auditoria', p !== 'super_admin_tenant');
@@ -1465,6 +1520,7 @@ function applyPermissions() {
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
 
   // Action buttons
+  hide('btnNovoAno', ['rh_colaborador', 'supervisor'].includes(p));
   hide('btnNovoFunc', ['rh_colaborador', 'supervisor'].includes(p));
   hide('btnNovoDep', ['rh_colaborador', 'supervisor'].includes(p));
   hide('btnNovoHorario', ['rh_colaborador', 'supervisor'].includes(p));
@@ -1498,6 +1554,7 @@ function nav(page) {
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: () => { carregarEscalas(); carregarExcecoes(); },
+    calendario: carregarAnosLaborais,
     exportacao: loadExportacao
   };
   loaders[page]?.();
@@ -4151,6 +4208,152 @@ function abrirModalInserirMarcacao(funcId, data, tipoSugerido) {
   document.getElementById('imHora').value = '08:00';
   document.getElementById('imMotivo').value = '';
   document.getElementById('modalInserirMarcacao').classList.add('open');
+}
+
+// ── CALENDÁRIO ──
+let _anosLaborais = [];
+
+async function carregarAnosLaborais() {
+  const el = document.getElementById('anosLaboraisContent');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/anos-laborais');
+    _anosLaborais = res.dados || [];
+    const html = _anosLaborais.map(a => `
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-head" style="cursor:pointer" onclick="toggleAnoFeriados(${a.ano})">
+          <div class="card-title">
+            <span style="font-size:16px;margin-right:12px">${a.ano}</span>
+            <span class="badge badge-${a.estado === 'activo' ? 'green' : (a.estado === 'fechado' ? 'gray' : 'warn')}">${a.estado}</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            ${a.estado === 'pendente' ? `<button class="btn btn-sm btn-accent" onclick="event.stopPropagation();activarAno(${a.ano})">Activar</button>` : ''}
+            ${a.estado === 'activo' ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();fecharAno(${a.ano})">Fechar</button>` : ''}
+            <span style="font-size:20px;color:var(--muted2);margin-left:10px" id="ano-icon-${a.ano}">▸</span>
+          </div>
+        </div>
+        <div class="card-body" id="ano-detalhe-${a.ano}" style="display:none;padding:0;border-top:1px solid var(--border)">
+          <div style="padding:16px;background:var(--s2);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+            <div><div style="font-size:11px;color:var(--muted2)">DIAS SEMANA</div><strong>${a.dia_inicio_semana} a ${a.dia_fim_semana}</strong></div>
+            <div><div style="font-size:11px;color:var(--muted2)">PERÍODO</div><strong>${a.data_inicio_periodo} a ${a.data_fim_periodo}</strong></div>
+            ${a.activado_em ? `<div><div style="font-size:11px;color:var(--muted2)">ACTIVADO EM</div><strong>${a.activado_em.slice(0,16)}</strong></div>` : ''}
+          </div>
+          <div style="padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div class="card-title" style="font-size:11px">Feriados do Ano</div>
+              <button class="btn btn-sm" onclick="abrirModalNovoFeriadoPontual(${a.ano})">+ Feriado Pontual</button>
+            </div>
+            <div id="ano-feriados-${a.ano}"><div class="empty"><span class="spinner"></span></div></div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    el.innerHTML = html || '<div class="empty">Nenhum ano laboral configurado.</div>';
+  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar anos laborais.</div>'; }
+}
+
+function abrirModalAno() {
+  const ano = new Date().getFullYear();
+  document.getElementById('alAno').value = ano;
+  document.getElementById('alDataInicio').value = `${ano}-01-01`;
+  document.getElementById('alDataFim').value = `${ano}-12-31`;
+  document.getElementById('modalAno').classList.add('open');
+}
+
+async function guardarAno() {
+  const ano = parseInt(document.getElementById('alAno').value);
+  const payload = {
+    ano: ano,
+    data_inicio_periodo: document.getElementById('alDataInicio').value,
+    data_fim_periodo: document.getElementById('alDataFim').value,
+    dia_inicio_semana: parseInt(document.getElementById('alSemanaInicio').value),
+    dia_fim_semana: parseInt(document.getElementById('alSemanaFim').value)
+  };
+  try {
+    const res = await api('POST', '/api/anos-laborais', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    fecharModal('modalAno');
+    carregarAnosLaborais();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function activarAno(ano) {
+  if (!confirm(`Activar o ano laboral ${ano}?`)) return;
+  try {
+    const res = await api('POST', `/api/anos-laborais/${ano}/activar`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    carregarAnosLaborais();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function fecharAno(ano) {
+  if (!confirm(`Fechar o ano laboral ${ano}? Esta acção é irreversível.`)) return;
+  try {
+    const res = await api('POST', `/api/anos-laborais/${ano}/fechar`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    carregarAnosLaborais();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+function toggleAnoFeriados(ano) {
+  const panel = document.getElementById(`ano-detalhe-${ano}`);
+  const icon = document.getElementById(`ano-icon-${ano}`);
+  const isVisible = panel.style.display === 'block';
+  panel.style.display = isVisible ? 'none' : 'block';
+  icon.textContent = isVisible ? '▸' : '▾';
+  if (!isVisible) carregarFeriadosAno(ano);
+}
+
+async function carregarFeriadosAno(ano) {
+  const out = document.getElementById(`ano-feriados-${ano}`);
+  try {
+    const res = await api('GET', `/api/anos-laborais/${ano}/feriados`);
+    const rows = (res.dados || []).map(f => `
+      <tr>
+        <td><span style="font-family:var(--mono)">${f.data}</span></td>
+        <td><strong>${f.nome}</strong></td>
+        <td><span class="badge badge-gray">${f.tipo}</span></td>
+        <td>${f.meio_dia ? 'Sim' : 'Não'}</td>
+        <td>${f.recorrente ? 'Repete' : 'Pontual'}</td>
+      </tr>
+    `).join('');
+    out.innerHTML = `
+      <table class="tbl" style="background:var(--bg)">
+        <thead><tr><th>Data</th><th>Nome</th><th>Tipo</th><th>Meio-dia</th><th>Ciclo</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" class="empty">Sem feriados.</td></tr>'}</tbody>
+      </table>
+    `;
+  } catch(e) { out.innerHTML = '<div class="empty">Erro ao carregar feriados.</div>'; }
+}
+
+function abrirModalNovoFeriadoPontual(ano) {
+  document.getElementById('fpAno').value = ano;
+  document.getElementById('fpData').value = `${ano}-01-01`;
+  document.getElementById('fpNome').value = '';
+  document.getElementById('fpMeioDia').checked = false;
+  document.getElementById('modalNovoFeriadoPontual').classList.add('open');
+}
+
+async function guardarFeriadoPontual() {
+  const ano = document.getElementById('fpAno').value;
+  const payload = {
+    nome: document.getElementById('fpNome').value.trim(),
+    data: document.getElementById('fpData').value,
+    meio_dia: document.getElementById('fpMeioDia').checked ? 1 : 0,
+    recorrente: 0,
+    tipo: 'empresa'
+  };
+  try {
+    const res = await api('POST', '/api/feriados', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    fecharModal('modalNovoFeriadoPontual');
+    carregarFeriadosAno(ano);
+  } catch(e) { toast(e.message, 'err'); }
 }
 
 async function guardarMarcacaoManual() {

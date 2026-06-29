@@ -15,7 +15,14 @@ function bootstrap_db(): PDO
     $pdo->exec("
         CREATE TABLE funcionarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL
+            numero_funcionario TEXT,
+            nome_completo TEXT,
+            nome TEXT NOT NULL,
+            departamento_id INTEGER,
+            cargo_id INTEGER,
+            horario_id INTEGER,
+            data_admissao TEXT,
+            estado TEXT DEFAULT 'activo'
         );
 
         CREATE TABLE departamentos (
@@ -25,7 +32,8 @@ function bootstrap_db(): PDO
 
         CREATE TABLE utilizadores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL
+            nome TEXT NOT NULL,
+            perfil TEXT
         );
 
         CREATE TABLE turnos (
@@ -48,6 +56,7 @@ function bootstrap_db(): PDO
             descricao TEXT,
             departamento_id INTEGER,
             tamanho_ciclo INTEGER NOT NULL,
+            regime TEXT NOT NULL DEFAULT 'turnos',
             activo INTEGER NOT NULL DEFAULT 1,
             FOREIGN KEY (departamento_id) REFERENCES departamentos(id)
         );
@@ -86,6 +95,66 @@ function bootstrap_db(): PDO
             FOREIGN KEY (funcionario_substituto_id) REFERENCES funcionarios(id),
             FOREIGN KEY (turno_id) REFERENCES turnos(id),
             FOREIGN KEY (criado_por) REFERENCES utilizadores(id)
+        );
+
+        CREATE TABLE anos_laborais (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ano INTEGER NOT NULL,
+            estado TEXT NOT NULL DEFAULT 'pendente',
+            dia_inicio_semana INTEGER NOT NULL DEFAULT 1,
+            dia_fim_semana INTEGER NOT NULL DEFAULT 5,
+            data_inicio_periodo TEXT NOT NULL,
+            data_fim_periodo TEXT NOT NULL,
+            activado_em TEXT,
+            activado_por INTEGER,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (ano)
+        );
+
+        CREATE TABLE feriados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            data TEXT NOT NULL,
+            tipo TEXT NOT NULL DEFAULT 'nacional',
+            meio_dia INTEGER NOT NULL DEFAULT 0,
+            recorrente INTEGER NOT NULL DEFAULT 1,
+            ano INTEGER,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE horarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            tipo TEXT NOT NULL DEFAULT 'normal',
+            horas_dia REAL NOT NULL DEFAULT 8.00,
+            horas_semana REAL NOT NULL DEFAULT 44.00,
+            tolerancia_entrada_min INTEGER NOT NULL DEFAULT 10,
+            intervalo_min INTEGER NOT NULL DEFAULT 60,
+            activo INTEGER NOT NULL DEFAULT 1,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE horario_turnos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            horario_id INTEGER NOT NULL,
+            dia_semana INTEGER NOT NULL,
+            hora_entrada TEXT NOT NULL,
+            hora_saida TEXT NOT NULL,
+            hora_inicio_intervalo TEXT,
+            hora_fim_intervalo TEXT,
+            dia_folga INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (horario_id) REFERENCES horarios(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE funcionario_horario (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            funcionario_id INTEGER NOT NULL,
+            horario_id INTEGER NOT NULL,
+            data_inicio TEXT NOT NULL,
+            data_fim TEXT,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE,
+            FOREIGN KEY (horario_id) REFERENCES horarios(id)
         );
     ");
 

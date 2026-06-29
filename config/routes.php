@@ -234,6 +234,22 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->delete('/feriados/{id}',     [\App\Controllers\FeriadoController::class, 'destroy'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
+    // --- Anos Laborais ---
+    $group->get('/anos-laborais',                [\App\Controllers\AnoLaboralController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    $group->post('/anos-laborais',               [\App\Controllers\AnoLaboralController::class, 'store'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/anos-laborais/{ano}/activar', [\App\Controllers\AnoLaboralController::class, 'activar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/anos-laborais/{ano}/fechar',  [\App\Controllers\AnoLaboralController::class, 'fechar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->get('/anos-laborais/{ano}/feriados', [\App\Controllers\AnoLaboralController::class, 'feriados'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
     // --- Configurações ---
     $group->get('/configuracoes',       [\App\Controllers\ConfiguracaoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant']));

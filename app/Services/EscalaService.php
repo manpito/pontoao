@@ -108,7 +108,7 @@ class EscalaService
 
         // 2. Consultar funcionario_escala para a escala activa do funcionário na data
         $stmt = $this->pdo->prepare("
-            SELECT fe.*, e.tamanho_ciclo
+            SELECT fe.*, e.tamanho_ciclo, e.regime
             FROM funcionario_escala fe
             JOIN escalas e ON e.id = fe.escala_id
             WHERE fe.funcionario_id = :fid
@@ -123,6 +123,107 @@ class EscalaService
         }
 
         $escalaId = (int) $fe['escala_id'];
+        $regime = $fe['regime'];
+
+        if ($regime === 'normal') {
+            $dow = date('N', strtotime($dataStr));
+            $stmt = $this->pdo->prepare("
+                SELECT ht.hora_entrada, ht.hora_saida, ht.hora_inicio_intervalo,
+                       ht.hora_fim_intervalo, ht.dia_folga,
+                       h.horas_dia, h.horas_semana, h.tolerancia_entrada_min, h.intervalo_min
+                FROM funcionario_horario fh
+                JOIN horarios h ON h.id = fh.horario_id
+                JOIN horario_turnos ht ON ht.horario_id = h.id AND ht.dia_semana = :dow
+                WHERE fh.funcionario_id = :fid
+                  AND :data BETWEEN fh.data_inicio AND COALESCE(fh.data_fim, '9999-12-31')
+                LIMIT 1
+            ");
+            $stmt->execute(['fid' => $funcionarioId, 'dow' => $dow, 'data' => $dataStr]);
+            $ht = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$ht || (int)$ht['dia_folga'] === 1) {
+                return [
+                    'turno_id'              => 0,
+                    'turno_nome'            => 'Folga',
+                    'tipo'                  => 'folga',
+                    'hora_entrada'          => null,
+                    'hora_saida'            => null,
+                    'hora_inicio_intervalo' => null,
+                    'hora_fim_intervalo'    => null,
+                    'horas_efectivas'       => 0.0,
+                    'atravessa_dia_civil'   => false,
+                    'classificacao_legal'   => 'nao_aplicavel',
+                    'escala_id'             => $escalaId,
+                    'posicao_no_ciclo'      => 0,
+                    'substituicao'          => null,
+                ];
+            }
+
+            // Verificar feriado
+            $mesDia = date('m-d', strtotime($dataStr));
+            $driver = $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+            $sqlFeriado = "SELECT 1 FROM feriados WHERE (recorrente = 1 AND " .
+                          ($driver === 'sqlite' ? "strftime('%m-%d', data)" : "DATE_FORMAT(data, '%m-%d')") .
+                          " = :md) OR (recorrente = 0 AND data = :data) LIMIT 1";
+
+            $stmt = $this->pdo->prepare($sqlFeriado);
+            $stmt->execute(['md' => $mesDia, 'data' => $dataStr]);
+            if ($stmt->fetchColumn()) {
+                return [
+                    'turno_id'              => 0,
+                    'turno_nome'            => 'Feriado',
+                    'tipo'                  => 'folga',
+                    'hora_entrada'          => null,
+                    'hora_saida'            => null,
+                    'hora_inicio_intervalo' => null,
+                    'hora_fim_intervalo'    => null,
+                    'horas_efectivas'       => 0.0,
+                    'atravessa_dia_civil'   => false,
+                    'classificacao_legal'   => 'nao_aplicavel',
+                    'escala_id'             => $escalaId,
+                    'posicao_no_ciclo'      => 0,
+                    'substituicao'          => null,
+                ];
+            }
+
+            // Verificar excepção ausente
+            $stmt = $this->pdo->prepare("
+                SELECT exc.*
+                FROM escala_excepcoes exc
+                WHERE exc.data = :data AND exc.funcionario_ausente_id = :fid
+                LIMIT 1
+            ");
+            $stmt->execute(['data' => $dataStr, 'fid' => $funcionarioId]);
+            $excepcaoAusente = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $substituicao = null;
+            $tipoTurno = 'trabalho';
+            if ($excepcaoAusente) {
+                $tipoTurno = 'folga';
+                $substituicao = [
+                    'tipo' => 'ausente',
+                    'funcionario_substituto_id' => $excepcaoAusente['funcionario_substituto_id'] ? (int) $excepcaoAusente['funcionario_substituto_id'] : null,
+                    'motivo' => $excepcaoAusente['motivo']
+                ];
+            }
+
+            return [
+                'turno_id'              => 0,
+                'turno_nome'            => 'Normal',
+                'tipo'                  => $tipoTurno,
+                'hora_entrada'          => $ht['hora_entrada'],
+                'hora_saida'            => $ht['hora_saida'],
+                'hora_inicio_intervalo' => $ht['hora_inicio_intervalo'],
+                'hora_fim_intervalo'    => $ht['hora_fim_intervalo'],
+                'horas_efectivas'       => (float) $ht['horas_dia'],
+                'atravessa_dia_civil'   => false,
+                'classificacao_legal'   => 'diurno',
+                'escala_id'             => $escalaId,
+                'posicao_no_ciclo'      => 0,
+                'substituicao'          => $substituicao,
+            ];
+        }
+
         $dataInicio = new DateTimeImmutable($fe['data_inicio']);
         $posicaoInicial = (int) $fe['posicao_inicial'];
         $tamanhoCiclo = (int) $fe['tamanho_ciclo'];
