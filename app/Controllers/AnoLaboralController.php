@@ -39,8 +39,8 @@ class AnoLaboralController
     {
         $body = $request->getParsedBody() ?? [];
 
-        if (empty($body['ano']) || empty($body['data_inicio_periodo']) || empty($body['data_fim_periodo'])) {
-            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Os campos ano, data_inicio_periodo e data_fim_periodo são obrigatórios.']);
+        if (empty($body['ano'])) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'O campo ano é obrigatório.']);
         }
 
         $db = $this->db();
@@ -53,16 +53,14 @@ class AnoLaboralController
         }
 
         $stmt = $db->prepare("
-            INSERT INTO anos_laborais (ano, estado, dia_inicio_semana, dia_fim_semana, data_inicio_periodo, data_fim_periodo)
-            VALUES (:ano, 'pendente', :dia_inicio, :dia_fim, :data_inicio, :data_fim)
+            INSERT INTO anos_laborais (ano, estado, dia_inicio_semana, dia_fim_semana)
+            VALUES (:ano, 'pendente', :dia_inicio, :dia_fim)
         ");
 
         $stmt->execute([
-            ':ano'         => $body['ano'],
-            ':dia_inicio'  => $body['dia_inicio_semana'] ?? 1,
-            ':dia_fim'     => $body['dia_fim_semana'] ?? 5,
-            ':data_inicio' => $body['data_inicio_periodo'],
-            ':data_fim'    => $body['data_fim_periodo'],
+            ':ano'       => $body['ano'],
+            ':dia_inicio' => $body['dia_inicio_semana'] ?? 1,
+            ':dia_fim'    => $body['dia_fim_semana'] ?? 5,
         ]);
 
         // Pré-carregar feriados móveis

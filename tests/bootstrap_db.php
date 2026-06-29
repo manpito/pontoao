@@ -103,8 +103,6 @@ function bootstrap_db(): PDO
             estado TEXT NOT NULL DEFAULT 'pendente',
             dia_inicio_semana INTEGER NOT NULL DEFAULT 1,
             dia_fim_semana INTEGER NOT NULL DEFAULT 5,
-            data_inicio_periodo TEXT NOT NULL,
-            data_fim_periodo TEXT NOT NULL,
             activado_em TEXT,
             activado_por INTEGER,
             criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
