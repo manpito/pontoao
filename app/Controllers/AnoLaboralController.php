@@ -90,7 +90,7 @@ class AnoLaboralController
             return $this->json($response, 400, ['erro' => true, 'mensagem' => "Já existe um ano laboral activo ({$activo})."]);
         }
 
-        $userId = $request->getAttribute('auth_user_id');
+        $userId = (int)($request->getAttribute('auth_user')->id ?? 0);
 
         $stmt = $db->prepare("
             UPDATE anos_laborais

@@ -1289,8 +1289,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-body">
       <div class="form-group"><label>Ano (YYYY) *</label><input type="number" id="alAno" placeholder="2024"></div>
       <div class="form-row">
-        <div class="form-group"><label>Dia início período *</label><input type="number" id="alDiaInicio" value="21"></div>
-        <div class="form-group"><label>Dia fim período *</label><input type="number" id="alDiaFim" value="20"></div>
+        <div class="form-group"><label>Data início período *</label><input type="date" id="alDataInicio"></div>
+        <div class="form-group"><label>Data fim período *</label><input type="date" id="alDataFim"></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>Dia início semana (1=Seg)</label><input type="number" id="alSemanaInicio" value="1" min="1" max="7"></div>
@@ -4236,7 +4236,7 @@ async function carregarAnosLaborais() {
         <div class="card-body" id="ano-detalhe-${a.ano}" style="display:none;padding:0;border-top:1px solid var(--border)">
           <div style="padding:16px;background:var(--s2);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
             <div><div style="font-size:11px;color:var(--muted2)">DIAS SEMANA</div><strong>${a.dia_inicio_semana} a ${a.dia_fim_semana}</strong></div>
-            <div><div style="font-size:11px;color:var(--muted2)">PERÍODO</div><strong>Dia ${new Date(a.data_inicio_periodo).getDate()} ao dia ${new Date(a.data_fim_periodo).getDate()}</strong></div>
+            <div><div style="font-size:11px;color:var(--muted2)">PERÍODO</div><strong>${a.data_inicio_periodo} a ${a.data_fim_periodo}</strong></div>
             ${a.activado_em ? `<div><div style="font-size:11px;color:var(--muted2)">ACTIVADO EM</div><strong>${a.activado_em.slice(0,16)}</strong></div>` : ''}
           </div>
           <div style="padding:16px">
@@ -4254,7 +4254,10 @@ async function carregarAnosLaborais() {
 }
 
 function abrirModalAno() {
-  document.getElementById('alAno').value = new Date().getFullYear();
+  const ano = new Date().getFullYear();
+  document.getElementById('alAno').value = ano;
+  document.getElementById('alDataInicio').value = `${ano}-01-01`;
+  document.getElementById('alDataFim').value = `${ano}-12-31`;
   document.getElementById('modalAno').classList.add('open');
 }
 
@@ -4262,8 +4265,8 @@ async function guardarAno() {
   const ano = parseInt(document.getElementById('alAno').value);
   const payload = {
     ano: ano,
-    data_inicio_periodo: `${ano}-01-${document.getElementById('alDiaInicio').value.padStart(2,'0')}`,
-    data_fim_periodo: `${ano}-01-${document.getElementById('alDiaFim').value.padStart(2,'0')}`,
+    data_inicio_periodo: document.getElementById('alDataInicio').value,
+    data_fim_periodo: document.getElementById('alDataFim').value,
     dia_inicio_semana: parseInt(document.getElementById('alSemanaInicio').value),
     dia_fim_semana: parseInt(document.getElementById('alSemanaFim').value)
   };
