@@ -147,11 +147,16 @@ class RelatorioController
         foreach ($marcacoesRaw as $m) {
             $dia = substr($m['data_hora'], 0, 10);
             $hora = (int) substr($m['data_hora'], 11, 2);
-            if ($m['tipo'] === 'saida' && $hora < 12) {
+
+            if ($hora < 12) {
                 $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
                 $turnoAnterior = $escalaService->calcularTurnoEm($funcId, $diaAnterior);
                 if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
-                    $dia = $diaAnterior;
+                    // Saída que pertence ao turno nocturno iniciado no dia anterior
+                    // OU entrada após meia-noite que é continuação do mesmo turno
+                    if ($m['tipo'] === 'saida' || $m['tipo'] === 'entrada') {
+                        $dia = $diaAnterior;
+                    }
                 }
             }
             $marcPorDia[$dia][] = $m;
@@ -224,6 +229,25 @@ class RelatorioController
                         }
                         $minutosTotais -= (int)round($diffInt/60);
                         $intervaloInicio = null;
+                    }
+                }
+            }
+
+            if ($minutosTotais > 0 && $intervaloInicio === null) {
+                // Nenhum intervalo foi marcado explicitamente
+                if ($turno && !empty($turno['hora_inicio_intervalo']) && !empty($turno['hora_fim_intervalo'])) {
+                    $tsIntIni = strtotime($dataStr . ' ' . substr($turno['hora_inicio_intervalo'], 0, 5));
+                    $tsIntFim = strtotime($dataStr . ' ' . substr($turno['hora_fim_intervalo'], 0, 5));
+                    // Reconstruir tsEntrada a partir de primeiraEntrada para esta verificação
+                    if ($primeiraEntrada && $ultimaSaida) {
+                        $tsEnt = strtotime($dataStr . ' ' . $primeiraEntrada);
+                        $tsSai = strtotime($dataStr . ' ' . $ultimaSaida);
+                        if ($turno['atravessa_dia_civil'] && $tsSai < $tsEnt) {
+                            $tsSai += 86400;
+                        }
+                        if ($tsIntIni >= $tsEnt && $tsIntFim <= $tsSai) {
+                            $minutosTotais -= (int) round(($tsIntFim - $tsIntIni) / 60);
+                        }
                     }
                 }
             }
@@ -906,11 +930,16 @@ class RelatorioController
             foreach ($marcFunc as $m) {
                 $dia = substr($m['data_hora'], 0, 10);
                 $hora = (int) substr($m['data_hora'], 11, 2);
-                if ($m['tipo'] === 'saida' && $hora < 12) {
+
+                if ($hora < 12) {
                     $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
                     $turnoAnterior = $escalaService->calcularTurnoEm((int)$func['id'], $diaAnterior);
                     if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
-                        $dia = $diaAnterior;
+                        // Saída que pertence ao turno nocturno iniciado no dia anterior
+                        // OU entrada após meia-noite que é continuação do mesmo turno
+                        if ($m['tipo'] === 'saida' || $m['tipo'] === 'entrada') {
+                            $dia = $diaAnterior;
+                        }
                     }
                 }
                 $marcPorDia[$dia][] = $m;
@@ -976,6 +1005,17 @@ class RelatorioController
 
                 $saidaEfetiva = $saida ?? ($entrada + ($horasEsperadasDiaTurno * 3600));
                 $minutosTrabalhados = (int) round(($saidaEfetiva - $entrada) / 60) - $minutosIntervalo;
+
+                if ($minutosTrabalhados > 0 && $minutosIntervalo === 0 && $turnoHoras) {
+                    if (!empty($turnoHoras['hora_inicio_intervalo']) && !empty($turnoHoras['hora_fim_intervalo'])) {
+                        $tsIntIni = strtotime($dia . ' ' . substr($turnoHoras['hora_inicio_intervalo'], 0, 5));
+                        $tsIntFim = strtotime($dia . ' ' . substr($turnoHoras['hora_fim_intervalo'], 0, 5));
+                        $saidaEfetivaTs = $saida ?? ($entrada + ($horasEsperadasDiaTurno * 3600));
+                        if ($tsIntIni >= $entrada && $tsIntFim <= $saidaEfetivaTs) {
+                            $minutosTrabalhados -= (int) round(($tsIntFim - $tsIntIni) / 60);
+                        }
+                    }
+                }
 
                 // Ajuste se a entrada antecipada não deve contar (configuração horas_extra_entrada_antecipada)
                 if (!$contarEntradaAntecipada && $turnoHoras && $turnoHoras['hora_entrada']) {
