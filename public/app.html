@@ -858,6 +858,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-head"><h3 id="modalFuncTitle">Novo funcionário</h3><button class="modal-close" onclick="fecharModal('modalFunc')">✕</button></div>
     <div class="modal-body">
       <div class="form-row">
+        <div class="form-group"><label>Número de funcionário</label><input id="fNumero" placeholder="Ex: 1001"></div>
         <div class="form-group" style="grid-column:1/-1"><label>Nome completo *</label><input id="fNome" placeholder="Nome e apelido"></div>
         <div class="form-group"><label>Data de admissão *</label><input type="date" id="fAdmissao"></div>
         <div class="form-group"><label>Tipo de contrato</label><select id="fContrato"><option value="prazo_indeterminado">Prazo indeterminado</option><option value="prazo_determinado">Prazo determinado</option><option value="prestacao_servicos">Prestação de serviços</option></select></div>
@@ -1727,7 +1728,7 @@ function filtrarFuncionarios() {
     <tbody>${rows||'<tr><td colspan="7" class="empty">Nenhum resultado.</td></tr>'}</tbody>
   </table>`;
 }
-function abrirModalFunc(id) {
+async function abrirModalFunc(id) {
   const isRestricted = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
   const vencGrp = document.getElementById('fVencimento').closest('.form-group');
   if (vencGrp) vencGrp.style.display = isRestricted ? 'none' : '';
@@ -1738,7 +1739,7 @@ function abrirModalFunc(id) {
   _editFuncId = id || null;
   document.getElementById('modalFuncTitle').textContent = id ? (isRestricted ? 'Ver funcionario' : 'Editar funcionario') : 'Novo funcionario';
   if (!id) {
-    ['fNome','fNif','fNiss','fEmail','fTelefone','fMorada'].forEach(i => document.getElementById(i).value = '');
+    ['fNumero','fNome','fNif','fNiss','fEmail','fTelefone','fMorada'].forEach(i => document.getElementById(i).value = '');
     document.getElementById('fAdmissao').value = new Date().toISOString().slice(0,10);
     document.getElementById('fVencimento').value = '';
     document.getElementById('fDependentes').value = '0';
@@ -1747,6 +1748,9 @@ function abrirModalFunc(id) {
     document.getElementById('fGenero').value = '';
     document.getElementById('fCargo').value = '';
     document.getElementById('fDep').value = '';
+
+    const resNum = await api('GET', '/api/funcionarios/proximo-numero');
+    if (resNum.proximo_numero) document.getElementById('fNumero').value = resNum.proximo_numero;
   }
   document.getElementById('modalFunc').classList.add('open');
 }
@@ -1764,6 +1768,7 @@ function editarFunc(id) {
   hide('btnGuardarFunc', isRestricted);
   if (!isRestricted) document.getElementById('btnAcessoPortal').style.display = 'inline-flex';
 
+  document.getElementById('fNumero').value     = f.numero_funcionario || '';
   document.getElementById('fNome').value       = f.nome_completo || '';
   document.getElementById('fAdmissao').value   = f.data_admissao || '';
   document.getElementById('fContrato').value   = f.tipo_contrato || 'prazo_indeterminado';
@@ -1830,6 +1835,7 @@ async function atribuirEscalaFunc() {
 }
 async function submeterFunc() {
   const payload = {
+    numero_funcionario:  document.getElementById('fNumero').value.trim() || null,
     nome_completo:       document.getElementById('fNome').value.trim(),
     data_admissao:       document.getElementById('fAdmissao').value,
     tipo_contrato:       document.getElementById('fContrato').value,

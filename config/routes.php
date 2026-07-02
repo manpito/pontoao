@@ -86,6 +86,9 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
           ->add(AuthMiddleware::class);
 
     // --- Funcionários ---
+    $group->get('/funcionarios/proximo-numero', [\App\Controllers\FuncionarioController::class, 'proximoNumero'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+
     $group->get('/funcionarios',        [\App\Controllers\FuncionarioController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
