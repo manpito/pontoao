@@ -238,57 +238,7 @@ class ZkBridgeController
         $sn      = $params['SN'] ?? '';
 
         // Resolver DB e relógio pelo SN
-        $db      = null;
-        $relogio = null;
-
-        $masterDsn = "mysql:host=" . ($_ENV['DB_MASTER_HOST'] ?? 'localhost') .
-                     ";dbname=" . ($_ENV['DB_MASTER_DATABASE'] ?? '') . ";charset=utf8mb4";
-        try {
-            $master  = new \PDO($masterDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
-            $stmt    = $master->prepare("SELECT db_nome, db_host FROM tenants LIMIT 100");
-            $stmt->execute();
-            $tenants = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            foreach ($tenants as $tenant) {
-                $dsn = "mysql:host=" . ($tenant['db_host'] ?? 'localhost') .
-                       ";dbname=" . $tenant['db_nome'] . ";charset=utf8mb4";
-                try {
-                    $tdb   = new \PDO($dsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
-                    $stmt2 = $tdb->prepare("SELECT * FROM relogios WHERE device_id = :sn LIMIT 1");
-                    $stmt2->execute([':sn' => $sn]);
-                    $rel   = $stmt2->fetch(\PDO::FETCH_ASSOC);
-                    if ($rel) {
-                        $db      = $tdb;
-                        $relogio = $rel;
-                        break;
-                    }
-                } catch (\Throwable $e) {
-                    continue;
-                }
-            }
-        } catch (\Throwable $e) {
-            $this->log("ERRO master DB: " . $e->getMessage());
-        }
-
-        // Fallback directo ao tenant se SN não encontrado
-        if (!$db) {
-            $this->log("AVISO: SN={$sn} não encontrado, usando fallback");
-            $dbName = 'ftlangol_' . ($_ENV['DB_TENANT_PREFIX'] ?? 'tenant_') . '009_ftl';
-            $dsn    = "mysql:host=localhost;dbname={$dbName};charset=utf8mb4";
-            try {
-                $db    = new \PDO($dsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
-                $stmt  = $db->prepare("SELECT * FROM relogios WHERE device_id = :sn LIMIT 1");
-                $stmt->execute([':sn' => $sn]);
-                $relogio = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
-                if (!$relogio) {
-                    $stmt2   = $db->prepare("SELECT * FROM relogios LIMIT 1");
-                    $stmt2->execute();
-                    $relogio = $stmt2->fetch(\PDO::FETCH_ASSOC) ?: null;
-                }
-            } catch (\Throwable $e) {
-                $this->log("ERRO fallback DB: " . $e->getMessage());
-            }
-        }
+        [$db, $relogio] = $this->resolverTenantPorSN($sn);
 
         $raw = (string) $request->getBody();
 
@@ -352,9 +302,28 @@ class ZkBridgeController
     {
         $params = $request->getQueryParams();
         $sn     = $params['SN'] ?? '';
-        $cmd = "C:1:DATA QUERY ATTLOG StartTime=2026-01-01 00:00:00\nOK";
-        $this->log("GETREQUEST SN={$sn} -> DATA QUERY ATTLOG");
-        $response->getBody()->write($cmd);
+
+        [$db, $relogio] = $this->resolverTenantPorSN($sn);
+
+        if (!$db || !$relogio) {
+            $response->getBody()->write("OK");
+            return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
+        }
+
+        $zkService = new \App\Services\ZkComandoService($db);
+        $comando   = $zkService->obterProximoComando((int) $relogio['id']);
+
+        if (!$comando) {
+            $response->getBody()->write("OK");
+            return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
+        }
+
+        $zkService->marcarEnviado((int) $comando['id']);
+
+        $body = "C:{$comando['id']}:{$comando['payload']}";
+        $this->log("GETREQUEST SN={$sn} -> CMD {$comando['id']}: {$comando['payload']}");
+
+        $response->getBody()->write($body);
         return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
 
@@ -364,6 +333,30 @@ class ZkBridgeController
 
     public function admsDeviceCmd(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
+        $params = $request->getQueryParams();
+        $sn     = $params['SN'] ?? '';
+        $raw    = (string) $request->getBody();
+
+        $this->log("DEVICECMD SN={$sn} raw={$raw}");
+
+        [$db, $relogio] = $this->resolverTenantPorSN($sn);
+
+        if ($db && $relogio) {
+            // Formato de confirmação do relógio: "ID=1\nReturn=0\nCMD=DATA UPDATE USERINFO"
+            if (preg_match('/ID=(\d+)/', $raw, $m)) {
+                $cmdId = (int) $m[1];
+                $sucesso = str_contains($raw, 'Return=0');
+                $zkService = new \App\Services\ZkComandoService($db);
+                if ($sucesso) {
+                    $zkService->marcarConfirmado($cmdId);
+                    $this->log("CMD {$cmdId} confirmado");
+                } else {
+                    $zkService->marcarErro($cmdId, $raw);
+                    $this->log("CMD {$cmdId} erro: {$raw}");
+                }
+            }
+        }
+
         $response->getBody()->write("OK");
         return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
     }
@@ -520,6 +513,63 @@ class ZkBridgeController
 
         $time = strtotime($ts);
         return $time ? date('Y-m-d H:i:s', $time) : null;
+    }
+
+    private function resolverTenantPorSN(string $sn): array
+    {
+        $db      = null;
+        $relogio = null;
+
+        $masterDsn = "mysql:host=" . ($_ENV['DB_MASTER_HOST'] ?? 'localhost') .
+                     ";dbname=" . ($_ENV['DB_MASTER_DATABASE'] ?? '') . ";charset=utf8mb4";
+        try {
+            $master  = new \PDO($masterDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+            $stmt    = $master->prepare("SELECT db_nome, db_host FROM tenants LIMIT 100");
+            $stmt->execute();
+            $tenants = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            foreach ($tenants as $tenant) {
+                $dsn = "mysql:host=" . ($tenant['db_host'] ?? 'localhost') .
+                       ";dbname=" . $tenant['db_nome'] . ";charset=utf8mb4";
+                try {
+                    $tdb   = new \PDO($dsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+                    $stmt2 = $tdb->prepare("SELECT * FROM relogios WHERE device_id = :sn LIMIT 1");
+                    $stmt2->execute([':sn' => $sn]);
+                    $rel   = $stmt2->fetch(\PDO::FETCH_ASSOC);
+                    if ($rel) {
+                        $db      = $tdb;
+                        $relogio = $rel;
+                        break;
+                    }
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->log("ERRO master DB: " . $e->getMessage());
+        }
+
+        // Fallback directo ao tenant se SN não encontrado
+        if (!$db) {
+            $this->log("AVISO: SN={$sn} não encontrado, usando fallback");
+            $dbName = 'ftlangol_' . ($_ENV['DB_TENANT_PREFIX'] ?? 'tenant_') . '009_ftl';
+            $dsn    = "mysql:host=localhost;dbname={$dbName};charset=utf8mb4";
+            try {
+                $db    = new \PDO($dsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+                $stmt  = $db->prepare("SELECT * FROM relogios WHERE device_id = :sn LIMIT 1");
+                $stmt->execute([':sn' => $sn]);
+                $relogio = $stmt->fetch(\PDO::FETCH_ASSOC) ?: null;
+                if (!$relogio) {
+                    $stmt2   = $db->prepare("SELECT * FROM relogios LIMIT 1");
+                    $stmt2->execute();
+                    $relogio = $stmt2->fetch(\PDO::FETCH_ASSOC) ?: null;
+                }
+            } catch (\Throwable $e) {
+                $this->log("ERRO fallback DB: " . $e->getMessage());
+            }
+        }
+
+        return [$db, $relogio];
     }
 
     private function json(ResponseInterface $response, int $status, array $data): ResponseInterface
