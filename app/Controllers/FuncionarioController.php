@@ -234,6 +234,9 @@ class FuncionarioController
 
         $id = (int) $db->lastInsertId();
 
+        $zkService = new \App\Services\ZkComandoService($db);
+        $zkService->enfileirarCriacaoUtilizador($id);
+
         // Associar horário se fornecido
         if (!empty($body['horario_id'])) {
             $db->prepare("
@@ -312,6 +315,9 @@ class FuncionarioController
 
         $db->prepare("UPDATE funcionarios SET " . implode(', ', $sets) . " WHERE id = :id")->execute($bind);
 
+        $zkService = new \App\Services\ZkComandoService($db);
+        $zkService->enfileirarCriacaoUtilizador($id);
+
         // Actualizar horário se fornecido
         if (!empty($body['horario_id'])) {
             $db->prepare("UPDATE funcionario_horario SET data_fim = CURDATE() WHERE funcionario_id = :fid AND data_fim IS NULL")
@@ -378,7 +384,7 @@ class FuncionarioController
         $body = $request->getParsedBody() ?? [];
         $db   = $this->db();
 
-        $stmt = $db->prepare("SELECT id, nome_completo FROM funcionarios WHERE id = :id AND estado != 'desligado' LIMIT 1");
+        $stmt = $db->prepare("SELECT id, nome_completo, numero_funcionario FROM funcionarios WHERE id = :id AND estado != 'desligado' LIMIT 1");
         $stmt->execute([':id' => $id]);
         $func = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -398,6 +404,9 @@ class FuncionarioController
         // Fechar horário activo
         $db->prepare("UPDATE funcionario_horario SET data_fim = CURDATE() WHERE funcionario_id = :fid AND data_fim IS NULL")
            ->execute([':fid' => $id]);
+
+        $zkService = new \App\Services\ZkComandoService($db);
+        $zkService->enfileirarApagarUtilizador($func['numero_funcionario']);
 
         $this->auditoria($db, $request, 'funcionario.desligado', 'funcionario', $id, null, ['motivo' => $body['motivo'] ?? null]);
 
