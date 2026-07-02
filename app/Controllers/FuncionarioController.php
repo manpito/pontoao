@@ -28,6 +28,17 @@ class FuncionarioController
     }
 
     /**
+     * GET /api/funcionarios/proximo-numero
+     */
+    public function proximoNumero(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $db  = $this->db();
+        $ultimo = (int) $db->query("SELECT MAX(CAST(numero_funcionario AS UNSIGNED)) FROM funcionarios")->fetchColumn();
+        $proximo = str_pad((string)($ultimo + 1), 4, '0', STR_PAD_LEFT);
+        return $this->json($response, 200, ['proximo_numero' => $proximo]);
+    }
+
+    /**
      * GET /api/funcionarios
      * Suporta filtros: ?estado=activo&departamento_id=1&search=nome
      */
@@ -157,9 +168,19 @@ class FuncionarioController
 
         $db = $this->db();
 
-        // Gerar número de funcionário sequencial
-        $ultimo = $db->query("SELECT MAX(CAST(numero_funcionario AS UNSIGNED)) FROM funcionarios")->fetchColumn();
-        $numero = str_pad((int) $ultimo + 1, 4, '0', STR_PAD_LEFT);
+        // Gerar número de funcionário sequencial ou usar fornecido
+        if (!empty($body['numero_funcionario'])) {
+            $numero = str_pad((string)$body['numero_funcionario'], 4, '0', STR_PAD_LEFT);
+            // Verificar se já existe
+            $check = $db->prepare("SELECT id FROM funcionarios WHERE numero_funcionario = :num LIMIT 1");
+            $check->execute([':num' => $numero]);
+            if ($check->fetch()) {
+                return $this->json($response, 422, ['erro' => true, 'mensagem' => "O número de funcionário {$numero} já está em uso."]);
+            }
+        } else {
+            $ultimo = $db->query("SELECT MAX(CAST(numero_funcionario AS UNSIGNED)) FROM funcionarios")->fetchColumn();
+            $numero = str_pad((int) $ultimo + 1, 4, '0', STR_PAD_LEFT);
+        }
         $uuid   = $this->uuid();
 
         $stmt = $db->prepare("
@@ -258,7 +279,7 @@ class FuncionarioController
         }
 
         $campos = [
-            'nome_completo', 'data_nascimento', 'genero', 'nacionalidade',
+            'numero_funcionario', 'nome_completo', 'data_nascimento', 'genero', 'nacionalidade',
             'nif', 'niss', 'bi_numero', 'bi_validade', 'estado_civil', 'num_dependentes',
             'morada', 'municipio', 'provincia', 'telefone', 'telefone_alternativo', 'email',
             'departamento_id', 'cargo_id', 'supervisor_id', 'tipo_contrato',
@@ -270,8 +291,18 @@ class FuncionarioController
 
         foreach ($campos as $campo) {
             if (array_key_exists($campo, $body)) {
+                $valor = $body[$campo];
+                if ($campo === 'numero_funcionario' && !empty($valor)) {
+                    $valor = str_pad((string)$valor, 4, '0', STR_PAD_LEFT);
+                    // Verificar duplicado excluindo o próprio
+                    $check = $db->prepare("SELECT id FROM funcionarios WHERE numero_funcionario = :num AND id != :id LIMIT 1");
+                    $check->execute([':num' => $valor, ':id' => $id]);
+                    if ($check->fetch()) {
+                        return $this->json($response, 422, ['erro' => true, 'mensagem' => "O número de funcionário {$valor} já está em uso por outro funcionário."]);
+                    }
+                }
                 $sets[]         = "`{$campo}` = :{$campo}";
-                $bind[":{$campo}"] = $body[$campo];
+                $bind[":{$campo}"] = $valor;
             }
         }
 
