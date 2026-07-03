@@ -18,7 +18,8 @@ class ZkComandoService
         $relogios = $this->pdo->query("SELECT id FROM relogios WHERE activo = 1")->fetchAll(PDO::FETCH_COLUMN);
 
         foreach ($relogios as $relogioId) {
-            $payload = "DATA UPDATE USERINFO Pin={$f['numero_funcionario']}\tName={$f['nome_completo']}\tPri=0\tPasswd=" . ($f['pin_marcacao'] ?? '') . "\tCard=0\tGrp=1\tTZ=0000000100000000\tVerify=0\tViceCard=0";
+            $tab = "\t";
+            $payload = "DATA UPDATE USERINFO Pin={$f['numero_funcionario']}{$tab}Name={$f['nome_completo']}{$tab}Pri=0{$tab}Passwd=" . ($f['pin_marcacao'] ?? '') . "{$tab}Card=0{$tab}Grp=1{$tab}TZ=0000000100000000{$tab}Verify=0{$tab}ViceCard=0";
             $this->inserirComando($relogioId, 'criar_utilizador', $payload, $funcionarioId);
         }
     }
