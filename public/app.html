@@ -360,6 +360,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <hr class="sb-divider">
     <div class="sb-section">Relatórios e Dados</div>
     <button class="nav-item" onclick="nav('relatorios')" id="nav-relatorios"><span class="ni">◈</span> Relatórios</button>
+    <button class="nav-item" onclick="nav('relatorio-periodo')" id="nav-relatorio-periodo"><span class="ni">◈</span> Período (Folha)</button>
     <button class="nav-item" onclick="nav('exportacao')" id="nav-exportacao"><span class="ni">↑</span> Exportação</button>
     <button class="nav-item" onclick="nav('importacao')" id="nav-importacao"><span class="ni">↓</span> Importação</button>
     <hr class="sb-divider">
@@ -644,6 +645,39 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div id="configsContent"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
+
+    <!-- RELATÓRIO DE PERÍODO -->
+    <div class="page" id="page-relatorio-periodo">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Relatório de Período (Folha)</div>
+          <div class="page-sub">Cruza dias e horas para o fecho e folha salarial</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn" onclick="exportarRelatorioPeriodoCSV()"><span class="ni">↓</span> Excel/CSV</button>
+          <button class="btn" onclick="exportarRelatorioPeriodoPDF()"><span class="ni">↓</span> PDF</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input type="month" id="rpFiltroMes" class="text-input" style="width:200px" onchange="carregarRelatorioPeriodo()">
+        <button class="btn btn-primary" onclick="carregarRelatorioPeriodo()"><span class="ni">⟳</span> Gerar Relatório</button>
+      </div>
+      <div class="card" style="padding:0">
+        <table class="table" id="tableRelatorioPeriodo">
+          <thead>
+            <tr>
+              <th>Funcionário</th>
+              <th style="text-align:right">Nº Dias Trabalhados</th>
+              <th style="text-align:right">Nº Horas Trabalhadas</th>
+              <th style="text-align:right">Nº Meio Dia</th>
+              <th style="text-align:right">Nº Horas Meio Dia</th>
+              <th style="text-align:right">Nº Horas Extra</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
 
     <!-- RELATÓRIOS -->
     <div class="page" id="page-relatorios">
@@ -1514,6 +1548,7 @@ function applyPermissions() {
   hide('nav-terminais', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
   hide('nav-logs-auditoria', p !== 'super_admin_tenant');
   hide('nav-configs', p !== 'super_admin_tenant');
+  hide('nav-relatorio-periodo', p === 'supervisor');
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
 
   // Action buttons
@@ -1550,11 +1585,102 @@ function nav(page) {
     ferias: loadFerias, 'horas-extra': carregarPedidosHorasExtra, departamentos: loadDepartamentos,
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
+    'relatorio-periodo': initRelatorioPeriodo,
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: () => { carregarEscalas(); carregarExcecoes(); },
     calendario: carregarAnosLaborais,
     exportacao: loadExportacao
   };
   loaders[page]?.();
+}
+
+// ── RELATÓRIO PERÍODO ──
+let rpDadosAtuais = [];
+let rpPeriodoAtual = {};
+
+function initRelatorioPeriodo() {
+  const agora = new Date();
+  const mes = (agora.getMonth() + 1).toString().padStart(2, '0');
+  const ano = agora.getFullYear();
+  document.getElementById('rpFiltroMes').value = `${ano}-${mes}`;
+  carregarRelatorioPeriodo();
+}
+
+async function carregarRelatorioPeriodo() {
+  const tbody = document.querySelector('#tableRelatorioPeriodo tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty"><span class="spinner"></span> Carregando...</td></tr>';
+
+  const val = document.getElementById('rpFiltroMes').value;
+  if (!val) return;
+  const [ano, mes] = val.split('-');
+
+  try {
+    const res = await api('GET', `/api/relatorios/periodo?ano=${ano}&mes=${mes}`);
+    rpDadosAtuais = res.dados || [];
+    rpPeriodoAtual = res.periodo || {};
+
+    if (rpDadosAtuais.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Sem dados para o período seleccionado</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rpDadosAtuais.map(r => `
+      <tr>
+        <td>${esc(r.funcionario_nome)}</td>
+        <td style="text-align:right">${r.dias_trabalhados}</td>
+        <td style="text-align:right">${r.horas_trabalhadas}</td>
+        <td style="text-align:right">${r.meio_dias}</td>
+        <td style="text-align:right">${r.horas_meio_dia}</td>
+        <td style="text-align:right">${r.horas_extra}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="color:var(--danger)">Erro: ${e.message}</td></tr>`;
+  }
+}
+
+function exportarRelatorioPeriodoCSV() {
+  const val = document.getElementById('rpFiltroMes').value;
+  if (!val) return;
+  const [ano, mes] = val.split('-');
+  window.open(`/api/relatorios/periodo/exportar?ano=${ano}&mes=${mes}&formato=xlsx`, '_blank');
+}
+
+function exportarRelatorioPeriodoPDF() {
+  if (!rpDadosAtuais.length) return toast('Sem dados para exportar', 'err');
+
+  const doc = new jspdf.jsPDF('l', 'pt', 'a4');
+
+  doc.setFontSize(16);
+  doc.text('Relatório de Período (Auditoria Salarial)', 40, 40);
+
+  doc.setFontSize(10);
+  doc.text(`Período: ${rpPeriodoAtual.inicio || ''} a ${rpPeriodoAtual.fim || ''}`, 40, 60);
+
+  const rows = rpDadosAtuais.map(r => [
+    r.funcionario_nome,
+    r.dias_trabalhados.toString(),
+    r.horas_trabalhadas.toString(),
+    r.meio_dias.toString(),
+    r.horas_meio_dia.toString(),
+    r.horas_extra.toString()
+  ]);
+
+  doc.autoTable({
+    startY: 80,
+    head: [['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra']],
+    body: rows,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [40, 40, 40] },
+    columnStyles: {
+      1: { halign: 'right' },
+      2: { halign: 'right' },
+      3: { halign: 'right' },
+      4: { halign: 'right' },
+      5: { halign: 'right' }
+    }
+  });
+
+  doc.save(`relatorio_periodo_${rpPeriodoAtual.inicio || 'periodo'}.pdf`);
 }
 
 // ── DASHBOARD ──
