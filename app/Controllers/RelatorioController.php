@@ -1458,6 +1458,9 @@ class RelatorioController
         }
 
         if ($formato === 'csv') {
+            if ($tipo === 'periodo') {
+                return $this->exportarCSV($dados, $tipo, $filename, $response);
+            }
             return $this->exportarCSV($dados, $tipo, $filename, $response);
         }
 
@@ -1541,14 +1544,17 @@ class RelatorioController
             $sheet->setCellValue('A1', 'Relatório de Período');
             $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-            $periodoInicio = is_array($dados['periodo']) ? ($dados['periodo']['inicio'] ?? '') : '';
-            $periodoFim = is_array($dados['periodo']) ? ($dados['periodo']['fim'] ?? '') : '';
-            $sheet->setCellValue('A2', 'Período: ' . $periodoInicio . ' a ' . $periodoFim);
+            $periodoInicio = isset($dados['periodo']) && is_array($dados['periodo']) ? ($dados['periodo']['inicio'] ?? '') : '';
+            $periodoFim = isset($dados['periodo']) && is_array($dados['periodo']) ? ($dados['periodo']['fim'] ?? '') : '';
+            $empresa = isset($dados['empresa']) && is_array($dados['empresa']) ? ($dados['empresa']['nome'] ?? '') : '';
 
-            $sheet->fromArray(['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], NULL, 'A4');
-            $sheet->getStyle('A4:F4')->applyFromArray($headerStyle);
+            $sheet->setCellValue('A2', 'Empresa: ' . $empresa);
+            $sheet->setCellValue('A3', 'Período: ' . $periodoInicio . ' a ' . $periodoFim);
 
-            $row = 5;
+            $sheet->fromArray(['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], NULL, 'A5');
+            $sheet->getStyle('A5:F5')->applyFromArray($headerStyle);
+
+            $row = 6;
             $dadosIter = isset($dados['dados']) ? $dados['dados'] : (is_array($dados) && count($dados) > 0 && !isset($dados['periodo']) ? $dados : []);
             foreach ($dadosIter as $r) {
                 if (!is_array($r)) continue;

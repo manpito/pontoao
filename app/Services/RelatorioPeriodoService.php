@@ -109,15 +109,16 @@ class RelatorioPeriodoService
                         // Desconto fixo de 1 hora
                         $liquidoHoras = $brutoHoras - 1.0;
 
-                        if ($liquidoHoras > 0) {
-                            $diasTrabalhados += 1;
-                            $horasTrabalhadas += $liquidoHoras;
+                        // Se o líquido for <= 0 após almoço, assume-se como 0 para não descontar horas, mas conta como dia trabalhado com 0h.
+                        $liquidoHorasAjustado = max(0, $liquidoHoras);
 
-                            // Calcular Horas Extra
-                            $horasEsperadas = $this->getHorasEsperadasDia($funcId, $dia, (float) ($func['horas_esperadas_dia'] ?? 8.0));
-                            if ($liquidoHoras > $horasEsperadas) {
-                                $horasExtra += ($liquidoHoras - $horasEsperadas);
-                            }
+                        $diasTrabalhados += 1;
+                        $horasTrabalhadas += $liquidoHorasAjustado;
+
+                        // Calcular Horas Extra
+                        $horasEsperadas = $this->getHorasEsperadasDia($funcId, $dia, (float) ($func['horas_esperadas_dia'] ?? 8.0));
+                        if ($liquidoHorasAjustado > $horasEsperadas) {
+                            $horasExtra += ($liquidoHorasAjustado - $horasEsperadas);
                         }
                     }
                 }
