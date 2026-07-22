@@ -1454,13 +1454,13 @@ class RelatorioController
         $filename = "relatorio_{$tipo}_{$periodo['inicio']}_{$periodo['fim']}";
 
         if ($formato === 'xlsx') {
+            // O exportarExcel já está preparado em toda a base de código para receber o $body completo (contendo ['dados'], ['periodo'], ['empresa']).
             return $this->exportarExcel($body, $tipo, $filename, $response);
         }
 
         if ($formato === 'csv') {
-            if ($tipo === 'periodo') {
-                return $this->exportarCSV($dados, $tipo, $filename, $response);
-            }
+            // O exportarCSV nas outras chaves (assiduidade, horas) espera receber apenas o array iterável com os dados ($dados = $body['dados'])
+            // No caso do periodo, na exportação CSV iteramos sobre ['dados'] que é o que contém a array de funcionários, por isso $dados está correto.
             return $this->exportarCSV($dados, $tipo, $filename, $response);
         }
 
