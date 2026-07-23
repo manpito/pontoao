@@ -242,9 +242,6 @@ class ZkBridgeController
 
         $raw = (string) $request->getBody();
 
-        $this->log("POSTCDATA table={$table} db=" . ($db ? 'OK' : 'NULL') . " relogio=" . ($relogio['id'] ?? 'NULL'));
-        $this->log("RAW: " . $raw);
-
         if ($table !== 'ATTLOG' || empty($raw)) {
             $response->getBody()->write("OK");
             return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
@@ -262,8 +259,6 @@ class ZkBridgeController
             $partes = preg_split('/\s+/', $linha);
             $count  = count($partes);
 
-            $this->log("LINHA partes={$count} raw=" . json_encode($partes));
-
             if ($count < 3) {
                 continue;
             }
@@ -278,7 +273,6 @@ class ZkBridgeController
             try {
                 if ($this->processarRegisto($db, $relogio, $registo)) {
                     $processados++;
-                    $this->log("OK uid={$registo['UserID']} ts={$registo['Timestamp']}");
                 }
             } catch (\Throwable $e) {
                 $this->log("ERRO uid={$registo['UserID']}: " . $e->getMessage());
