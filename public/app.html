@@ -1388,6 +1388,17 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 <div class="toasts" id="toasts"></div>
 
 <script>
+// ── UTILS ──
+function esc(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── STATE ──
 let TOKEN   = '';
 let USER    = null;
