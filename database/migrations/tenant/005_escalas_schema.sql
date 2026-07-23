@@ -31,6 +31,7 @@ CREATE TABLE escalas (
     descricao TEXT NULL,
     departamento_id INT UNSIGNED NULL COMMENT 'Opcional: associa escala a departamento',
     tamanho_ciclo TINYINT UNSIGNED NOT NULL COMMENT 'Número total de posições/dias no ciclo (ex: 7 para 5/2, 5 para call center 5x5)',
+    regime ENUM('normal','turnos') NOT NULL DEFAULT 'normal',
     activo TINYINT(1) NOT NULL DEFAULT 1,
     criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     actualizado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -81,8 +82,9 @@ CREATE TABLE funcionario_escala (
 -- ============================================================
 CREATE TABLE escala_excepcoes (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    tipo ENUM('substituicao','atribuicao_directa') NOT NULL DEFAULT 'substituicao',
     data DATE NOT NULL,
-    funcionario_ausente_id INT UNSIGNED NOT NULL COMMENT 'Quem devia trabalhar mas não vai',
+    funcionario_ausente_id INT UNSIGNED NULL COMMENT 'Quem devia trabalhar mas não vai',
     funcionario_substituto_id INT UNSIGNED NULL COMMENT 'Quem cobre (NULL = turno descoberto)',
     turno_id INT UNSIGNED NOT NULL COMMENT 'O turno a ser coberto',
     motivo ENUM('ferias', 'doenca', 'pessoal', 'troca', 'outro') NOT NULL,
@@ -104,3 +106,4 @@ CREATE TABLE escala_excepcoes (
 -- DROP TABLE IF EXISTS escala_turnos;
 -- DROP TABLE IF EXISTS escalas;
 -- DROP TABLE IF EXISTS turnos;
+

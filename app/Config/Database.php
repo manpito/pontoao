@@ -126,13 +126,22 @@ class Database
         sort($files);
 
         foreach ($files as $file) {
-            $sql        = file_get_contents($file);
+            $sql = file_get_contents($file);
+
+            // Remover comentários de linha e statements vazios
+            $lines = explode("\n", $sql);
+            $cleanLines = array_filter($lines, fn($l) => !preg_match('/^\s*--/', $l));
+            $sql = implode("\n", $cleanLines);
+
+            // Split por ; no fim de linha (evita partir dentro de strings com ;)
             $statements = array_filter(
-                array_map('trim', explode(';', $sql)),
-                fn($s) => !empty($s) && !preg_match('/^--/', $s)
+                array_map('trim', preg_split('/;\s*\n/', $sql)),
+                fn($s) => !empty(trim($s))
             );
 
             foreach ($statements as $stmt) {
+                $stmt = trim($stmt);
+                if (empty($stmt)) continue;
                 try {
                     $pdo->exec($stmt . ';');
                 } catch (PDOException $e) {

@@ -17,6 +17,7 @@ CREATE TABLE `utilizadores` (
     `tentativas_login`      TINYINT         NOT NULL DEFAULT 0,
     `bloqueado_ate`         DATETIME        NULL,
     `activo`                TINYINT(1)      NOT NULL DEFAULT 1,
+    `deve_alterar_password` TINYINT(1)      NOT NULL DEFAULT 1,
     `criado_em`             DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `actualizado_em`        DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -329,14 +330,10 @@ INSERT INTO `configuracoes` (`chave`, `valor`, `tipo`, `descricao`) VALUES
 ('logo_empresa',            NULL,               'string',  'URL do logótipo da empresa'),
 ('horas_extra_entrada_antecipada', '0', 'boolean', 'Contar tempo de entrada antecipada como horas extra');
 
+ALTER TABLE `periodos_mensais` ADD COLUMN `data_inicio` DATE NULL AFTER `mes`;
+ALTER TABLE `periodos_mensais` ADD COLUMN `data_fim` DATE NULL AFTER `data_inicio`;
+ALTER TABLE `periodos_mensais` ADD COLUMN `fechado_em` DATETIME NULL AFTER `data_fecho`;
 
-ALTER TABLE `periodos_mensais` 
-ADD COLUMN IF NOT EXISTS `data_inicio` DATE NULL AFTER `mes`,
-ADD COLUMN IF NOT EXISTS `data_fim` DATE NULL AFTER `data_inicio`,
-ADD COLUMN IF NOT EXISTS `fechado_em` DATETIME NULL AFTER `data_fecho`;
-
-ALTER TABLE escalas ADD COLUMN regime ENUM('normal','turnos') NOT NULL DEFAULT 'normal';
-ALTER TABLE utilizadores ADD COLUMN deve_alterar_password TINYINT(1) NOT NULL DEFAULT 1;
 
 -- Tabela: pedidos_horas_extra
 CREATE TABLE IF NOT EXISTS pedidos_horas_extra (
@@ -359,6 +356,3 @@ CREATE TABLE IF NOT EXISTS pedidos_horas_extra (
     CONSTRAINT fk_phe_funcionario FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE
 );
 
-ALTER TABLE escala_excepcoes
-    ADD COLUMN tipo ENUM('substituicao','atribuicao_directa') NOT NULL DEFAULT 'substituicao' AFTER id,
-    MODIFY COLUMN funcionario_ausente_id INT UNSIGNED NULL;
