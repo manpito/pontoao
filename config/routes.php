@@ -186,6 +186,9 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->get('/relatorios/horas',        [\App\Controllers\RelatorioController::class, 'horas'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
+    $group->get('/relatorios/periodo',      [\App\Controllers\RelatorioController::class, 'periodo'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
     $group->get('/relatorios/departamento/{departamento_id}', [\App\Controllers\RelatorioController::class, 'porDepartamento'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
@@ -370,6 +373,9 @@ $group->get('/relatorios/assiduidade/exportar',        [\App\Controllers\Relator
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
 $group->get('/relatorios/horas/exportar',              [\App\Controllers\RelatorioController::class, 'exportarHoras'])
+      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+$group->get('/relatorios/periodo/exportar',            [\App\Controllers\RelatorioController::class, 'exportarPeriodo'])
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
     // Períodos mensais

@@ -51,6 +51,58 @@ class RelatorioController
      * - tipo de ausência (justificada / injustificada)
      * - marcações do dia
      */
+    public function periodo(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $tenantInfo = $this->getTenantInfo();
+        $params = $request->getQueryParams();
+        $ano = (int) ($params['ano'] ?? date('Y'));
+        $mes = (int) ($params['mes'] ?? date('m'));
+
+        $db = $this->db();
+
+        // Obter configuração do ciclo de pagamento
+        $stmtCfg = $db->query("SELECT chave, valor FROM configuracoes WHERE chave IN ('periodo_dia_inicio','periodo_dia_fim')");
+        $config = [];
+        while ($row = $stmtCfg->fetch(PDO::FETCH_ASSOC)) {
+            $config[$row['chave']] = $row['valor'];
+        }
+
+        $diaInicio = (int) ($config['periodo_dia_inicio'] ?? 1);
+        $diaFim = (int) ($config['periodo_dia_fim'] ?? 31);
+
+        // Calcular datas tal como PeriodoController::calcularDataInicio/Fim
+        if ($diaInicio > 1) {
+            $mesAnterior = $mes === 1 ? 12 : $mes - 1;
+            $anoAnterior = $mes === 1 ? $ano - 1 : $ano;
+            $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mesAnterior, $anoAnterior);
+            $diaReal = min($diaInicio, $ultimoDia);
+            $dataInicio = sprintf('%04d-%02d-%02d', $anoAnterior, $mesAnterior, $diaReal);
+        } else {
+            $dataInicio = sprintf('%04d-%02d-%02d', $ano, $mes, 1);
+        }
+
+        $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mes, $ano);
+        if ($diaFim >= $ultimoDia || $diaFim === 31) {
+            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mes, $ultimoDia);
+        } else {
+            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mes, $diaFim);
+        }
+
+        // Se forneceram datas explícitas, usar as datas explícitas
+        if (!empty($params['data_inicio'])) $dataInicio = $params['data_inicio'];
+        if (!empty($params['data_fim'])) $dataFim = $params['data_fim'];
+
+        $svc = new \App\Services\RelatorioPeriodoService($db);
+        $dados = $svc->gerar($dataInicio, $dataFim);
+
+        return $this->json($response, 200, [
+            'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
+            'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
+            'dados' => $dados,
+            'gerado_em' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
     public function marcacoesDiarias(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
         $tenantInfo = $this->getTenantInfo();
@@ -1377,14 +1429,23 @@ class RelatorioController
         return $this->exportar($request, $response, 'horas');
     }
 
+    public function exportarPeriodo(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        return $this->exportar($request, $response, 'periodo');
+    }
+
     private function exportar(ServerRequestInterface $request, ResponseInterface $response, string $tipo): ResponseInterface
     {
         $formato = $request->getQueryParams()['formato'] ?? 'csv';
 
         // Obter dados usando o método existente
-        $dadosResponse = $tipo === 'assiduidade'
-            ? $this->assiduidade($request, new Response())
-            : $this->horas($request, new Response());
+        if ($tipo === 'assiduidade') {
+            $dadosResponse = $this->assiduidade($request, new Response());
+        } elseif ($tipo === 'periodo') {
+            $dadosResponse = $this->periodo($request, new Response());
+        } else {
+            $dadosResponse = $this->horas($request, new Response());
+        }
 
         $body = json_decode((string) $dadosResponse->getBody(), true);
         $dados = $body['dados'] ?? [];
@@ -1393,10 +1454,13 @@ class RelatorioController
         $filename = "relatorio_{$tipo}_{$periodo['inicio']}_{$periodo['fim']}";
 
         if ($formato === 'xlsx') {
+            // O exportarExcel já está preparado em toda a base de código para receber o $body completo (contendo ['dados'], ['periodo'], ['empresa']).
             return $this->exportarExcel($body, $tipo, $filename, $response);
         }
 
         if ($formato === 'csv') {
+            // O exportarCSV nas outras chaves (assiduidade, horas) espera receber apenas o array iterável com os dados ($dados = $body['dados'])
+            // No caso do periodo, na exportação CSV iteramos sobre ['dados'] que é o que contém a array de funcionários, por isso $dados está correto.
             return $this->exportarCSV($dados, $tipo, $filename, $response);
         }
 
@@ -1460,7 +1524,6 @@ class RelatorioController
         } elseif ($tipo === 'horas') {
             $sheet->fromArray(['Nº', 'Nome', 'Departamento', 'H. Efectivas', 'H. Esperadas', 'H. Extra', 'H. Défice', 'Atrasos (min)', 'Saldo (h)'], NULL, 'A1');
             $sheet->getStyle('A1:I1')->applyFromArray($headerStyle);
-
             $row = 2;
             foreach ($dados['dados'] as $r) {
                 $s = $r['resumo'];
@@ -1474,6 +1537,34 @@ class RelatorioController
                     $s['horas_deficit'],
                     $s['minutos_atraso_total'],
                     $s['saldo_horas'],
+                ], NULL, 'A' . $row);
+                $row++;
+            }
+        } elseif ($tipo === 'periodo') {
+            $sheet->setCellValue('A1', 'Relatório de Período');
+            $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+
+            $periodoInicio = isset($dados['periodo']) && is_array($dados['periodo']) ? ($dados['periodo']['inicio'] ?? '') : '';
+            $periodoFim = isset($dados['periodo']) && is_array($dados['periodo']) ? ($dados['periodo']['fim'] ?? '') : '';
+            $empresa = isset($dados['empresa']) && is_array($dados['empresa']) ? ($dados['empresa']['nome'] ?? '') : '';
+
+            $sheet->setCellValue('A2', 'Empresa: ' . $empresa);
+            $sheet->setCellValue('A3', 'Período: ' . $periodoInicio . ' a ' . $periodoFim);
+
+            $sheet->fromArray(['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], NULL, 'A5');
+            $sheet->getStyle('A5:F5')->applyFromArray($headerStyle);
+
+            $row = 6;
+            $dadosIter = isset($dados['dados']) ? $dados['dados'] : (is_array($dados) && count($dados) > 0 && !isset($dados['periodo']) ? $dados : []);
+            foreach ($dadosIter as $r) {
+                if (!is_array($r)) continue;
+                $sheet->fromArray([
+                    $r['funcionario_nome'] ?? '',
+                    $r['dias_trabalhados'] ?? 0,
+                    $r['horas_trabalhadas'] ?? 0,
+                    $r['meio_dias'] ?? 0,
+                    $r['horas_meio_dia'] ?? 0,
+                    $r['horas_extra'] ?? 0,
                 ], NULL, 'A' . $row);
                 $row++;
             }
@@ -1628,6 +1719,18 @@ class RelatorioController
                     $s['dias_justificados'],
                     $s['dias_feriado'],
                     $s['taxa_presenca'],
+                ], ';');
+            }
+        } elseif ($tipo === 'periodo') {
+            fputcsv($output, ['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], ';');
+            foreach ($dados as $r) {
+                fputcsv($output, [
+                    $r['funcionario_nome'],
+                    $r['dias_trabalhados'],
+                    $r['horas_trabalhadas'],
+                    $r['meio_dias'],
+                    $r['horas_meio_dia'],
+                    $r['horas_extra'],
                 ], ';');
             }
         } else {
