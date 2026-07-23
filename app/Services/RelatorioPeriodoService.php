@@ -42,11 +42,9 @@ class RelatorioPeriodoService
 
         // 2. Obter configurações de horas_extra_entrada_antecipada (se aplicável para cálculo, mas o user disse que descontamos 1h e calculamos horas brutas, extra é o que excede o turno.
 
-        $fimQuery = $dataFim . ' 23:59:59';
-        // Ajuste para turnos nocturnos, estendemos a query até meio dia seguinte
-        if ($this->periodoTemTurnoNocturnoGlobal($dataInicio, $dataFim)) {
-            $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
-        }
+        // Ajuste para turnos nocturnos: estendemos a query até ao meio-dia do dia seguinte.
+        // A filtragem e reatribuição de marcações (para turnos nocturnos) é tratada em agruparMarcacoesPorDia().
+        $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
 
         // 3. Obter todas as marcações no período
         $stmtM = $this->pdo->prepare("
@@ -195,21 +193,4 @@ class RelatorioPeriodoService
         return $dias;
     }
 
-    private function periodoTemTurnoNocturnoGlobal(string $dataInicio, string $dataFim): bool
-    {
-        // Simplificação: apenas vemos se algum funcionário teve turno nocturno na escala neste período
-        // Caso contrário, é overkill para cada query.
-        $stmt = $this->pdo->prepare("
-            SELECT 1
-            FROM escalas e
-            JOIN turnos t ON (
-                t.id IN (SELECT turno_id FROM rotacoes r WHERE r.escala_id = e.id)
-                OR t.id IN (SELECT turno_id FROM escala_excepcoes exc WHERE exc.data BETWEEN :ini AND :fim)
-            )
-            WHERE t.atravessa_dia_civil = 1
-            LIMIT 1
-        ");
-        $stmt->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
-        return (bool) $stmt->fetchColumn();
-    }
 }
