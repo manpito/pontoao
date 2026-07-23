@@ -63,7 +63,12 @@ class ExportacaoController
 
         $whereStr = implode(' AND ', $where);
         $stmtF = $db->prepare("
-            SELECT f.id, f.numero_funcionario
+            SELECT f.id, f.numero_funcionario,
+                   (SELECT e.regime
+                    FROM escalas e
+                    JOIN funcionario_escala fe ON fe.escala_id = e.id
+                    WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
+                    LIMIT 1) as regime_escala
             FROM funcionarios f
             WHERE {$whereStr}
             ORDER BY f.numero_funcionario ASC
@@ -207,11 +212,7 @@ class ExportacaoController
                     $tipoDia = 'domingo';
                 }
 
-                // Na exportacao não temos o regime da escala de imediato carregado p/ todo o lado,
-                // para simplificar assumimos regime='normal' para fins de H04, pois Exportacao Primavera trata fds/feriado como H04 direto na lógica legada:
-                // `$codigo = ($diaSemana >= 6 || isset($feriados[$dataStr])) ? 'H04' : 'H02';`
-                // No entanto, para ser correto e suportar futuro, procuramos o regime do func ou defaultamos
-                $regimeEscala = 'normal'; // default legada
+                $regimeEscala = $func['regime_escala'] ?? 'normal';
 
                 $calculoService = new \App\Services\CalculoHorasService();
                 $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr);

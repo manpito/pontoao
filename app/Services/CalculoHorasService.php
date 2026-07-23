@@ -120,42 +120,32 @@ class CalculoHorasService
             }
         }
 
-        // Atrasos e Saídas antecipadas (regra baseada no horário esperado, igual ao antigo marcacoesDiarias)
+        // Atrasos e Saídas antecipadas (regra baseada no horário esperado, usando timestamp real e não string truncada a minutos)
         if ($turno && $turno['tipo'] !== 'folga' && $resultado['tipo_presenca'] === 'completo') {
-            if ($turno['hora_entrada'] && $resultado['primeira_entrada_str']) {
-                [$hP, $mP] = explode(':', $turno['hora_entrada']);
-                $minPrevisto = (int)$hP * 60 + (int)$mP;
-
-                [$hR, $mR] = explode(':', $resultado['primeira_entrada_str']);
-                $minReal = (int)$hR * 60 + (int)$mR;
+            if ($turno['hora_entrada'] && $resultado['primeira_entrada_ts']) {
+                $tsPrevistoEntrada = strtotime($dataStr . ' ' . $turno['hora_entrada']);
+                $tsRealEntrada = $resultado['primeira_entrada_ts'];
 
                 $tolerancia = $turno['tolerancia_entrada_min'] ?? 10;
-                $diffEntrada = $minReal - $minPrevisto;
+                $diffEntradaSegundos = $tsRealEntrada - $tsPrevistoEntrada;
+                $diffEntradaMinutos = (int) round($diffEntradaSegundos / 60);
 
-                if ($diffEntrada > $tolerancia) {
-                    $resultado['atraso_minutos'] = $diffEntrada - $tolerancia;
+                if ($diffEntradaMinutos > $tolerancia) {
+                    $resultado['atraso_minutos'] = $diffEntradaMinutos - $tolerancia;
                 }
             }
 
-            if ($turno['hora_saida'] && $resultado['ultima_saida_str']) {
-                $horaPrevistaSaida = substr($turno['hora_saida'], 0, 5);
-
+            if ($turno['hora_saida'] && $resultado['ultima_saida_ts']) {
                 if ($turno['atravessa_dia_civil']) {
-                    $tsPrevisto = strtotime($dataStr . ' ' . $horaPrevistaSaida . ' +1 day');
-                    $tsReal     = strtotime($dataStr . ' ' . $resultado['ultima_saida_str'] . ' +1 day'); // assumption
-                    if ($tsPrevisto - $tsReal > 0) {
-                        $resultado['saida_antecipada_minutos'] = (int) round(($tsPrevisto - $tsReal) / 60);
-                    }
+                    $tsPrevistoSaida = strtotime($dataStr . ' ' . $turno['hora_saida'] . ' +1 day');
                 } else {
-                    [$hP, $mP] = explode(':', $horaPrevistaSaida);
-                    $minPrevisto = (int)$hP * 60 + (int)$mP;
+                    $tsPrevistoSaida = strtotime($dataStr . ' ' . $turno['hora_saida']);
+                }
 
-                    [$hR, $mR] = explode(':', $resultado['ultima_saida_str']);
-                    $minReal = (int)$hR * 60 + (int)$mR;
+                $tsRealSaida = $resultado['ultima_saida_ts'];
 
-                    if ($minPrevisto - $minReal > 0) {
-                        $resultado['saida_antecipada_minutos'] = $minPrevisto - $minReal;
-                    }
+                if ($tsPrevistoSaida - $tsRealSaida > 0) {
+                    $resultado['saida_antecipada_minutos'] = (int) round(($tsPrevistoSaida - $tsRealSaida) / 60);
                 }
             }
         }

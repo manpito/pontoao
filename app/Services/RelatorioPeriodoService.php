@@ -25,7 +25,12 @@ class RelatorioPeriodoService
         // 1. Obter funcionários activos e os seus horários normais
         $stmtF = $this->pdo->query("
             SELECT f.id, f.nome_completo, f.numero_funcionario,
-                   d.nome AS departamento, h.horas_dia AS horas_esperadas_dia
+                   d.nome AS departamento, h.horas_dia AS horas_esperadas_dia,
+                   (SELECT e.regime
+                    FROM escalas e
+                    JOIN funcionario_escala fe ON fe.escala_id = e.id
+                    WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
+                    LIMIT 1) as regime_escala
             FROM funcionarios f
             LEFT JOIN departamentos d ON f.departamento_id = d.id
             LEFT JOIN funcionario_horario fh ON fh.funcionario_id = f.id AND fh.data_fim IS NULL
@@ -93,7 +98,7 @@ class RelatorioPeriodoService
                 // Tipo dia fallback (RelatorioPeriodo actual não deduz feriados para H02/H04 separadamente, soma tudo)
                 $diaSemana = (int) date('N', $atual);
                 $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util'; // Simplificação, pois o relatório de período agrupa tudo numa só coluna "horas_extra"
-                $regimeEscala = 'normal';
+                $regimeEscala = $func['regime_escala'] ?? 'normal';
 
                 $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia);
 
