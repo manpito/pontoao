@@ -907,6 +907,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div class="form-group"><label>Departamento</label><select id="fDep"><option value="">— Nenhum —</option></select></div>
         <div class="form-group"><label>Horário</label><select id="fHorario"><option value="">— Nenhum —</option></select></div>
         <div class="form-group"><label>Cargo</label><select id="fCargo"><option value="">— Nenhum —</option></select></div>
+        <div class="form-group"><label>Supervisor</label><select id="fSupervisor"><option value="">— Nenhum —</option></select></div>
         <div class="form-group" style="grid-column:1/-1"><label>Morada</label><input id="fMorada" placeholder="Rua, número, município"></div>
       </div>
 
@@ -1910,6 +1911,7 @@ async function abrirModalFunc(id) {
     document.getElementById('fGenero').value = '';
     document.getElementById('fCargo').value = '';
     document.getElementById('fDep').value = '';
+    document.getElementById('fSupervisor').value = '';
 
     const resNum = await api('GET', '/api/funcionarios/proximo-numero');
     if (resNum.proximo_numero) document.getElementById('fNumero').value = resNum.proximo_numero;
@@ -1945,6 +1947,7 @@ function editarFunc(id) {
   document.getElementById('fDep').value        = f.departamento_id || '';
   document.getElementById('fCargo').value      = f.cargo_id || '';
   document.getElementById('fHorario').value    = f.horario_id || '';
+  document.getElementById('fSupervisor').value = f.supervisor_id || '';
 
   // Carregar dados da escala
   const canManageEscala = USER.perfil === 'super_admin_tenant' || USER.perfil === 'rh_manager';
@@ -2013,6 +2016,7 @@ async function submeterFunc() {
     departamento_id:     document.getElementById('fDep').value || null,
     cargo_id:            document.getElementById('fCargo').value || null,
     horario_id:          document.getElementById('fHorario').value || null,
+    supervisor_id:       document.getElementById('fSupervisor').value || null,
   };
   if (!payload.nome_completo || !payload.data_admissao) { toast('Nome e data de admissão são obrigatórios.','err'); return; }
   try {
@@ -2996,6 +3000,9 @@ async function carregarSelectores() {
       (hors.dados||[]).map(h=>`<option value="${h.id}">${h.nome}</option>`).join('');
     const funcSel = document.getElementById('marcFunc');
     if (funcSel) funcSel.innerHTML = '<option value="">Todos os funcionarios</option>' +
+      (funcs.dados||[]).map(f=>`<option value="${f.id}">${f.nome_completo}</option>`).join('');
+    const supSel = document.getElementById('fSupervisor');
+    if (supSel) supSel.innerHTML = '<option value="">— Nenhum —</option>' +
       (funcs.dados||[]).map(f=>`<option value="${f.id}">${f.nome_completo}</option>`).join('');
     const relDepSel = document.getElementById('relDep');
     if (relDepSel) {

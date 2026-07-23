@@ -87,7 +87,7 @@ class FuncionarioController
                 f.telefone, f.data_admissao, f.tipo_contrato, f.data_fim_contrato,
                 f.vencimento_base_aoa, f.estado, f.nif, f.niss, f.num_dependentes,
                 f.genero, f.data_nascimento, f.foto_url,
-                f.departamento_id, f.cargo_id,
+                f.departamento_id, f.cargo_id, f.supervisor_id,
                 d.nome AS departamento, c.nome AS cargo,
                 fh.horario_id,
                 (SELECT e.nome FROM funcionario_escala fe JOIN escalas e ON fe.escala_id = e.id WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE()) ORDER BY fe.data_inicio DESC LIMIT 1) AS escala_nome,
