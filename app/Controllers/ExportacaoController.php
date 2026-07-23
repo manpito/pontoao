@@ -63,7 +63,12 @@ class ExportacaoController
 
         $whereStr = implode(' AND ', $where);
         $stmtF = $db->prepare("
-            SELECT f.id, f.numero_funcionario
+            SELECT f.id, f.numero_funcionario,
+                   (SELECT e.regime
+                    FROM escalas e
+                    JOIN funcionario_escala fe ON fe.escala_id = e.id
+                    WHERE fe.funcionario_id = f.id AND (fe.data_fim IS NULL OR fe.data_fim >= CURDATE())
+                    LIMIT 1) as regime_escala
             FROM funcionarios f
             WHERE {$whereStr}
             ORDER BY f.numero_funcionario ASC
@@ -198,42 +203,30 @@ class ExportacaoController
                 $mDia = $marcPorDia[$dataStr] ?? [];
                 $turno = $escalaService->calcularTurnoEm($fId, $dataStr);
 
-                if ($turno) {
-                    $entrada = null; $saida = null; $minutosIntervalo = 0; $iniInt = null;
-                    foreach ($mDia as $m) {
-                        $ts = strtotime($m['data_hora']);
-                        if ($m['tipo'] === 'entrada' && !$entrada) $entrada = $ts;
-                        elseif ($m['tipo'] === 'saida') $saida = $ts;
-                        elseif ($m['tipo'] === 'inicio_intervalo') $iniInt = $ts;
-                        elseif ($m['tipo'] === 'fim_intervalo' && $iniInt) {
-                            $minutosIntervalo += (int) round(($ts - $iniInt) / 60);
-                            $iniInt = null;
-                        }
-                    }
+                $tipoDia = 'util';
+                if (isset($feriados[$dataStr])) {
+                    $tipoDia = 'feriado';
+                } elseif ($diaSemana === 6) {
+                    $tipoDia = 'sabado';
+                } elseif ($diaSemana === 7) {
+                    $tipoDia = 'domingo';
+                }
 
-                    if ($entrada) {
-                        // Atrasos
-                        if ($turno['tipo'] !== 'folga' && $turno['hora_entrada']) {
-                            $tolerancia = $turno['tolerancia_entrada_min'] ?? 10;
-                            $entradaPrevista = strtotime($dataStr . ' ' . $turno['hora_entrada']);
-                            $atrasoMinutos = (int) round(($entrada - $entradaPrevista) / 60);
-                            if ($atrasoMinutos > $tolerancia) {
-                                $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', ($atrasoMinutos - $tolerancia) / 60);
-                            }
-                        }
+                $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                        // Horas Extra
-                        $horasEfectivas = ($turno['tipo'] === 'folga') ? 0 : ($turno['horas_efectivas'] ?? 8);
-                        $saidaCalc = $saida ?? ($entrada + ($horasEfectivas * 3600));
-                        $minutosTrabalhados = (int) round(($saidaCalc - $entrada) / 60) - $minutosIntervalo;
-                        $minutosEsperados   = (int) ($horasEfectivas * 60);
-                        $minutosExtra = max(0, $minutosTrabalhados - $minutosEsperados);
+                $calculoService = new \App\Services\CalculoHorasService();
+                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr);
 
-                        if ($minutosExtra > 0) {
-                            $codigo = ($diaSemana >= 6 || isset($feriados[$dataStr])) ? 'H04' : 'H02';
-                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, $codigo, $minutosExtra / 60);
-                        }
-                    }
+                if ($resultadoDia['atraso_minutos'] > 0) {
+                    $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', $resultadoDia['atraso_minutos'] / 60);
+                }
+
+                if ($resultadoDia['minutos_extra'] > 0) {
+                    $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H02', $resultadoDia['minutos_extra'] / 60);
+                }
+
+                if ($resultadoDia['minutos_extra_extraordinario'] > 0) {
+                    $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H04', $resultadoDia['minutos_extra_extraordinario'] / 60);
                 }
 
                 $atual = strtotime('+1 day', $atual);

@@ -3175,7 +3175,7 @@ function gerarHTMLRelatorioIndividual(res) {
     const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
     const fimInt = d.marcacoes.find(m => m.tipo === 'FIM_INTERVALO');
 
-    if (ent) diasPresentes++;
+    if (ent || sai) diasPresentes++;
     totalHoras += r.total_horas || 0;
     totalAtrasos += r.atraso_minutos || 0;
     totalSaidasAntecipadas += r.saida_antecipada_minutos || 0;
@@ -3212,8 +3212,9 @@ function gerarHTMLRelatorioIndividual(res) {
     if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
     else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
     else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
-    else if (!ent) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
-    else if (ent && !sai) ocor = '<span class="badge badge-warn">Falta Marcação</span>';
+    else if (!ent && !sai) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
+    else if (!ent && sai) ocor = '<span class="badge badge-warn">Meio Dia (só saída)</span>';
+    else if (ent && !sai) ocor = '<span class="badge badge-warn">Meio Dia (só entrada)</span>';
     else {
         let badges = [];
         if (r.atraso_minutos > 0) badges.push(`<span class="badge" style="background:rgba(255,235,59,.15);color:#d4af37">Entrada Tardia (+${r.atraso_minutos}min)</span>`);
