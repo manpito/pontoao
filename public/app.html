@@ -1658,45 +1658,65 @@ function exportarRelatorioPeriodoCSV() {
   const val = document.getElementById('rpFiltroMes').value;
   if (!val) return;
   const [ano, mes] = val.split('-');
-  window.open(`/api/relatorios/periodo/exportar?ano=${ano}&mes=${mes}&formato=xlsx`, '_blank');
+  downloadApi(`/api/relatorios/periodo/exportar?ano=${ano}&mes=${mes}&formato=xlsx`, `relatorio_periodo_${ano}_${mes}.xlsx`);
 }
 
 function exportarRelatorioPeriodoPDF() {
   if (!rpDadosAtuais.length) return toast('Sem dados para exportar', 'err');
 
-  const doc = new jspdf.jsPDF('l', 'pt', 'a4');
+  let htmlRows = rpDadosAtuais.map(r => `
+    <tr>
+      <td>${esc(r.funcionario_nome)}</td>
+      <td style="text-align:right">${r.dias_trabalhados}</td>
+      <td style="text-align:right">${r.horas_trabalhadas}</td>
+      <td style="text-align:right">${r.meio_dias}</td>
+      <td style="text-align:right">${r.horas_meio_dia}</td>
+      <td style="text-align:right">${r.horas_extra}</td>
+    </tr>
+  `).join('');
 
-  doc.setFontSize(16);
-  doc.text('Relatório de Período (Auditoria Salarial)', 40, 40);
+  const printContent = `
+    <!DOCTYPE html>
+    <html lang="pt">
+    <head>
+      <meta charset="UTF-8">
+      <title>Relatório de Período ${esc(rpPeriodoAtual.inicio || '')}</title>
+      <style>
+        body { font-family: sans-serif; font-size: 12px; padding: 20px; }
+        h1 { font-size: 16px; margin-bottom: 5px; }
+        .meta { font-size: 11px; color: #555; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #f4f4f4; }
+      </style>
+    </head>
+    <body>
+      <h1>Relatório de Período (Auditoria Salarial)</h1>
+      <div class="meta">Período: ${esc(rpPeriodoAtual.inicio || '')} a ${esc(rpPeriodoAtual.fim || '')}</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Funcionário</th>
+            <th style="text-align:right">Nº Dias Trabalhados</th>
+            <th style="text-align:right">Nº Horas Trabalhadas</th>
+            <th style="text-align:right">Nº Meio Dia</th>
+            <th style="text-align:right">Nº Horas Meio Dia</th>
+            <th style="text-align:right">Nº Horas Extra</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${htmlRows}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
 
-  doc.setFontSize(10);
-  doc.text(`Período: ${rpPeriodoAtual.inicio || ''} a ${rpPeriodoAtual.fim || ''}`, 40, 60);
-
-  const rows = rpDadosAtuais.map(r => [
-    r.funcionario_nome,
-    r.dias_trabalhados.toString(),
-    r.horas_trabalhadas.toString(),
-    r.meio_dias.toString(),
-    r.horas_meio_dia.toString(),
-    r.horas_extra.toString()
-  ]);
-
-  doc.autoTable({
-    startY: 80,
-    head: [['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra']],
-    body: rows,
-    styles: { fontSize: 9 },
-    headStyles: { fillColor: [40, 40, 40] },
-    columnStyles: {
-      1: { halign: 'right' },
-      2: { halign: 'right' },
-      3: { halign: 'right' },
-      4: { halign: 'right' },
-      5: { halign: 'right' }
-    }
-  });
-
-  doc.save(`relatorio_periodo_${rpPeriodoAtual.inicio || 'periodo'}.pdf`);
+  const win = window.open('', '_blank');
+  win.document.write(printContent);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); win.close(); }, 250);
 }
 
 // ── DASHBOARD ──
