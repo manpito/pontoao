@@ -1615,7 +1615,12 @@ async function carregarRelatorioPeriodo() {
 
   try {
     const res = await api('GET', `/api/relatorios/periodo?ano=${ano}&mes=${mes}`);
-    rpDadosAtuais = res.dados || [];
+
+    if (res.erro || res.dados === undefined) {
+      throw new Error(res.mensagem || 'Erro de processamento no servidor (sem dados devolvidos).');
+    }
+
+    rpDadosAtuais = res.dados;
     rpPeriodoAtual = res.periodo || {};
 
     if (rpDadosAtuais.length === 0) {
