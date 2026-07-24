@@ -438,7 +438,8 @@ class ZkBridgeController
         ");
         $checkDup->execute([':fid' => $func['id'], ':dh' => $dataHora, ':tipo' => $tipo]);
         if ($checkDup->fetch()) {
-            $this->log("DUPLICADO uid={$userId} ts={$dataHora}");
+            $sn = $relogio['device_id'] ?? 'unknown';
+            $this->log("DUPLICADO sn={$sn} uid={$userId} ts={$dataHora}");
             return false;
         }
 
