@@ -157,6 +157,18 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->put('/marcacoes/{id}',      [\App\Controllers\MarcacaoController::class, 'update'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
+        // --- Justificações de Ausência ---
+    $group->get('/justificacoes-ausencia', [\App\Controllers\JustificacaoAusenciaController::class, 'index'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+    $group->post('/justificacoes-ausencia', [\App\Controllers\JustificacaoAusenciaController::class, 'store'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+    $group->post('/justificacoes-ausencia/upload', [\App\Controllers\JustificacaoAusenciaController::class, 'upload'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+    $group->put('/justificacoes-ausencia/{id}/estado', [\App\Controllers\JustificacaoAusenciaController::class, 'updateEstado'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+    $group->get('/justificacoes-ausencia/documento/{filename}', [\App\Controllers\JustificacaoAusenciaController::class, 'downloadDocumento'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
+
     // --- Marcações em Falta ---
     $group->get('/marcacoes-falta',           [\App\Controllers\MarcacaoFaltaController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));

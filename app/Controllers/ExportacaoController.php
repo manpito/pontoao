@@ -214,8 +214,16 @@ class ExportacaoController
 
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
+                $hasServicoExterno = false;
+                foreach ($todasJA as $ja) {
+                    if ($ja['funcionario_id'] == $fId && $ja['tipo'] === 'servico_externo' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                        $hasServicoExterno = true;
+                        break;
+                    }
+                }
+
                 $calculoService = new \App\Services\CalculoHorasService();
-                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr);
+                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno);
 
                 if ($resultadoDia['atraso_minutos'] > 0) {
                     $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', $resultadoDia['atraso_minutos'] / 60);
