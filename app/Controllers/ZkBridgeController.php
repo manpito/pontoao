@@ -202,9 +202,14 @@ class ZkBridgeController
                ->execute([':sn' => $sn, ':id' => $relogio['id']]);
         }
 
+        $attlogStamp = "None";
+        if ($sn === '5450251100118') {
+            $attlogStamp = "20260701000000";
+        }
+
         $body = implode("\n", [
             "GET OPTION FROM: {$sn}",
-            "ATTLOGStamp=None",
+            "ATTLOGStamp={$attlogStamp}",
             "OPERLOGStamp=9999",
             "ATTPHOTOStamp=None",
             "ErrorDelay=30",
