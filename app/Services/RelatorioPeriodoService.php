@@ -60,21 +60,26 @@ class RelatorioPeriodoService
             $todasMarcacoes[$row['funcionario_id']][] = $row;
         }
 
-        // Justificações de ausência
-        $paramsJA = array_merge($funcionarioIds, [$dataFim, $dataInicio]);
-        $stmtJA = $this->db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo, estado
-            FROM justificacoes_ausencia
-            WHERE funcionario_id IN ($inStr)
-              AND data_inicio <= ? AND data_fim >= ?
-              AND estado = 'aprovado'
-        ");
-        $stmtJA->execute($paramsJA);
-        $todasJustificacoes = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
-
+        // Justificações de ausência (necessárias para que um dia com serviço externo
+        // aprovado conte como dia trabalhado, mesmo sem marcações)
+        $ids = array_column($funcionarios, 'id');
         $justificacoesPorFunc = [];
-        foreach ($todasJustificacoes as $ja) {
-            $justificacoesPorFunc[$ja['funcionario_id']][] = $ja;
+
+        if (!empty($ids)) {
+            $inStr = implode(',', $ids);
+            $stmtJA = $this->pdo->prepare("
+                SELECT funcionario_id, data_inicio, data_fim, tipo, estado
+                FROM justificacoes_ausencia
+                WHERE funcionario_id IN ({$inStr})
+                  AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+                  AND estado = 'aprovado'
+            ");
+            $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
+            $todasJustificacoes = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($todasJustificacoes as $ja) {
+                $justificacoesPorFunc[$ja['funcionario_id']][] = $ja;
+            }
         }
 
         $resultado = [];

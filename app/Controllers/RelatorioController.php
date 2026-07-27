@@ -194,6 +194,17 @@ class RelatorioController
         $rowReg = $stmtReg->fetch(PDO::FETCH_ASSOC);
             if ($rowReg) $regimeEscala = $rowReg['regime'];
 
+        // Justificações de ausência aprovadas no período (serviço externo / falta justificada)
+        $stmtJA = $db->prepare("
+            SELECT tipo, data_inicio, data_fim, motivo
+            FROM justificacoes_ausencia
+            WHERE funcionario_id = :fid
+              AND estado = 'aprovado'
+              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+        ");
+        $stmtJA->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
+        $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
         // Agrupar por dia
         $marcPorDia = [];
         foreach ($marcacoesRaw as $m) {
@@ -726,7 +737,7 @@ class RelatorioController
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
               AND estado = 'aprovada'
         ");
-        $stmtJ->execute(array_merge($funcionarioIds, [':dataFim' => $dataFim, ':dataInicio' => $dataInicio]));
+        $stmtJ->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
         $stmtJA = $db->prepare("
@@ -736,7 +747,7 @@ class RelatorioController
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
               AND estado = 'aprovado'
         ");
-        $stmtJA->execute(array_merge($funcionarioIds, [':dataFim' => $dataFim, ':dataInicio' => $dataInicio]));
+        $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
         // 4b. Buscar marcações em falta no período
@@ -746,7 +757,7 @@ class RelatorioController
             WHERE funcionario_id IN ({$inStr})
               AND data BETWEEN :dataInicio AND :dataFim
         ");
-        $stmtMF->execute(array_merge($funcionarioIds, [':dataInicio' => $dataInicio, ':dataFim' => $dataFim]));
+        $stmtMF->execute([':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
         $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Calcular por funcionário
