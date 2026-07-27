@@ -60,11 +60,34 @@ class RelatorioPeriodoService
             $todasMarcacoes[$row['funcionario_id']][] = $row;
         }
 
+        // Justificações de ausência (necessárias para que um dia com serviço externo
+        // aprovado conte como dia trabalhado, mesmo sem marcações)
+        $ids = array_column($funcionarios, 'id');
+        $justificacoesPorFunc = [];
+
+        if (!empty($ids)) {
+            $inStr = implode(',', $ids);
+            $stmtJA = $this->pdo->prepare("
+                SELECT funcionario_id, data_inicio, data_fim, tipo, estado
+                FROM justificacoes_ausencia
+                WHERE funcionario_id IN ({$inStr})
+                  AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+                  AND estado = 'aprovado'
+            ");
+            $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
+            $todasJustificacoes = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($todasJustificacoes as $ja) {
+                $justificacoesPorFunc[$ja['funcionario_id']][] = $ja;
+            }
+        }
+
         $resultado = [];
 
         foreach ($funcionarios as $func) {
             $funcId = (int) $func['id'];
             $marcacoesFunc = $todasMarcacoes[$funcId] ?? [];
+            $justificacoesFunc = $justificacoesPorFunc[$funcId] ?? [];
 
             $diasTrabalhados = 0;
             $horasTrabalhadas = 0.0;
@@ -87,7 +110,15 @@ class RelatorioPeriodoService
                 $dia = date('Y-m-d', $atual);
                 $marcacoesDia = $marcacoesPorDia[$dia] ?? [];
 
-                if (count($marcacoesDia) === 0) {
+                $hasServicoExterno = false;
+                foreach ($justificacoesFunc as $ja) {
+                    if ($ja['tipo'] === 'servico_externo' && $dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
+                        $hasServicoExterno = true;
+                        break;
+                    }
+                }
+
+                if (count($marcacoesDia) === 0 && !$hasServicoExterno) {
                     $atual = strtotime('+1 day', $atual);
                     continue; // Dia sem marcações
                 }
@@ -98,13 +129,13 @@ class RelatorioPeriodoService
                 $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util'; // Simplificação, pois o relatório de período agrupa tudo numa só coluna "horas_extra"
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia);
+                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno);
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
                     $meioDias += 1;
                     $horasTrabalhadas += $resultadoDia['horas_trabalhadas'];
                     $horasMeioDia += $resultadoDia['horas_trabalhadas'];
-                } elseif ($resultadoDia['tipo_presenca'] === 'completo') {
+                } elseif ($resultadoDia['tipo_presenca'] === 'completo' || $resultadoDia['tipo_presenca'] === 'servico_externo') {
                     $diasTrabalhados += 1;
                     $horasTrabalhadas += $resultadoDia['horas_trabalhadas'];
                     $horasExtra += ($resultadoDia['minutos_extra'] + $resultadoDia['minutos_extra_extraordinario']) / 60;

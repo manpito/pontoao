@@ -18,11 +18,12 @@ class CalculoHorasService
         ?array $turno,
         string $tipoDia, // 'util', 'sabado', 'domingo', 'feriado'
         string $regimeEscala, // 'normal', 'turnos'
-        string $dataStr
+        string $dataStr,
+        bool $hasServicoExterno = false
     ): array {
         // Inicializar o resultado
         $resultado = [
-            'tipo_presenca'                => 'ausente', // completo, meio_dia, ausente
+            'tipo_presenca'                => 'ausente', // completo, meio_dia, ausente, servico_externo
             'horas_trabalhadas'            => 0.0,
             'minutos_totais'               => 0, // para manter compatibilidade com algumas chamadas
             'minutos_extra'                => 0,
@@ -34,6 +35,22 @@ class CalculoHorasService
             'primeira_entrada_str'         => null,
             'ultima_saida_str'             => null,
         ];
+
+        // Se houver serviço externo justificado, tratar como dia de trabalho completo
+        if ($hasServicoExterno) {
+            $minutosEsperados = 0;
+            if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
+                $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+            } else {
+                $minutosEsperados = 8 * 60; // fallback para 8 horas
+            }
+
+            $resultado['tipo_presenca'] = 'servico_externo';
+            $resultado['minutos_totais'] = $minutosEsperados;
+            $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
+            // Sem horas extras, atrasos ou saídas antecipadas
+            return $resultado;
+        }
 
         if (count($marcacoes) === 0) {
             return $resultado;

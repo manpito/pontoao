@@ -144,6 +144,17 @@ class ExportacaoController
             $feriasMap[$f['funcionario_id']][] = $f;
         }
 
+        // 2.6b — Buscar justificações de ausência aprovadas do período (serviço externo)
+        $stmtJA = $db->prepare("
+            SELECT funcionario_id, data_inicio, data_fim, tipo
+            FROM justificacoes_ausencia
+            WHERE funcionario_id IN ({$inStr})
+              AND estado = 'aprovado'
+              AND data_inicio <= :fim AND data_fim >= :ini
+        ");
+        $stmtJA->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        $todasJA = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
         // 2.7 — Processar e gerar linhas
         $escalaService = new \App\Services\EscalaService($db);
         $linhas = [];
@@ -175,8 +186,18 @@ class ExportacaoController
                 $diaSemana = (int) date('N', $atual);
                 $isUtil = ($diaSemana < 6 && !isset($feriados[$dataStr]));
 
+                $hasServicoExterno = false;
+                foreach ($todasJA as $ja) {
+                    if ($ja['funcionario_id'] == $fId && $ja['tipo'] === 'servico_externo' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                        $hasServicoExterno = true;
+                        break;
+                    }
+                }
+
                 // Faltas (marcacoes_em_falta)
-                if (isset($faltasMap[$fId][$dataStr])) {
+                // Suprimir F03 quando entretanto foi aprovado serviço externo para o dia
+                // (a falta pode ter sido classificada como injustificada_falta antes da aprovação)
+                if (isset($faltasMap[$fId][$dataStr]) && !($hasServicoExterno && $faltasMap[$fId][$dataStr] === 'injustificada_falta')) {
                     $estado = $faltasMap[$fId][$dataStr];
                     $map = [
                         'injustificada_falta'    => ['F03', 1.0],
@@ -215,7 +236,7 @@ class ExportacaoController
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
                 $calculoService = new \App\Services\CalculoHorasService();
-                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr);
+                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno);
 
                 if ($resultadoDia['atraso_minutos'] > 0) {
                     $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', $resultadoDia['atraso_minutos'] / 60);

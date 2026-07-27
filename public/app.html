@@ -462,7 +462,16 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <input class="search-input" type="date" id="faltaFiltroFim" style="flex:0;width:150px">
         <button class="btn btn-accent" onclick="carregarMarcacoesFalta()">Filtrar</button>
         <button class="btn" onclick="exportarFaltasPDF()">↓ PDF</button>
+        <button class="btn btn-accent" onclick="abrirModalNovaJustificacao()" style="margin-left:auto">+ Justificar ausência (intervalo)</button>
       </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head">
+            <div class="card-title">Justificações de Ausência (Intervalo)</div>
+        </div>
+        <div id="justificacoesAusenciaTable"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+
       <div class="card">
         <div id="marcacoesFaltaTable"><div class="empty"><span class="spinner"></span></div></div>
       </div>
@@ -1165,6 +1174,60 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   </div>
 </div>
 
+<!-- MODAL JUSTIFICAÇÃO DE AUSÊNCIA -->
+<div class="overlay" id="modalNovaJustificacao">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Justificar Ausência (Intervalo)</h3>
+      <button class="modal-close" onclick="fecharModal('modalNovaJustificacao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Funcionário *</label>
+        <select id="jaFuncionarioId"></select>
+      </div>
+      <div class="form-row">
+          <div class="form-group">
+            <label>Data Início *</label>
+            <input type="date" id="jaDataInicio">
+          </div>
+          <div class="form-group">
+            <label>Data Fim *</label>
+            <input type="date" id="jaDataFim">
+          </div>
+      </div>
+      <div class="form-group">
+        <label>Tipo *</label>
+        <select id="jaTipo" onchange="toggleJaMotivo()">
+          <option value="servico_externo">Serviço externo / Viagem de trabalho</option>
+          <option value="falta_justificada">Falta justificada</option>
+        </select>
+      </div>
+      <div class="form-group" id="jaMotivoGroup" style="display:none">
+        <label>Motivo *</label>
+        <select id="jaMotivo">
+          <option value="saude">Saúde</option>
+          <option value="luto">Luto</option>
+          <option value="casamento">Casamento</option>
+          <option value="assistencia_familiar">Assistência a familiar</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nota (opcional)</label>
+        <textarea id="jaNota" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Comprovativo (opcional, PDF/JPG/PNG max 5MB)</label>
+        <input type="file" id="jaDocumento" accept=".pdf,.jpg,.jpeg,.png">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharModal('modalNovaJustificacao')">Cancelar</button>
+      <button class="btn btn-accent" id="btnGuardarJa" onclick="guardarNovaJustificacao()">Guardar</button>
+    </div>
+  </div>
+</div>
 <!-- MODAL CLASSIFICAR FALTA -->
 <div class="overlay" id="modalClassificarFalta">
   <div class="modal">
@@ -2074,6 +2137,139 @@ async function verificarMarcacoesPendentes() {
     countEl.textContent = n;
     el.style.display = n > 0 ? 'block' : 'none';
   } catch(_) { el.style.display = 'none'; }
+}
+
+function toggleJaMotivo() {
+  const tipo = document.getElementById('jaTipo').value;
+  document.getElementById('jaMotivoGroup').style.display = tipo === 'falta_justificada' ? 'block' : 'none';
+}
+
+async function abrirModalNovaJustificacao() {
+  const select = document.getElementById('jaFuncionarioId');
+  select.innerHTML = '<option value="">A carregar...</option>';
+  document.getElementById('jaDataInicio').value = '';
+  document.getElementById('jaDataFim').value = '';
+  document.getElementById('jaTipo').value = 'servico_externo';
+  document.getElementById('jaMotivo').value = 'saude';
+  document.getElementById('jaNota').value = '';
+  document.getElementById('jaDocumento').value = '';
+  toggleJaMotivo();
+  document.getElementById('modalNovaJustificacao').classList.add('open');
+
+  try {
+    const res = await api('GET', '/api/funcionarios?estado=activo');
+    select.innerHTML = '<option value="">Selecione o funcionário</option>' +
+      (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
+  } catch(e) {
+    select.innerHTML = '<option value="">Erro ao carregar</option>';
+  }
+}
+
+async function guardarNovaJustificacao() {
+  const funcId = document.getElementById('jaFuncionarioId').value;
+  const dataIn = document.getElementById('jaDataInicio').value;
+  const dataFim = document.getElementById('jaDataFim').value;
+  const tipo = document.getElementById('jaTipo').value;
+  if (!funcId || !dataIn || !dataFim || !tipo) return toast('Preencha os campos obrigatórios.', 'err');
+
+  const btn = document.getElementById('btnGuardarJa');
+  btn.disabled = true;
+  btn.textContent = 'A guardar...';
+
+  try {
+    let docUrl = null;
+    const fileInput = document.getElementById('jaDocumento');
+    if (fileInput.files.length > 0) {
+      const formData = new FormData();
+      formData.append('documento', fileInput.files[0]);
+      const req = await fetch('/api/justificacoes-ausencia/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${TOKEN}` },
+        body: formData
+      });
+      const resDoc = await req.json();
+      if (resDoc.erro) throw new Error(resDoc.mensagem);
+      docUrl = resDoc.url;
+    }
+
+    const payload = {
+      funcionario_id: funcId,
+      data_inicio: dataIn,
+      data_fim: dataFim,
+      tipo: tipo,
+      motivo: tipo === 'falta_justificada' ? document.getElementById('jaMotivo').value : null,
+      nota: document.getElementById('jaNota').value.trim() || null,
+      documento_url: docUrl
+    };
+
+    const res = await api('POST', '/api/justificacoes-ausencia', payload);
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Justificação registada com sucesso.', 'ok');
+    fecharModal('modalNovaJustificacao');
+    carregarJustificacoesAusencia();
+  } catch(e) {
+    toast(e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+  }
+}
+
+async function carregarJustificacoesAusencia() {
+  const el = document.getElementById('justificacoesAusenciaTable');
+  if (!el) return;
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', '/api/justificacoes-ausencia');
+    const canApprove = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
+
+    const rows = (res.dados||[]).map(j => {
+      let badgeClass = j.estado === 'pendente' ? 'warn' : (j.estado === 'aprovado' ? 'green' : 'red');
+      let actBtn = '';
+      if (j.estado === 'pendente' && canApprove) {
+        actBtn = `<button class="btn btn-sm btn-accent" onclick="aprovarJustificacaoAusencia(${j.id})">Aprovar</button>
+                  <button class="btn btn-sm" onclick="rejeitarJustificacaoAusencia(${j.id})" style="color:var(--danger)">Rejeitar</button>`;
+      }
+
+      let docLink = j.documento_url ? `<a href="${j.documento_url}" target="_blank" title="Ver documento">📄</a>` : '';
+      let tipoStr = j.tipo === 'servico_externo' ? 'Serviço Externo' : `Falta (${j.motivo})`;
+
+      return `<tr>
+        <td><span style="font-family:var(--mono)">${j.data_inicio} → ${j.data_fim}</span></td>
+        <td><strong>${j.funcionario_nome}</strong></td>
+        <td>${tipoStr}</td>
+        <td>${esc(j.nota||'')} ${docLink}</td>
+        <td><span class="badge badge-${badgeClass}">${j.estado}</span></td>
+        <td>${actBtn}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Período</th><th>Funcionário</th><th>Tipo</th><th>Detalhes</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||'<tr><td colspan="6" class="empty">Nenhuma justificação registada.</td></tr>'}</tbody>
+    </table>`;
+  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar justificações.</div>'; }
+}
+
+async function aprovarJustificacaoAusencia(id) {
+  if (!confirm('Aprovar esta justificação?')) return;
+  try {
+    const res = await api('PUT', `/api/justificacoes-ausencia/${id}/estado`, { estado: 'aprovado' });
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Justificação aprovada.', 'ok');
+    carregarJustificacoesAusencia();
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function rejeitarJustificacaoAusencia(id) {
+  const m = prompt('Motivo da rejeição:');
+  if (m === null) return;
+  try {
+    const res = await api('PUT', `/api/justificacoes-ausencia/${id}/estado`, { estado: 'rejeitado', motivo_rejeicao: m });
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Justificação rejeitada.', 'ok');
+    carregarJustificacoesAusencia();
+  } catch(e) { toast(e.message, 'err'); }
 }
 
 async function carregarMarcacoesFalta() {
@@ -3255,10 +3451,23 @@ function gerarHTMLRelatorioIndividual(res) {
     if (r.tipo_dia === 'feriado') ocor = '<span class="badge badge-blue">Feriado</span>';
     else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
     else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
-    else if (!ent && !sai) { ocor = '<span class="badge badge-red">Ausência</span>'; diasAusentes++; }
+    else if (!ent && !sai) {
+        if (r.has_servico_externo) {
+            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
+            diasPresentes++;
+        } else if (r.motivo_falta_justificada) {
+            ocor = `<span class="badge badge-blue">Justificado: ${esc(r.motivo_falta_justificada)}</span>`;
+        } else {
+            ocor = '<span class="badge badge-red">Ausência</span>';
+            diasAusentes++;
+        }
+    }
     else if (!ent && sai) ocor = '<span class="badge badge-warn">Meio Dia (só saída)</span>';
     else if (ent && !sai) ocor = '<span class="badge badge-warn">Meio Dia (só entrada)</span>';
     else {
+        if (r.has_servico_externo) {
+            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
+        }
         let badges = [];
         if (r.atraso_minutos > 0) badges.push(`<span class="badge" style="background:rgba(255,235,59,.15);color:#d4af37">Entrada Tardia (+${r.atraso_minutos}min)</span>`);
         if (r.saida_antecipada_minutos > 0) badges.push(`<span class="badge badge-warn">Saída Antecipada (-${r.saida_antecipada_minutos}min)</span>`);

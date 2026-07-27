@@ -154,6 +154,24 @@ function bootstrap_db(): PDO
             FOREIGN KEY (funcionario_id) REFERENCES funcionarios(id) ON DELETE CASCADE,
             FOREIGN KEY (horario_id) REFERENCES horarios(id)
         );
+
+
+        CREATE TABLE justificacoes_ausencia (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            funcionario_id INTEGER NOT NULL,
+            data_inicio TEXT NOT NULL,
+            data_fim TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            motivo TEXT NULL,
+            nota TEXT NULL,
+            documento_url TEXT NULL,
+            estado TEXT NOT NULL DEFAULT 'pendente',
+            criado_por INTEGER NOT NULL,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            aprovado_por INTEGER NULL,
+            aprovado_em TEXT NULL,
+            motivo_rejeicao TEXT NULL
+        );
     ");
 
     return $pdo;
