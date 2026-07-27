@@ -719,31 +719,34 @@ class RelatorioController
         $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
         // 4. Buscar justificações no período
-        $stmtJ = $db->query("
+        $stmtJ = $db->prepare("
             SELECT funcionario_id, data_inicio, data_fim, tipo, estado
             FROM justificacoes
             WHERE funcionario_id IN ({$inStr})
-              AND data_inicio <= '{$dataFim}' AND data_fim >= '{$dataInicio}'
+              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
               AND estado = 'aprovada'
         ");
+        $stmtJ->execute(array_merge($funcionarioIds, [':dataFim' => $dataFim, ':dataInicio' => $dataInicio]));
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmtJA = $db->query("
+        $stmtJA = $db->prepare("
             SELECT funcionario_id, data_inicio, data_fim, tipo, estado, motivo
             FROM justificacoes_ausencia
             WHERE funcionario_id IN ({$inStr})
-              AND data_inicio <= '{$dataFim}' AND data_fim >= '{$dataInicio}'
+              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
               AND estado = 'aprovado'
         ");
+        $stmtJA->execute(array_merge($funcionarioIds, [':dataFim' => $dataFim, ':dataInicio' => $dataInicio]));
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
         // 4b. Buscar marcações em falta no período
-        $stmtMF = $db->query("
+        $stmtMF = $db->prepare("
             SELECT funcionario_id, data, nota_classificacao, estado
             FROM marcacoes_em_falta
             WHERE funcionario_id IN ({$inStr})
-              AND data BETWEEN '{$dataInicio}' AND '{$dataFim}'
+              AND data BETWEEN :dataInicio AND :dataFim
         ");
+        $stmtMF->execute(array_merge($funcionarioIds, [':dataInicio' => $dataInicio, ':dataFim' => $dataFim]));
         $marcacoesFalta = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Calcular por funcionário
@@ -752,7 +755,7 @@ class RelatorioController
         foreach ($funcionarios as $func) {
             $marcFunc = array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']);
             $justFunc = array_filter($justificacoes, fn($j) => $j['funcionario_id'] == $func['id']);
-            $justAusFunc = array_filter($justificacoesAusencia, fn($ja) => $ja['funcionario_id'] == $func['id']);
+            $justAusFunc = array_filter($justificacoesAusencia ?? [], fn($ja) => $ja['funcionario_id'] == $func['id']);
             $mfFunc   = array_filter($marcacoesFalta, fn($mf) => $mf['funcionario_id'] == $func['id']);
 
             // Agrupar marcações por dia
@@ -855,7 +858,7 @@ class RelatorioController
                         }
                     }
 
-                    if (!isset($diaInfo['tipo'])) {
+                    if (!isset($diaInfo['tipo']) || $diaInfo['tipo'] === '') {
                         $diaInfo['tipo'] = $justificado ? 'justificado' : 'ausente';
                         if ($diaInfo['tipo'] === 'justificado') {
                              $totalJustif++;
