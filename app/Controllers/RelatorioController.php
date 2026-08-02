@@ -1589,8 +1589,8 @@ class RelatorioController
             $sheet->setCellValue('A2', 'Empresa: ' . $empresa);
             $sheet->setCellValue('A3', 'Período: ' . $periodoInicio . ' a ' . $periodoFim);
 
-            $sheet->fromArray(['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], NULL, 'A5');
-            $sheet->getStyle('A5:F5')->applyFromArray($headerStyle);
+            $sheet->fromArray(['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra', 'Nº de Faltas'], NULL, 'A5');
+            $sheet->getStyle('A5:G5')->applyFromArray($headerStyle);
 
             $row = 6;
             $dadosIter = isset($dados['dados']) ? $dados['dados'] : (is_array($dados) && count($dados) > 0 && !isset($dados['periodo']) ? $dados : []);
@@ -1603,6 +1603,7 @@ class RelatorioController
                     $r['meio_dias'] ?? 0,
                     $r['horas_meio_dia'] ?? 0,
                     $r['horas_extra'] ?? 0,
+                    $r['faltas_injustificadas'] ?? 0,
                 ], NULL, 'A' . $row);
                 $row++;
             }
@@ -1760,7 +1761,7 @@ class RelatorioController
                 ], ';');
             }
         } elseif ($tipo === 'periodo') {
-            fputcsv($output, ['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra'], ';');
+            fputcsv($output, ['Funcionário', 'Nº Dias Trabalhados', 'Nº Horas Trabalhadas', 'Nº Meio Dia', 'Nº Horas Meio Dia', 'Nº Horas Extra', 'Nº de Faltas'], ';');
             foreach ($dados as $r) {
                 fputcsv($output, [
                     $r['funcionario_nome'],
@@ -1769,6 +1770,7 @@ class RelatorioController
                     $r['meio_dias'],
                     $r['horas_meio_dia'],
                     $r['horas_extra'],
+                    $r['faltas_injustificadas'] ?? 0,
                 ], ';');
             }
         } else {

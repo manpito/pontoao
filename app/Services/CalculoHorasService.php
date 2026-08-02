@@ -19,7 +19,8 @@ class CalculoHorasService
         string $tipoDia, // 'util', 'sabado', 'domingo', 'feriado'
         string $regimeEscala, // 'normal', 'turnos'
         string $dataStr,
-        bool $hasServicoExterno = false
+        bool $hasServicoExterno = false,
+        bool $hasFaltaJustificada = false
     ): array {
         // Inicializar o resultado
         $resultado = [
@@ -34,6 +35,7 @@ class CalculoHorasService
             'ultima_saida_ts'              => null,
             'primeira_entrada_str'         => null,
             'ultima_saida_str'             => null,
+            'is_falta_injustificada'       => false,
         ];
 
         // Se houver serviço externo justificado, tratar como dia de trabalho completo
@@ -53,6 +55,9 @@ class CalculoHorasService
         }
 
         if (count($marcacoes) === 0) {
+            if (!$hasServicoExterno && !$hasFaltaJustificada && $turno && $turno['tipo'] !== 'folga') {
+                $resultado['is_falta_injustificada'] = true;
+            }
             return $resultado;
         }
 

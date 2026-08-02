@@ -94,6 +94,7 @@ class RelatorioPeriodoService
             $meioDias = 0;
             $horasMeioDia = 0.0;
             $horasExtra = 0.0;
+            $faltasInjustificadas = 0;
 
             // Agrupar marcações por dia civil e processar turnos nocturnos
             $marcacoesPorDia = $this->agruparMarcacoesPorDia($marcacoesFunc, $funcId, $dataInicio, $dataFim);
@@ -111,25 +112,25 @@ class RelatorioPeriodoService
                 $marcacoesDia = $marcacoesPorDia[$dia] ?? [];
 
                 $hasServicoExterno = false;
+                $hasFaltaJustificada = false;
                 foreach ($justificacoesFunc as $ja) {
-                    if ($ja['tipo'] === 'servico_externo' && $dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
-                        $hasServicoExterno = true;
-                        break;
+                    if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
+                        if ($ja['tipo'] === 'servico_externo') {
+                            $hasServicoExterno = true;
+                        } elseif ($ja['tipo'] === 'falta_justificada') {
+                            $hasFaltaJustificada = true;
+                        }
                     }
                 }
 
-                if (count($marcacoesDia) === 0 && !$hasServicoExterno) {
-                    $atual = strtotime('+1 day', $atual);
-                    continue; // Dia sem marcações
-                }
-
                 $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
+
                 // Tipo dia fallback (RelatorioPeriodo actual não deduz feriados para H02/H04 separadamente, soma tudo)
                 $diaSemana = (int) date('N', $atual);
                 $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util'; // Simplificação, pois o relatório de período agrupa tudo numa só coluna "horas_extra"
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno);
+                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada);
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
                     $meioDias += 1;
@@ -139,6 +140,10 @@ class RelatorioPeriodoService
                     $diasTrabalhados += 1;
                     $horasTrabalhadas += $resultadoDia['horas_trabalhadas'];
                     $horasExtra += ($resultadoDia['minutos_extra'] + $resultadoDia['minutos_extra_extraordinario']) / 60;
+                }
+
+                if (!empty($resultadoDia['is_falta_injustificada'])) {
+                    $faltasInjustificadas += 1;
                 }
 
                 $atual = strtotime('+1 day', $atual);
@@ -152,7 +157,8 @@ class RelatorioPeriodoService
                 'horas_trabalhadas' => round($horasTrabalhadas, 2),
                 'meio_dias' => $meioDias,
                 'horas_meio_dia' => round($horasMeioDia, 2),
-                'horas_extra' => round($horasExtra, 2)
+                'horas_extra' => round($horasExtra, 2),
+                'faltas_injustificadas' => $faltasInjustificadas
             ];
         }
 
