@@ -4179,6 +4179,18 @@ async function downloadApi(path, filename) {
     const opts = { headers: { 'Authorization': 'Bearer ' + TOKEN } };
     if (TENANT) opts.headers['X-Tenant'] = TENANT;
     const res  = await fetch(path, opts);
+
+    if (!res.ok) {
+      let erroMsg = 'Erro na exportação (HTTP ' + res.status + ')';
+      try {
+        const json = await res.json();
+        if (json.mensagem) erroMsg = json.mensagem;
+      } catch (e) {
+        // Ignora se não for JSON e usa a msg padrão
+      }
+      throw new Error(erroMsg);
+    }
+
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -4423,7 +4435,15 @@ async function exportarRelatorio(formato) {
   let url = `/api/relatorios/${tipo}/exportar?formato=${formato}&data_inicio=${inicio}&data_fim=${fim}`;
   if (tipo === 'departamento') url = `/api/relatorios/departamento/${dep}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
   if (tipo === 'escala') url = `/api/relatorios/escala/${escala}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
-  if (tipo === 'marcacoes-diarias') url = `/api/relatorios/marcacoes-diarias/${funcId}?formato=${formato}&inicio=${inicio}&fim=${fim}`;
+  if (tipo === 'marcacoes-diarias') {
+    const selected = getSelectedFuncs();
+    if (selected.length === 0) {
+      toast('Seleccione pelo menos um funcionário.', 'err');
+      return;
+    }
+    const ids = selected.map(f => f.id).join(',');
+    url = `/api/relatorios/marcacoes-diarias?funcionario_ids=${ids}&formato=${formato}&inicio=${inicio}&fim=${fim}`;
+  }
 
   if (tipo === 'assiduidade' || tipo === 'horas') {
     if (dep)    url += `&departamento_id=${dep}`;

@@ -210,6 +210,9 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->get('/relatorios/individual/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'individual'])
           ->add(AuthMiddleware::class);
 
+    $group->get('/relatorios/marcacoes-diarias', [\App\Controllers\RelatorioController::class, 'marcacoesDiarias'])
+          ->add(AuthMiddleware::class);
+
     $group->get('/relatorios/marcacoes-diarias/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'marcacoesDiarias'])
           ->add(AuthMiddleware::class);
 
