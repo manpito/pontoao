@@ -103,24 +103,12 @@ class RelatorioController
         ]);
     }
 
-    public function marcacoesDiarias(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    private function gerarDadosMarcacoesDiarias(PDO $db, int $funcId, string $dataInicio, string $dataFim, string $perfil, $user, array $tenantInfo): ?array
     {
-        $tenantInfo = $this->getTenantInfo();
-        $user   = $request->getAttribute('auth_user');
-        $perfil = $request->getAttribute('auth_perfil');
-        $funcId = (int) $args['funcionario_id'];
-
         // RBAC: admin e rh vêem qualquer funcionário. Supervisor vê apenas funcionários da sua equipa. Funcionário vê apenas o seu próprio relatório.
         if ($perfil === 'funcionario' && $user->funcionario_id != $funcId) {
-            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório.']);
+            return null; // Return null to indicate unauthorized
         }
-
-        $params     = $request->getQueryParams();
-        $dataInicio = $params['inicio'] ?? date('Y-m-01');
-        $dataFim    = $params['fim']    ?? date('Y-m-t');
-        $formato    = $params['formato'] ?? 'json';
-
-        $db = $this->db();
 
         // 1. Dados do funcionário
         $stmtF = $db->prepare("
@@ -135,11 +123,11 @@ class RelatorioController
         $func = $stmtF->fetch(PDO::FETCH_ASSOC);
 
         if (!$func) {
-            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return null; // Funcionário não encontrado.
         }
 
         if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
-            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
+            return null; // Sem permissão para ver este relatório (não pertence à sua equipa).
         }
 
         // 2. Feriados
@@ -410,7 +398,7 @@ class RelatorioController
             $atual = strtotime('+1 day', $atual);
         }
 
-        $dados = [
+        return [
             'empresa' => ['nome' => $tenantInfo['nome_empresa'], 'nif' => $tenantInfo['nif']],
             'funcionario' => [
                 'id' => (int) $func['id'],
@@ -422,12 +410,60 @@ class RelatorioController
             'periodo' => ['inicio' => $dataInicio, 'fim' => $dataFim],
             'dias' => $dias
         ];
+    }
 
-        if ($formato === 'xlsx') {
-            return $this->exportarExcel($dados, 'marcacoes_diarias', "relatorio_marcacoes_{$func['numero_funcionario']}", $response);
+    public function marcacoesDiarias(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $tenantInfo = $this->getTenantInfo();
+        $user   = $request->getAttribute('auth_user');
+        $perfil = $request->getAttribute('auth_perfil');
+        $funcIdArg = $args['funcionario_id'] ?? null;
+
+        $params     = $request->getQueryParams();
+        $dataInicio = $params['inicio'] ?? date('Y-m-01');
+        $dataFim    = $params['fim']    ?? date('Y-m-t');
+        $formato    = $params['formato'] ?? 'json';
+        $funcionarioIdsParam = $params['funcionario_ids'] ?? '';
+
+        $db = $this->db();
+
+        $funcionarioIds = [];
+        if ($funcIdArg !== null) {
+            $funcionarioIds[] = (int) $funcIdArg;
+        } elseif (!empty($funcionarioIdsParam)) {
+            $funcionarioIds = array_filter(array_map('intval', explode(',', $funcionarioIdsParam)));
         }
 
-        return $this->json($response, 200, $dados);
+        if (empty($funcionarioIds)) {
+             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Nenhum funcionário seleccionado.']);
+        }
+
+        $resultados = [];
+        foreach ($funcionarioIds as $fid) {
+            $dadosFuncionario = $this->gerarDadosMarcacoesDiarias($db, $fid, $dataInicio, $dataFim, $perfil, $user, $tenantInfo);
+            if ($dadosFuncionario !== null) {
+                $resultados[] = $dadosFuncionario;
+            }
+        }
+
+        if (empty($resultados)) {
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Nenhum dado encontrado ou sem permissão.']);
+        }
+
+        if ($formato === 'xlsx') {
+            $filename = count($resultados) > 1 ? "relatorio_marcacoes_multiplo" : "relatorio_marcacoes_{$resultados[0]['funcionario']['numero']}";
+            return $this->exportarExcel(['relatorios' => $resultados], 'marcacoes_diarias', $filename, $response);
+        } elseif ($formato === 'csv') {
+            $filename = count($resultados) > 1 ? "relatorio_marcacoes_multiplo" : "relatorio_marcacoes_{$resultados[0]['funcionario']['numero']}";
+            return $this->exportarCSV(['relatorios' => $resultados], 'marcacoes_diarias', $filename, $response);
+        }
+
+        // Maintain JSON format compatibility for single user
+        if (count($resultados) === 1 && $funcIdArg !== null) {
+            return $this->json($response, 200, $resultados[0]);
+        }
+
+        return $this->json($response, 200, $resultados);
     }
 
     public function individual(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
@@ -467,11 +503,11 @@ class RelatorioController
         $func = $stmtF->fetch(PDO::FETCH_ASSOC);
 
         if (!$func) {
-            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+            return null; // Funcionário não encontrado.
         }
 
         if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
-            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para ver este relatório (não pertence à sua equipa).']);
+            return null; // Sem permissão para ver este relatório (não pertence à sua equipa).
         }
 
         // 2. Feriados
@@ -1674,42 +1710,50 @@ class RelatorioController
                 $row++;
             }
         } elseif ($tipo === 'marcacoes_diarias') {
-            $f = $dados['funcionario'];
             $sheet->setCellValue('A1', 'Relatório de Marcações Diárias');
             $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
-            $sheet->setCellValue('A3', 'Funcionário:'); $sheet->setCellValue('B3', $f['nome']);
-            $sheet->setCellValue('A4', 'Número:');      $sheet->setCellValue('B4', $f['numero']);
-            $sheet->setCellValue('A5', 'Período:');      $sheet->setCellValue('B5', $dados['periodo']['inicio'] . ' a ' . $dados['periodo']['fim']);
-            $sheet->getStyle('A3:A5')->getFont()->setBold(true);
+            $relatorios = $dados['relatorios'] ?? [$dados];
 
-            $sheet->fromArray(['Data', 'Dia', 'Hora', 'Tipo', 'Origem'], NULL, 'A7');
-            $sheet->getStyle('A7:E7')->applyFromArray($headerStyle);
+            $row = 3;
+            foreach ($relatorios as $relatorio) {
+                $f = $relatorio['funcionario'];
 
-            $row = 8;
-            foreach ($dados['dias'] as $d) {
-                if (empty($d['marcacoes'])) {
-                    $sheet->fromArray([$d['data'], $d['dia_semana'], 'Sem marcações'], NULL, 'A' . $row);
-                    $row++;
-                    continue;
-                }
-                foreach ($d['marcacoes'] as $idx => $m) {
-                    $sheet->fromArray([
-                        $idx === 0 ? $d['data'] : '',
-                        $idx === 0 ? $d['dia_semana'] : '',
-                        $m['hora'],
-                        $m['tipo'],
-                        $m['origem']
-                    ], NULL, 'A' . $row);
-                    $row++;
-                }
-                $sheet->setCellValue('C' . $row, 'Resumo:');
-                $priEnt = $d['resumo']['primeira_entrada'] ?? '--:--';
-                $ultSai = $d['resumo']['ultima_saida'] ?? '--:--';
-                $totH = $d['resumo']['total_horas'];
-                $sheet->setCellValue('D' . $row, "Ent: {$priEnt} | Sai: {$ultSai} | Total: {$totH}h");
-                $sheet->getStyle("C$row:D$row")->getFont()->setItalic(true)->setSize(9);
+                $sheet->setCellValue('A' . $row, 'Funcionário:'); $sheet->setCellValue('B' . $row, $f['nome']);
+                $sheet->setCellValue('A' . ($row+1), 'Número:');      $sheet->setCellValue('B' . ($row+1), $f['numero']);
+                $sheet->setCellValue('A' . ($row+2), 'Período:');      $sheet->setCellValue('B' . ($row+2), $relatorio['periodo']['inicio'] . ' a ' . $relatorio['periodo']['fim']);
+                $sheet->getStyle('A' . $row . ':A' . ($row+2))->getFont()->setBold(true);
+
+                $row += 4;
+                $sheet->fromArray(['Data', 'Dia', 'Hora', 'Tipo', 'Origem'], NULL, 'A' . $row);
+                $sheet->getStyle('A' . $row . ':E' . $row)->applyFromArray($headerStyle);
                 $row++;
+
+                foreach ($relatorio['dias'] as $d) {
+                    if (empty($d['marcacoes'])) {
+                        $sheet->fromArray([$d['data'], $d['dia_semana'], 'Sem marcações'], NULL, 'A' . $row);
+                        $row++;
+                        continue;
+                    }
+                    foreach ($d['marcacoes'] as $idx => $m) {
+                        $sheet->fromArray([
+                            $idx === 0 ? $d['data'] : '',
+                            $idx === 0 ? $d['dia_semana'] : '',
+                            $m['hora'],
+                            $m['tipo'],
+                            $m['origem']
+                        ], NULL, 'A' . $row);
+                        $row++;
+                    }
+                    $sheet->setCellValue('C' . $row, 'Resumo:');
+                    $priEnt = $d['resumo']['primeira_entrada'] ?? '--:--';
+                    $ultSai = $d['resumo']['ultima_saida'] ?? '--:--';
+                    $totH = $d['resumo']['total_horas'];
+                    $sheet->setCellValue('D' . $row, "Ent: {$priEnt} | Sai: {$ultSai} | Total: {$totH}h");
+                    $sheet->getStyle("C$row:D$row")->getFont()->setItalic(true)->setSize(9);
+                    $row++;
+                }
+                $row += 2; // Space between employees
             }
         }
 
@@ -1772,6 +1816,40 @@ class RelatorioController
                     $r['horas_extra'],
                     $r['faltas_injustificadas'] ?? 0,
                 ], ';');
+            }
+        } elseif ($tipo === 'marcacoes_diarias') {
+            $relatorios = $dados['relatorios'] ?? [$dados];
+            foreach ($relatorios as $relatorio) {
+                $f = $relatorio['funcionario'];
+                fputcsv($output, ['Funcionário:', $f['nome']], ';');
+                fputcsv($output, ['Número:', $f['numero']], ';');
+                fputcsv($output, ['Período:', $relatorio['periodo']['inicio'] . ' a ' . $relatorio['periodo']['fim']], ';');
+                fputcsv($output, [], ';');
+
+                fputcsv($output, ['Data', 'Dia', 'Hora', 'Tipo', 'Origem'], ';');
+
+                foreach ($relatorio['dias'] as $d) {
+                    if (empty($d['marcacoes'])) {
+                        fputcsv($output, [$d['data'], $d['dia_semana'], 'Sem marcações'], ';');
+                        continue;
+                    }
+                    foreach ($d['marcacoes'] as $idx => $m) {
+                        fputcsv($output, [
+                            $idx === 0 ? $d['data'] : '',
+                            $idx === 0 ? $d['dia_semana'] : '',
+                            $m['hora'],
+                            $m['tipo'],
+                            $m['origem']
+                        ], ';');
+                    }
+
+                    $priEnt = $d['resumo']['primeira_entrada'] ?? '--:--';
+                    $ultSai = $d['resumo']['ultima_saida'] ?? '--:--';
+                    $totH = $d['resumo']['total_horas'];
+                    fputcsv($output, ['', '', 'Resumo:', "Ent: {$priEnt} | Sai: {$ultSai} | Total: {$totH}h"], ';');
+                }
+                fputcsv($output, [], ';');
+                fputcsv($output, [], ';');
             }
         } else {
             fputcsv($output, ['Nº', 'Nome', 'Departamento', 'H. Efectivas', 'H. Esperadas', 'H. Extra', 'H. Défice', 'Atrasos (min)', 'Saldo (h)'], ';');
