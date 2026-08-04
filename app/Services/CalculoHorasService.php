@@ -40,8 +40,13 @@ class CalculoHorasService
         ];
 
         // Se houver férias aprovadas para este dia, nunca conta como falta e não conta horas trabalhadas
+        // Apenas conta como "dia de férias" se for um dia agendado de trabalho (não folga)
         if ($hasFerias) {
-            $resultado['tipo_presenca'] = 'ferias';
+            if ($turno && $turno['tipo'] !== 'folga') {
+                $resultado['tipo_presenca'] = 'ferias';
+            } else {
+                $resultado['tipo_presenca'] = 'ausente';
+            }
             $resultado['horas_trabalhadas'] = 0.0;
             return $resultado;
         }
