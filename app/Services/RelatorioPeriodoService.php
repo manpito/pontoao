@@ -123,9 +123,7 @@ class RelatorioPeriodoService
             $fimTs = strtotime($dataFim);
 
             $calculoService = new \App\Services\CalculoHorasService();
-            // Buscar feriados para sabermos que tipo de dia é (usaremos FeriadoService se possível, mas como é agregação ignoramos feriado no RelatorioPeriodo ou instanciamos se necessário, mas para horas trabalhadas totais só importam horas normais/extra)
-            // No Relatorio de Período as horas extra estão juntas, mas o `calcularDia` pede $tipoDia.
-            // Para ser correto, devíamos passar o tipo, mas como a agregação soma ambos (ou só extra base), faremos um fallback rápido.
+            $feriadoService = new \App\Services\FeriadoService($this->pdo);
 
             while ($atual <= $fimTs) {
                 $dia = date('Y-m-d', $atual);
@@ -154,9 +152,15 @@ class RelatorioPeriodoService
 
                 $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
 
-                // Tipo dia fallback (RelatorioPeriodo actual não deduz feriados para H02/H04 separadamente, soma tudo)
                 $diaSemana = (int) date('N', $atual);
-                $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util'; // Simplificação, pois o relatório de período agrupa tudo numa só coluna "horas_extra"
+                $isFeriado = $feriadoService->isFeriado($dia);
+
+                if ($isFeriado) {
+                    $tipoDia = 'feriado';
+                } else {
+                    $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util';
+                }
+
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
                 $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada, $hasFerias);

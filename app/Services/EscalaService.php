@@ -198,6 +198,7 @@ class EscalaService
 
             $substituicao = null;
             $tipoTurno = 'trabalho';
+            $tipoOriginal = 'trabalho';
             if ($excepcaoAusente) {
                 $tipoTurno = 'folga';
                 $substituicao = [
@@ -211,6 +212,7 @@ class EscalaService
                 'turno_id'              => 0,
                 'turno_nome'            => 'Normal',
                 'tipo'                  => $tipoTurno,
+                'tipo_original'         => $tipoOriginal,
                 'hora_entrada'          => $ht['hora_entrada'],
                 'hora_saida'            => $ht['hora_saida'],
                 'hora_inicio_intervalo' => $ht['hora_inicio_intervalo'],
@@ -271,6 +273,7 @@ class EscalaService
         }
 
         $tipoTurno = $turno['turno_tipo'];
+        $tipoOriginal = $turno['turno_tipo'];
         $substituicao = null;
         if ($excepcaoAusente) {
             $tipoTurno = 'folga'; // Virtualmente folga conforme sugestão do requisito
@@ -285,6 +288,7 @@ class EscalaService
             'turno_id' => (int) $turno['turno_id'],
             'turno_nome' => $turno['turno_nome'],
             'tipo' => $tipoTurno,
+            'tipo_original' => $tipoOriginal,
             'hora_entrada' => $turno['hora_entrada'],
             'hora_saida' => $turno['hora_saida'],
             'hora_inicio_intervalo' => $turno['hora_inicio_intervalo'],

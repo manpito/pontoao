@@ -40,9 +40,12 @@ class CalculoHorasService
         ];
 
         // Se houver férias aprovadas para este dia, nunca conta como falta e não conta horas trabalhadas
-        // Apenas conta como "dia de férias" se for um dia agendado de trabalho (não folga)
         if ($hasFerias) {
-            if ($turno && $turno['tipo'] !== 'folga') {
+            // Conta como "dia de férias" apenas se for um dia em que o funcionário originalmente
+            // estaria agendado para trabalhar (não folga) e não for um feriado.
+            // A EscalaService fornece 'tipo_original' antes de a excepção de férias transformar o dia em 'folga'.
+            $isTrabalhoAgendado = ($turno && ($turno['tipo_original'] ?? $turno['tipo']) !== 'folga');
+            if ($isTrabalhoAgendado && $tipoDia !== 'feriado') {
                 $resultado['tipo_presenca'] = 'ferias';
             } else {
                 $resultado['tipo_presenca'] = 'ausente';
