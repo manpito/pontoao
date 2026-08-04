@@ -368,7 +368,7 @@ class ExportacaoController
         $data       = date('dmY', strtotime($dataStr));
         $intParte   = (int) $quantidade;
         $decParte   = (int) round(($quantidade - $intParte) * 1000);
-        $qtd        = sprintf('%3d.%03d', $intParte, $decParte);
+        $qtd        = sprintf('%03d.%03d', $intParte, $decParte);
         return $tipo . $codPadded . $data . $codigo . $qtd . '0000';
     }
 
