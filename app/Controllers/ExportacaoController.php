@@ -364,11 +364,11 @@ class ExportacaoController
         string $codigo,
         float $quantidade
     ): string {
-        $codPadded  = str_pad($codFunc, 10, '0', STR_PAD_LEFT);
+        $codPadded  = str_pad($codFunc, 10, ' ', STR_PAD_LEFT);
         $data       = date('dmY', strtotime($dataStr));
         $intParte   = (int) $quantidade;
         $decParte   = (int) round(($quantidade - $intParte) * 1000);
-        $qtd        = sprintf('%03d.%03d', $intParte, $decParte);
+        $qtd        = sprintf('%3d.%03d', $intParte, $decParte);
         return $tipo . $codPadded . $data . $codigo . $qtd . '0000';
     }
 
