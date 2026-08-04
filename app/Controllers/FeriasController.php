@@ -277,8 +277,11 @@ class FeriasController
             $dataStr = $atual->format('Y-m-d');
             $turno = $escalaService->calcularTurnoEm((int) $pedido['funcionario_id'], $dataStr);
 
-            // Se o funcionário tem turno de trabalho previsto para este dia
-            if ($turno && $turno['tipo'] === 'trabalho') {
+            // Se o funcionário tem turno de trabalho previsto para este dia.
+            // turno_id=0 é um placeholder de regime normal (sem turno real associado
+            // à tabela turnos) — não há registo em turnos com id=0, por isso não é
+            // possível (nem necessário) criar aqui uma excepção de escala para esse dia.
+            if ($turno && $turno['tipo'] === 'trabalho' && (int) $turno['turno_id'] !== 0) {
                 $stmt = $db->prepare("
                     INSERT INTO escala_excepcoes (data, funcionario_ausente_id, funcionario_substituto_id, turno_id, motivo, criado_por)
                     VALUES (:data, :ausente, NULL, :turno, 'ferias', :criado_por)
