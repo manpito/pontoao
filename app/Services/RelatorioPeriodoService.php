@@ -64,9 +64,12 @@ class RelatorioPeriodoService
         // aprovado conte como dia trabalhado, mesmo sem marcações)
         $ids = array_column($funcionarios, 'id');
         $justificacoesPorFunc = [];
+        $feriasPorFunc = [];
 
         if (!empty($ids)) {
             $inStr = implode(',', $ids);
+
+            // Justificações de ausência
             $stmtJA = $this->pdo->prepare("
                 SELECT funcionario_id, data_inicio, data_fim, tipo, estado
                 FROM justificacoes_ausencia
@@ -80,6 +83,21 @@ class RelatorioPeriodoService
             foreach ($todasJustificacoes as $ja) {
                 $justificacoesPorFunc[$ja['funcionario_id']][] = $ja;
             }
+
+            // Férias aprovadas
+            $stmtFerias = $this->pdo->prepare("
+                SELECT funcionario_id, data_inicio, data_fim
+                FROM ferias_pedidos
+                WHERE funcionario_id IN ({$inStr})
+                  AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+                  AND estado = 'aprovado_rh'
+            ");
+            $stmtFerias->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
+            $todasFerias = $stmtFerias->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($todasFerias as $fp) {
+                $feriasPorFunc[$fp['funcionario_id']][] = $fp;
+            }
         }
 
         $resultado = [];
@@ -88,6 +106,7 @@ class RelatorioPeriodoService
             $funcId = (int) $func['id'];
             $marcacoesFunc = $todasMarcacoes[$funcId] ?? [];
             $justificacoesFunc = $justificacoesPorFunc[$funcId] ?? [];
+            $feriasFunc = $feriasPorFunc[$funcId] ?? [];
 
             $diasTrabalhados = 0;
             $horasTrabalhadas = 0.0;
@@ -95,6 +114,7 @@ class RelatorioPeriodoService
             $horasMeioDia = 0.0;
             $horasExtra = 0.0;
             $faltasInjustificadas = 0;
+            $diasFerias = 0;
 
             // Agrupar marcações por dia civil e processar turnos nocturnos
             $marcacoesPorDia = $this->agruparMarcacoesPorDia($marcacoesFunc, $funcId, $dataInicio, $dataFim);
@@ -113,6 +133,8 @@ class RelatorioPeriodoService
 
                 $hasServicoExterno = false;
                 $hasFaltaJustificada = false;
+                $hasFerias = false;
+
                 foreach ($justificacoesFunc as $ja) {
                     if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
                         if ($ja['tipo'] === 'servico_externo') {
@@ -123,6 +145,13 @@ class RelatorioPeriodoService
                     }
                 }
 
+                foreach ($feriasFunc as $fp) {
+                    if ($dia >= $fp['data_inicio'] && $dia <= $fp['data_fim']) {
+                        $hasFerias = true;
+                        break;
+                    }
+                }
+
                 $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
 
                 // Tipo dia fallback (RelatorioPeriodo actual não deduz feriados para H02/H04 separadamente, soma tudo)
@@ -130,7 +159,7 @@ class RelatorioPeriodoService
                 $tipoDia = ($diaSemana >= 6) ? 'sabado' : 'util'; // Simplificação, pois o relatório de período agrupa tudo numa só coluna "horas_extra"
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada);
+                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada, $hasFerias);
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
                     $meioDias += 1;
@@ -140,6 +169,8 @@ class RelatorioPeriodoService
                     $diasTrabalhados += 1;
                     $horasTrabalhadas += $resultadoDia['horas_trabalhadas'];
                     $horasExtra += ($resultadoDia['minutos_extra'] + $resultadoDia['minutos_extra_extraordinario']) / 60;
+                } elseif ($resultadoDia['tipo_presenca'] === 'ferias') {
+                    $diasFerias += 1;
                 }
 
                 if (!empty($resultadoDia['is_falta_injustificada'])) {
@@ -158,7 +189,8 @@ class RelatorioPeriodoService
                 'meio_dias' => $meioDias,
                 'horas_meio_dia' => round($horasMeioDia, 2),
                 'horas_extra' => round($horasExtra, 2),
-                'faltas_injustificadas' => $faltasInjustificadas
+                'faltas_injustificadas' => $faltasInjustificadas,
+                'dias_ferias' => $diasFerias
             ];
         }
 

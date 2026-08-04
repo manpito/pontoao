@@ -228,27 +228,36 @@ class FeriasController
                 ]);
             }
 
-            $db->prepare("
-                UPDATE ferias_pedidos
-                SET estado = 'aprovado_rh', aprovado_rh_por = :uid, data_aprovacao_final = NOW()
-                WHERE id = :id
-            ")->execute([':uid' => (int) $user->sub, ':id' => $id]);
+            try {
+                $db->beginTransaction();
 
-            // Descontar dias do saldo
-            $db->prepare("
-                UPDATE ferias
-                SET dias_gozados = dias_gozados + :dias,
-                    dias_pendentes = GREATEST(dias_pendentes - :dias, 0)
-                WHERE funcionario_id = :fid AND ano = :ano
-            ")->execute([
-                ':dias' => $pedido['dias_uteis'],
-                ':fid'  => $pedido['funcionario_id'],
-                ':ano'  => $ano,
-            ]);
+                $db->prepare("
+                    UPDATE ferias_pedidos
+                    SET estado = 'aprovado_rh', aprovado_rh_por = :uid, data_aprovacao_final = NOW()
+                    WHERE id = :id
+                ")->execute([':uid' => (int) $user->sub, ':id' => $id]);
 
-            $this->gerarExcecoesFerias($db, $pedido, (int) $user->sub);
+                // Descontar dias do saldo
+                $db->prepare("
+                    UPDATE ferias
+                    SET dias_gozados = dias_gozados + :dias,
+                        dias_pendentes = GREATEST(dias_pendentes - :dias2, 0)
+                    WHERE funcionario_id = :fid AND ano = :ano
+                ")->execute([
+                    ':dias'  => $pedido['dias_uteis'],
+                    ':dias2' => $pedido['dias_uteis'],
+                    ':fid'   => $pedido['funcionario_id'],
+                    ':ano'   => $ano,
+                ]);
 
-            return $this->json(200, ['mensagem' => 'Férias aprovadas com sucesso.']);
+                $this->gerarExcecoesFerias($db, $pedido, (int) $user->sub);
+
+                $db->commit();
+                return $this->json(200, ['mensagem' => 'Férias aprovadas com sucesso.']);
+            } catch (\Exception $e) {
+                $db->rollBack();
+                return $this->json(500, ['erro' => true, 'mensagem' => 'Erro interno ao aprovar as férias. A operação foi revertida.']);
+            }
         }
 
         return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para esta operação no estado actual do pedido.']);

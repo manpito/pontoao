@@ -20,11 +20,12 @@ class CalculoHorasService
         string $regimeEscala, // 'normal', 'turnos'
         string $dataStr,
         bool $hasServicoExterno = false,
-        bool $hasFaltaJustificada = false
+        bool $hasFaltaJustificada = false,
+        bool $hasFerias = false
     ): array {
         // Inicializar o resultado
         $resultado = [
-            'tipo_presenca'                => 'ausente', // completo, meio_dia, ausente, servico_externo
+            'tipo_presenca'                => 'ausente', // completo, meio_dia, ausente, servico_externo, ferias
             'horas_trabalhadas'            => 0.0,
             'minutos_totais'               => 0, // para manter compatibilidade com algumas chamadas
             'minutos_extra'                => 0,
@@ -37,6 +38,13 @@ class CalculoHorasService
             'ultima_saida_str'             => null,
             'is_falta_injustificada'       => false,
         ];
+
+        // Se houver férias aprovadas para este dia, nunca conta como falta e não conta horas trabalhadas
+        if ($hasFerias) {
+            $resultado['tipo_presenca'] = 'ferias';
+            $resultado['horas_trabalhadas'] = 0.0;
+            return $resultado;
+        }
 
         // Se houver serviço externo justificado, tratar como dia de trabalho completo
         if ($hasServicoExterno) {
