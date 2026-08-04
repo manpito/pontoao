@@ -681,6 +681,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
               <th style="text-align:right">Nº Meio Dia</th>
               <th style="text-align:right">Nº Horas Meio Dia</th>
               <th style="text-align:right">Nº Horas Extra</th>
+                  <th style="text-align:right;color:var(--blue)">Dias Férias</th>
               <th style="text-align:right">Nº de Faltas</th>
             </tr>
           </thead>
@@ -1712,6 +1713,7 @@ async function carregarRelatorioPeriodo() {
         <td style="text-align:right">${r.meio_dias}</td>
         <td style="text-align:right">${r.horas_meio_dia}</td>
         <td style="text-align:right">${r.horas_extra}</td>
+        <td style="text-align:right">${r.dias_ferias || 0}</td>
         <td style="text-align:right">${r.faltas_injustificadas}</td>
       </tr>
     `).join('');
@@ -1738,6 +1740,7 @@ function exportarRelatorioPeriodoPDF() {
       <td style="text-align:right">${r.meio_dias}</td>
       <td style="text-align:right">${r.horas_meio_dia}</td>
       <td style="text-align:right">${r.horas_extra}</td>
+      <td style="text-align:right">${r.dias_ferias || 0}</td>
       <td style="text-align:right">${r.faltas_injustificadas}</td>
     </tr>
   `).join('');
@@ -1769,6 +1772,7 @@ function exportarRelatorioPeriodoPDF() {
             <th style="text-align:right">Nº Meio Dia</th>
             <th style="text-align:right">Nº Horas Meio Dia</th>
             <th style="text-align:right">Nº Horas Extra</th>
+              <th style="text-align:right;color:var(--blue)">Dias Férias</th>
             <th style="text-align:right">Nº de Faltas</th>
           </tr>
         </thead>
