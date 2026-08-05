@@ -228,21 +228,6 @@ class ExportacaoController
                     }
                 }
 
-                // Faltas
-                $faltaEmitida = false;
-                if (isset($faltasMap[$fId][$dataStr])) {
-                    $estado = $faltasMap[$fId][$dataStr];
-                    $map = [
-                        'injustificada_meio_dia' => ['F08', 0.5],
-                        'justificada_trabalho'   => ['F10', 1.0],
-                        'justificada_motivo'     => ['F10', 1.0],
-                    ];
-                    if (isset($map[$estado])) {
-                        $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, $map[$estado][0], (float)$map[$estado][1]);
-                        $faltaEmitida = true;
-                    }
-                }
-
                 // Férias (ferias_pedidos)
                 if (isset($feriasMap[$fId])) {
                     foreach ($feriasMap[$fId] as $fp) {
@@ -286,6 +271,21 @@ class ExportacaoController
                 }
 
                 $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada);
+
+                // Faltas (priorizar presença real)
+                $faltaEmitida = false;
+                if (isset($faltasMap[$fId][$dataStr]) && !in_array($resultadoDia['tipo_presenca'], ['meio_dia', 'completo'])) {
+                    $estado = $faltasMap[$fId][$dataStr];
+                    $map = [
+                        'injustificada_meio_dia' => ['F08', 0.5],
+                        'justificada_trabalho'   => ['F10', 1.0],
+                        'justificada_motivo'     => ['F10', 1.0],
+                    ];
+                    if (isset($map[$estado])) {
+                        $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, $map[$estado][0], (float)$map[$estado][1]);
+                        $faltaEmitida = true;
+                    }
+                }
 
                 if (!empty($resultadoDia['is_falta_injustificada']) && !$faltaEmitida) {
                     $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F03', 1.0);
