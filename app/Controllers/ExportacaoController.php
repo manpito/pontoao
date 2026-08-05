@@ -307,10 +307,18 @@ class ExportacaoController
                 if ($extraExtraHours > 0 || $extraHours > 0) {
                     $totalExtra = $extraHours + $extraExtraHours; // Junta tudo, vamos reclassificar com base no tipoDia
 
-                    if ($tipoDia === 'sabado' || $tipoDia === 'domingo') {
-                        $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H03', $totalExtra);
-                    } elseif ($tipoDia === 'feriado') {
+                    $isFeriado = ($tipoDia === 'feriado');
+                    $isDescanso = false;
+                    if ($regimeEscala === 'turnos') {
+                        $isDescanso = ($turno && $turno['tipo'] === 'folga');
+                    } else {
+                        $isDescanso = ($tipoDia === 'sabado' || $tipoDia === 'domingo');
+                    }
+
+                    if ($isFeriado) {
                         $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H04', $totalExtra);
+                    } elseif ($isDescanso) {
+                        $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H03', $totalExtra);
                     } else {
                         // Dia normal - usar H01/H02 e acumulador mensal
                         $acumuladoAtual = $acumuladoH01H02[$mesCivil];

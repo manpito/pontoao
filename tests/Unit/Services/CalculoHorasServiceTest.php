@@ -79,8 +79,8 @@ class CalculoHorasServiceTest extends TestCase
 
         $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02', false, false, false, true);
 
-        $this->assertEquals('incoerente', $resultado['tipo_presenca']);
-        $this->assertEquals(0.0, $resultado['horas_trabalhadas']); // Valor fixo
+        $this->assertEquals('meio_dia', $resultado['tipo_presenca']);
+        $this->assertEquals(4.0, $resultado['horas_trabalhadas']); // Valor fixo
         $this->assertEquals(0, $resultado['minutos_extra']);
     }
 

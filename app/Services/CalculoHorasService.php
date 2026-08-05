@@ -105,22 +105,24 @@ class CalculoHorasService
             $resultado['ultima_saida_str'] = date('H:i', $ultimaSaidaTs);
         }
 
-        // Verificação de picagens incoerentes
-        // Qualquer dia civil em que as marcações não formam um par coerente de exactamente uma entrada seguida de uma saída
-        // deve ficar com 0 horas e ser sinalizado.
-        if (count($todasEntradas) !== 1 || count($todasSaidas) !== 1 || $primeiraEntradaTs > $ultimaSaidaTs) {
-            $resultado['tipo_presenca'] = 'incoerente';
-            $resultado['is_incoerente'] = true;
-            $resultado['horas_trabalhadas'] = 0.0;
-            $resultado['minutos_totais'] = 0;
-            $resultado['minutos_extra'] = 0;
-            $resultado['minutos_extra_extraordinario'] = 0;
-            $resultado['atraso_minutos'] = 0;
-            $resultado['saida_antecipada_minutos'] = 0;
-            return $resultado;
+        // Regra: se só tem entrada e não tem saída, ou vice-versa (exactamente 1 picagem), é MEIO DIA
+        if ((count($todasEntradas) === 1 && count($todasSaidas) === 0) || (count($todasSaidas) === 1 && count($todasEntradas) === 0)) {
+            $resultado['tipo_presenca'] = 'meio_dia';
+        } else {
+            // Se tem múltiplas picagens, mas não formam UM par válido (1 entrada, 1 saída na ordem certa) -> incoerente
+            if (count($todasEntradas) !== 1 || count($todasSaidas) !== 1 || $primeiraEntradaTs > $ultimaSaidaTs) {
+                $resultado['tipo_presenca'] = 'incoerente';
+                $resultado['is_incoerente'] = true;
+                $resultado['horas_trabalhadas'] = 0.0;
+                $resultado['minutos_totais'] = 0;
+                $resultado['minutos_extra'] = 0;
+                $resultado['minutos_extra_extraordinario'] = 0;
+                $resultado['atraso_minutos'] = 0;
+                $resultado['saida_antecipada_minutos'] = 0;
+                return $resultado;
+            }
+            $resultado['tipo_presenca'] = 'completo';
         }
-
-        $resultado['tipo_presenca'] = 'completo';
 
         // Horas efetivas esperadas pelo turno
         $minutosEsperados = 0;
