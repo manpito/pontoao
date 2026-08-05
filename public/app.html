@@ -3484,6 +3484,10 @@ function gerarHTMLRelatorioIndividual(res) {
         ocor = badges.join(' ');
     }
 
+    if (r.is_incoerente) {
+        ocor = '<span class="badge badge-danger" title="Picagens incoerentes. Necessita revisão.">Incoerente - Rever</span> ' + ocor;
+    }
+
     const canEdit = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
     let acts = '';
     if (canEdit && (r.tipo_dia === 'util' || (r.primeira_entrada || r.ultima_saida))) {

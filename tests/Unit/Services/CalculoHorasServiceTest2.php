@@ -34,7 +34,7 @@ class CalculoHorasServiceTest2 extends TestCase
             'tolerancia_entrada_min' => 10
         ];
 
-        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02');
+        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02', false, false, false, true);
 
         // Diferença = 11 mins de atraso. Tolerancia de 10. Atraso final deve ser 1 min.
         $this->assertEquals(1, $resultado['atraso_minutos']);

@@ -133,6 +133,10 @@ class RelatorioController
         // 2. Feriados
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
 
+        $stmtCfg = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
+        $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+        $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
+
         // 3. Marcações com origem e auditoria
         $fimQuery = $dataFim . ' 23:59:59';
         if ($this->periodoTemTurnoNocturno($db, $funcId, $dataInicio, $dataFim)) {
@@ -367,7 +371,7 @@ class RelatorioController
             }
 
             $calculoService = new \App\Services\CalculoHorasService();
-            $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno);
+            $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, false, false, $contarEntradaAntecipada);
 
             $minutosEsperados = 0;
             if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
@@ -390,6 +394,7 @@ class RelatorioController
                     'minutos_esperados'              => $minutosEsperados,
                     'minutos_extra'                  => $resultadoDia['minutos_extra'],
                     'minutos_extra_extraordinario'   => $resultadoDia['minutos_extra_extraordinario'],
+                    'is_incoerente'                  => $resultadoDia['is_incoerente'] ?? false,
                     'has_servico_externo'            => $hasServicoExterno ?? false,
                     'motivo_falta_justificada'       => $motivoFaltaJustificada ?? null
                 ]
@@ -512,6 +517,10 @@ class RelatorioController
 
         // 2. Feriados
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
+
+        $stmtCfg = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
+        $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+        $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
         // 3. Marcações
         $stmtM = $db->prepare("
