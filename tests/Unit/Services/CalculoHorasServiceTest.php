@@ -32,7 +32,7 @@ class CalculoHorasServiceTest extends TestCase
             'tolerancia_entrada_min' => 10
         ];
 
-        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02');
+        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02', false, false, false, true);
 
         $this->assertEquals('completo', $resultado['tipo_presenca']);
         $this->assertEquals(9, $resultado['horas_trabalhadas']); // (18-8) - 1h fixa de almoço
@@ -77,10 +77,10 @@ class CalculoHorasServiceTest extends TestCase
             'hora_saida' => '17:00:00'
         ];
 
-        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02');
+        $resultado = $this->service->calcularDia($marcacoes, $turno, 'util', 'normal', '2023-10-02', false, false, false, true);
 
-        $this->assertEquals('meio_dia', $resultado['tipo_presenca']);
-        $this->assertEquals(4.0, $resultado['horas_trabalhadas']); // Valor fixo
+        $this->assertEquals('incoerente', $resultado['tipo_presenca']);
+        $this->assertEquals(0.0, $resultado['horas_trabalhadas']); // Valor fixo
         $this->assertEquals(0, $resultado['minutos_extra']);
     }
 

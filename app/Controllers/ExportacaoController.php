@@ -39,9 +39,36 @@ class ExportacaoController
     {
         $params     = $request->getQueryParams();
         $mes        = $params['mes'] ?? date('Y-m');
-        $dataInicio = $mes . '-01';
-        $dataFim    = $mes . '-' . date('t', strtotime($dataInicio));
         $db         = $this->db();
+
+        // Obter configuração do ciclo de pagamento
+        $stmtCfg = $db->query("SELECT chave, valor FROM configuracoes WHERE chave IN ('periodo_dia_inicio','periodo_dia_fim')");
+        $config = [];
+        while ($row = $stmtCfg->fetch(PDO::FETCH_ASSOC)) {
+            $config[$row['chave']] = $row['valor'];
+        }
+
+        $diaInicio = (int) ($config['periodo_dia_inicio'] ?? 1);
+        $diaFim = (int) ($config['periodo_dia_fim'] ?? 31);
+        $ano = (int) substr($mes, 0, 4);
+        $mesInt = (int) substr($mes, 5, 2);
+
+        if ($diaInicio > 1) {
+            $mesAnterior = $mesInt === 1 ? 12 : $mesInt - 1;
+            $anoAnterior = $mesInt === 1 ? $ano - 1 : $ano;
+            $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mesAnterior, $anoAnterior);
+            $diaReal = min($diaInicio, $ultimoDia);
+            $dataInicio = sprintf('%04d-%02d-%02d', $anoAnterior, $mesAnterior, $diaReal);
+        } else {
+            $dataInicio = sprintf('%04d-%02d-%02d', $ano, $mesInt, 1);
+        }
+
+        $ultimoDiaMesFim = cal_days_in_month(CAL_GREGORIAN, $mesInt, $ano);
+        if ($diaFim >= $ultimoDiaMesFim || $diaFim === 31) {
+            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $ultimoDiaMesFim);
+        } else {
+            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $diaFim);
+        }
 
         // 2.2 — Buscar funcionários activos
         $idsParam = $params['funcionario_ids'] ?? '';
@@ -157,6 +184,11 @@ class ExportacaoController
 
         // 2.7 — Processar e gerar linhas
         $escalaService = new \App\Services\EscalaService($db);
+
+        $stmtCfg = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
+        $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+        $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
+
         $linhas = [];
 
         foreach ($funcionarios as $func) {
@@ -181,6 +213,8 @@ class ExportacaoController
             $atual = strtotime($dataInicio);
             $fimTs = strtotime($dataFim);
 
+            $acumuladoH01H02 = [];
+
             while ($atual <= $fimTs) {
                 $dataStr = date('Y-m-d', $atual);
                 $diaSemana = (int) date('N', $atual);
@@ -194,19 +228,18 @@ class ExportacaoController
                     }
                 }
 
-                // Faltas (marcacoes_em_falta)
-                // Suprimir F03 quando entretanto foi aprovado serviço externo para o dia
-                // (a falta pode ter sido classificada como injustificada_falta antes da aprovação)
-                if (isset($faltasMap[$fId][$dataStr]) && !($hasServicoExterno && $faltasMap[$fId][$dataStr] === 'injustificada_falta')) {
+                // Faltas
+                $faltaEmitida = false;
+                if (isset($faltasMap[$fId][$dataStr])) {
                     $estado = $faltasMap[$fId][$dataStr];
                     $map = [
-                        'injustificada_falta'    => ['F03', 1.0],
                         'injustificada_meio_dia' => ['F08', 0.5],
                         'justificada_trabalho'   => ['F10', 1.0],
                         'justificada_motivo'     => ['F10', 1.0],
                     ];
                     if (isset($map[$estado])) {
                         $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, $map[$estado][0], (float)$map[$estado][1]);
+                        $faltaEmitida = true;
                     }
                 }
 
@@ -236,18 +269,71 @@ class ExportacaoController
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
                 $calculoService = new \App\Services\CalculoHorasService();
-                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno);
+
+                $hasFerias = false;
+                if (isset($feriasMap[$fId])) {
+                    foreach ($feriasMap[$fId] as $fp) {
+                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim'] && $isUtil) {
+                            $hasFerias = true;
+                            break;
+                        }
+                    }
+                }
+
+                $hasFaltaJustificada = false;
+                if (isset($faltasMap[$fId][$dataStr]) && in_array($faltasMap[$fId][$dataStr], ['justificada_trabalho', 'justificada_motivo'])) {
+                    $hasFaltaJustificada = true;
+                }
+
+                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada);
+
+                if (!empty($resultadoDia['is_falta_injustificada']) && !$faltaEmitida) {
+                    $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F03', 1.0);
+                }
 
                 if ($resultadoDia['atraso_minutos'] > 0) {
                     $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F07', $resultadoDia['atraso_minutos'] / 60);
                 }
 
-                if ($resultadoDia['minutos_extra'] > 0) {
-                    $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H02', $resultadoDia['minutos_extra'] / 60);
+                // Acumulado do mês civil correspondente à data actual
+                $mesCivil = substr($dataStr, 0, 7);
+                if (!isset($acumuladoH01H02[$mesCivil])) {
+                    $acumuladoH01H02[$mesCivil] = 0.0;
                 }
 
-                if ($resultadoDia['minutos_extra_extraordinario'] > 0) {
-                    $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H04', $resultadoDia['minutos_extra_extraordinario'] / 60);
+                $extraHours = $resultadoDia['minutos_extra'] / 60;
+                $extraExtraHours = $resultadoDia['minutos_extra_extraordinario'] / 60;
+
+                if ($extraExtraHours > 0 || $extraHours > 0) {
+                    $totalExtra = $extraHours + $extraExtraHours; // Junta tudo, vamos reclassificar com base no tipoDia
+
+                    if ($tipoDia === 'sabado' || $tipoDia === 'domingo') {
+                        $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H03', $totalExtra);
+                    } elseif ($tipoDia === 'feriado') {
+                        $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H04', $totalExtra);
+                    } else {
+                        // Dia normal - usar H01/H02 e acumulador mensal
+                        $acumuladoAtual = $acumuladoH01H02[$mesCivil];
+
+                        if ($acumuladoAtual >= 30) {
+                            // Já passou das 30h, tudo vai para H02
+                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H02', $totalExtra);
+                            $acumuladoH01H02[$mesCivil] += $totalExtra;
+                        } elseif ($acumuladoAtual + $totalExtra <= 30) {
+                            // Ainda dentro do limite das 30h, tudo vai para H01
+                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H01', $totalExtra);
+                            $acumuladoH01H02[$mesCivil] += $totalExtra;
+                        } else {
+                            // Dia da transição (passa as 30h)
+                            $horasH01 = 30 - $acumuladoAtual;
+                            $horasH02 = $totalExtra - $horasH01;
+
+                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H01', $horasH01);
+                            $linhas[] = $this->formatarLinhaPrimavera('H', $codFunc, $dataStr, 'H02', $horasH02);
+
+                            $acumuladoH01H02[$mesCivil] += $totalExtra;
+                        }
+                    }
                 }
 
                 $atual = strtotime('+1 day', $atual);

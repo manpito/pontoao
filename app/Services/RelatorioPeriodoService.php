@@ -40,7 +40,10 @@ class RelatorioPeriodoService
         ");
         $funcionarios = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
-        // 2. Obter configurações de horas_extra_entrada_antecipada (se aplicável para cálculo, mas o user disse que descontamos 1h e calculamos horas brutas, extra é o que excede o turno.
+        // 2. Obter configurações de horas_extra_entrada_antecipada
+        $stmtCfg = $this->pdo->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
+        $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
+        $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
         // Ajuste para turnos nocturnos: estendemos a query até ao meio-dia do dia seguinte.
         // A filtragem e reatribuição de marcações (para turnos nocturnos) é tratada em agruparMarcacoesPorDia().
@@ -163,7 +166,7 @@ class RelatorioPeriodoService
 
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada, $hasFerias);
+                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada);
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
                     $meioDias += 1;

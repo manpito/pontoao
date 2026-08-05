@@ -21,7 +21,8 @@ class CalculoHorasService
         string $dataStr,
         bool $hasServicoExterno = false,
         bool $hasFaltaJustificada = false,
-        bool $hasFerias = false
+        bool $hasFerias = false,
+        bool $contarEntradaAntecipada = true
     ): array {
         // Inicializar o resultado
         $resultado = [
@@ -37,6 +38,7 @@ class CalculoHorasService
             'primeira_entrada_str'         => null,
             'ultima_saida_str'             => null,
             'is_falta_injustificada'       => false,
+            'is_incoerente'                => false,
         ];
 
         // Se houver férias aprovadas para este dia, nunca conta como falta e não conta horas trabalhadas
@@ -103,14 +105,22 @@ class CalculoHorasService
             $resultado['ultima_saida_str'] = date('H:i', $ultimaSaidaTs);
         }
 
-        // Regra: se só tem entrada e não tem saída, ou vice-versa, é MEIO DIA
-        if (count($todasEntradas) > 0 && count($todasSaidas) === 0) {
-            $resultado['tipo_presenca'] = 'meio_dia';
-        } elseif (count($todasSaidas) > 0 && count($todasEntradas) === 0) {
-            $resultado['tipo_presenca'] = 'meio_dia';
-        } elseif (count($todasEntradas) > 0 && count($todasSaidas) > 0) {
-            $resultado['tipo_presenca'] = 'completo';
+        // Verificação de picagens incoerentes
+        // Qualquer dia civil em que as marcações não formam um par coerente de exactamente uma entrada seguida de uma saída
+        // deve ficar com 0 horas e ser sinalizado.
+        if (count($todasEntradas) !== 1 || count($todasSaidas) !== 1 || $primeiraEntradaTs > $ultimaSaidaTs) {
+            $resultado['tipo_presenca'] = 'incoerente';
+            $resultado['is_incoerente'] = true;
+            $resultado['horas_trabalhadas'] = 0.0;
+            $resultado['minutos_totais'] = 0;
+            $resultado['minutos_extra'] = 0;
+            $resultado['minutos_extra_extraordinario'] = 0;
+            $resultado['atraso_minutos'] = 0;
+            $resultado['saida_antecipada_minutos'] = 0;
+            return $resultado;
         }
+
+        $resultado['tipo_presenca'] = 'completo';
 
         // Horas efetivas esperadas pelo turno
         $minutosEsperados = 0;
@@ -126,7 +136,17 @@ class CalculoHorasService
 
         } elseif ($resultado['tipo_presenca'] === 'completo') {
             // Regra autoritativa: (saída - entrada) - 1h de almoço fixa
-            $diffBruto = $ultimaSaidaTs - $primeiraEntradaTs;
+            $entradaCalculoTs = $primeiraEntradaTs;
+
+            // Truncar entrada antecipada se a configuração assim o ditar
+            if (!$contarEntradaAntecipada && $turno && $turno['tipo'] !== 'folga' && !empty($turno['hora_entrada'])) {
+                $tsPrevistoEntrada = strtotime($dataStr . ' ' . $turno['hora_entrada']);
+                if ($entradaCalculoTs < $tsPrevistoEntrada) {
+                    $entradaCalculoTs = $tsPrevistoEntrada;
+                }
+            }
+
+            $diffBruto = $ultimaSaidaTs - $entradaCalculoTs;
 
             // Tratamento de travessia civil manual baseada em turno atravessa dia civil, apenas se diffBruto negativo e for turno.
             if ($turno && $turno['atravessa_dia_civil'] && $diffBruto < 0) {
@@ -155,6 +175,15 @@ class CalculoHorasService
                         $resultado['minutos_extra_extraordinario'] = $minutosLiquido;
                     }
                 }
+            }
+
+            // Arredondamento legal para horas extra:
+            // < 15 mins = 0; 15-44 mins = 30; 45-60 mins = 60
+            if ($resultado['minutos_extra'] > 0) {
+                $resultado['minutos_extra'] = $this->arredondarHorasExtra($resultado['minutos_extra']);
+            }
+            if ($resultado['minutos_extra_extraordinario'] > 0) {
+                $resultado['minutos_extra_extraordinario'] = $this->arredondarHorasExtra($resultado['minutos_extra_extraordinario']);
             }
         }
 
@@ -189,5 +218,21 @@ class CalculoHorasService
         }
 
         return $resultado;
+    }
+
+    private function arredondarHorasExtra(int $minutos): int
+    {
+        $horas = (int) floor($minutos / 60);
+        $resto = $minutos % 60;
+
+        if ($resto < 15) {
+            $restoArredondado = 0;
+        } elseif ($resto <= 44) {
+            $restoArredondado = 30;
+        } else {
+            $restoArredondado = 60;
+        }
+
+        return ($horas * 60) + $restoArredondado;
     }
 }
