@@ -19,7 +19,7 @@ use Slim\Psr7\Response;
  */
 class ExportacaoController
 {
-    protected function db(): PDO
+    private function db(): PDO
     {
         $sub = TenantResolver::resolve() ?? ($_SERVER['HTTP_X_TENANT'] ?? null);
         return Database::tenant($sub);
