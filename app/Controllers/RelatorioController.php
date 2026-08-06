@@ -197,6 +197,16 @@ class RelatorioController
         $stmtJA->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
+        // Marcações em falta (para mostrar na view)
+        $stmtMF = $db->prepare("
+            SELECT id, data, nota_classificacao, estado
+            FROM marcacoes_em_falta
+            WHERE funcionario_id = :fid
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtMF->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $marcacoesFaltaList = $stmtMF->fetchAll(PDO::FETCH_ASSOC);
+
         // Agrupar por dia
         $marcPorDia = [];
         foreach ($marcacoesRaw as $m) {
@@ -358,6 +368,19 @@ class RelatorioController
 
             $hasServicoExterno = false;
             $motivoFaltaJustificada = null;
+
+            $marcacaoFaltaId = null;
+            $marcacaoFaltaEstado = null;
+            $marcacaoFaltaNota = null;
+            foreach ($marcacoesFaltaList as $mf) {
+                if ($mf['data'] === $dataStr) {
+                    $marcacaoFaltaId = (int)$mf['id'];
+                    $marcacaoFaltaEstado = $mf['estado'];
+                    $marcacaoFaltaNota = $mf['nota_classificacao'];
+                    break;
+                }
+            }
+
             if (isset($justificacoesAusencia)) {
                 foreach ($justificacoesAusencia as $ja) {
                     if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
@@ -396,7 +419,10 @@ class RelatorioController
                     'minutos_extra_extraordinario'   => $resultadoDia['minutos_extra_extraordinario'],
                     'is_incoerente'                  => $resultadoDia['is_incoerente'] ?? false,
                     'has_servico_externo'            => $hasServicoExterno ?? false,
-                    'motivo_falta_justificada'       => $motivoFaltaJustificada ?? null
+                    'motivo_falta_justificada'       => $motivoFaltaJustificada ?? null,
+                    'marcacao_falta_id'              => $marcacaoFaltaId,
+                    'marcacao_falta_estado'          => $marcacaoFaltaEstado,
+                    'marcacao_falta_nota'            => $marcacaoFaltaNota
                 ]
             ];
 
@@ -539,7 +565,7 @@ class RelatorioController
 
         // 4. Marcações em falta
         $stmtMF = $db->prepare("
-            SELECT data, nota_classificacao, estado
+            SELECT id, data, nota_classificacao, estado
             FROM marcacoes_em_falta
             WHERE funcionario_id = :fid
               AND data BETWEEN :ini AND :fim
@@ -662,11 +688,17 @@ class RelatorioController
             }
 
             // Verificar FM
+            $diaInfo['marcacao_falta_id'] = null;
+            $diaInfo['marcacao_falta_estado'] = null;
+            $diaInfo['marcacao_falta_nota'] = null;
             foreach ($mfList as $mf) {
                 if ($mf['data'] === $dataStr) {
                     $diaInfo['falta_marcacao'] = true;
                     $diaInfo['estado'] = 'fm';
                     $totalFM++;
+                    $diaInfo['marcacao_falta_id'] = (int) $mf['id'];
+                    $diaInfo['marcacao_falta_estado'] = $mf['estado'];
+                    $diaInfo['marcacao_falta_nota'] = $mf['nota_classificacao'];
                     $nota = mb_strtolower($mf['nota_classificacao'] ?? '');
                     if (str_contains($nota, 'entrada')) $diaInfo['entrada'] = 'FM';
                     if (str_contains($nota, 'saída') || str_contains($nota, 'saida')) $diaInfo['saida'] = 'FM';
