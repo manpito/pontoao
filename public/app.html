@@ -3465,6 +3465,13 @@ function gerarHTMLRelatorioIndividual(res) {
             diasPresentes++;
         } else if (r.motivo_falta_justificada) {
             ocor = `<span class="badge badge-blue">Justificado: ${esc(r.motivo_falta_justificada)}</span>`;
+        } else if (r.marcacao_falta_estado && r.marcacao_falta_estado !== 'pendente') {
+            const badgeClass = r.marcacao_falta_estado.startsWith('justificada') ? 'green' : 'red';
+            ocor = `<span class="badge badge-${badgeClass}">${esc(labelEstadoFalta(r.marcacao_falta_estado))}</span>`;
+            if (r.marcacao_falta_nota) {
+                ocor += ` <br><small style="color:var(--muted2)">Nota: ${esc(r.marcacao_falta_nota)}</small>`;
+            }
+            if (!r.marcacao_falta_estado.startsWith('justificada')) diasAusentes++;
         } else {
             ocor = '<span class="badge badge-red">Ausência</span>';
             diasAusentes++;
@@ -3493,7 +3500,16 @@ function gerarHTMLRelatorioIndividual(res) {
     if (canEdit && (r.tipo_dia === 'util' || (r.primeira_entrada || r.ultima_saida))) {
       if (ent) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${ent.id},'Entrada','${ent.hora}','${d.data}')" title="Editar entrada">✏</button> `;
       if (sai && (!ent || sai.id !== ent.id)) acts += `<button class="btn btn-sm no-print" onclick="abrirModalEditarMarcacao(${sai.id},'Saída','${sai.hora}','${d.data}')" title="Editar saída">✏</button> `;
-      if (!ent && !sai) acts = `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','entrada')">+ Registar</button>`;
+
+      if (!ent && !sai) {
+        if (r.marcacao_falta_estado && r.marcacao_falta_estado !== 'pendente') {
+            const notaFalta = (r.marcacao_falta_nota || '').split("'").join("&#39;");
+            acts = `<button class="btn btn-sm no-print" onclick="abrirModalClassificar(${r.marcacao_falta_id}, '${esc(res.funcionario.nome)}', '${d.data}', 'Falta de entrada', '${r.marcacao_falta_estado}', '${notaFalta}', 'entrada')">Editar</button>`;
+        } else {
+            acts = `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','entrada')">+ Registar</button>`;
+        }
+      }
+
       if (ent && !sai) acts += `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','saida')" title="Registar saída">+ Saída</button>`;
     }
 

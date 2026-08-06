@@ -175,13 +175,14 @@ class MarcacaoFaltaController
 
         // Verificar existência e RBAC
         $stmt = $db->prepare("
-            SELECT mf.id
+            SELECT mf.*
             FROM marcacoes_em_falta mf
             JOIN funcionarios f ON mf.funcionario_id = f.id
             WHERE mf.id = :id
         ");
         $stmt->execute([':id' => $id]);
-        if (!$stmt->fetch()) {
+        $mfAtual = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$mfAtual) {
             return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação em falta não encontrada.']);
         }
 
@@ -213,6 +214,18 @@ class MarcacaoFaltaController
             ':nota'          => $nota,
             ':classificador' => $userId,
             ':id'            => $id
+        ]);
+
+        // Log de auditoria
+        $db->prepare("
+            INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_antes, dados_depois, ip)
+            VALUES (:uid, 'marcacao_falta.classificada', 'marcacao_em_falta', :eid, :antes, :depois, :ip)
+        ")->execute([
+            ':uid'    => $user ? (int) $user->sub : null,
+            ':eid'    => $id,
+            ':antes'  => json_encode(['estado' => $mfAtual['estado'], 'nota_classificacao' => $mfAtual['nota_classificacao']]),
+            ':depois' => json_encode(['estado' => $estado, 'nota_classificacao' => $nota]),
+            ':ip'     => $_SERVER['REMOTE_ADDR'] ?? null,
         ]);
 
         // Criar marcações quando aplicável
