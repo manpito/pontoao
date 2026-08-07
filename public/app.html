@@ -3477,8 +3477,8 @@ function gerarHTMLRelatorioIndividual(res) {
             diasAusentes++;
         }
     }
-    else if (!ent && sai) ocor = '<span class="badge badge-warn">Meio Dia (só saída)</span>';
-    else if (ent && !sai) ocor = '<span class="badge badge-warn">Meio Dia (só entrada)</span>';
+    else if (!ent && sai) ocor = r.is_incoerente ? '' : '<span class="badge badge-warn">Meio Dia (só saída)</span>';
+    else if (ent && !sai) ocor = r.is_incoerente ? '' : '<span class="badge badge-warn">Meio Dia (só entrada)</span>';
     else {
         if (r.has_servico_externo) {
             ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
