@@ -124,7 +124,8 @@ class MarcacaoFaltaController
         $perfil = $request->getAttribute('auth_perfil');
         $db     = $this->db();
 
-        $periodo = $this->getPeriodoActual($db);
+        $periodoService = new \App\Services\PeriodoService($db);
+        $periodo = $periodoService->getPeriodoActual(null);
 
         $where = [
             "mf.estado = 'pendente'",
@@ -154,62 +155,6 @@ class MarcacaoFaltaController
         $total = (int) $stmt->fetchColumn();
 
         return $this->json(200, ['total' => $total, 'periodo_actual' => $periodo]);
-    }
-
-    private function getPeriodoActual(PDO $db): array
-    {
-        $stmtCfg = $db->query("SELECT chave, valor FROM configuracoes WHERE chave IN ('periodo_dia_inicio','periodo_dia_fim')");
-        $config = [];
-        while ($row = $stmtCfg->fetch(PDO::FETCH_ASSOC)) {
-            $config[$row['chave']] = $row['valor'];
-        }
-
-        $diaInicio = (int) ($config['periodo_dia_inicio'] ?? 1);
-        $diaFim = (int) ($config['periodo_dia_fim'] ?? 31);
-
-        $hoje = date('Y-m-d');
-        $ano = (int) date('Y', strtotime($hoje));
-        $mesInt = (int) date('m', strtotime($hoje));
-        $diaHoje = (int) date('d', strtotime($hoje));
-
-        if ($diaInicio > 1) {
-            if ($diaHoje < $diaInicio) {
-                // Estamos no período que começou no mês passado e termina neste mês
-                $mesAnterior = $mesInt === 1 ? 12 : $mesInt - 1;
-                $anoAnterior = $mesInt === 1 ? $ano - 1 : $ano;
-
-                $mesFim = $mesInt;
-                $anoFim = $ano;
-            } else {
-                // Estamos no período que começou neste mês e termina no próximo
-                $mesAnterior = $mesInt;
-                $anoAnterior = $ano;
-
-                $mesFim = $mesInt === 12 ? 1 : $mesInt + 1;
-                $anoFim = $mesInt === 12 ? $ano + 1 : $ano;
-            }
-
-            $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mesAnterior, $anoAnterior);
-            $diaReal = min($diaInicio, $ultimoDia);
-            $dataInicio = sprintf('%04d-%02d-%02d', $anoAnterior, $mesAnterior, $diaReal);
-
-            $ultimoDiaMesFim = cal_days_in_month(CAL_GREGORIAN, $mesFim, $anoFim);
-            if ($diaFim >= $ultimoDiaMesFim || $diaFim === 31) {
-                $dataFim = sprintf('%04d-%02d-%02d', $anoFim, $mesFim, $ultimoDiaMesFim);
-            } else {
-                $dataFim = sprintf('%04d-%02d-%02d', $anoFim, $mesFim, $diaFim);
-            }
-        } else {
-            $dataInicio = sprintf('%04d-%02d-%02d', $ano, $mesInt, 1);
-            $ultimoDiaMesFim = cal_days_in_month(CAL_GREGORIAN, $mesInt, $ano);
-            if ($diaFim >= $ultimoDiaMesFim || $diaFim === 31) {
-                $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $ultimoDiaMesFim);
-            } else {
-                $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $diaFim);
-            }
-        }
-
-        return ['inicio' => $dataInicio, 'fim' => $dataFim];
     }
 
     /**
