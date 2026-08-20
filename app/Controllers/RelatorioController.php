@@ -175,6 +175,17 @@ class RelatorioController
         $stmtJA->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
+        // Férias aprovadas no período
+        $stmtFerias = $db->prepare("
+            SELECT data_inicio, data_fim
+            FROM ferias_pedidos
+            WHERE funcionario_id = :fid
+              AND estado = 'aprovado_rh'
+              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+        ");
+        $stmtFerias->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
+        $feriasPedidos = $stmtFerias->fetchAll(PDO::FETCH_ASSOC);
+
         // Marcações em falta (para mostrar na view)
         $stmtMF = $db->prepare("
             SELECT id, data, nota_classificacao, estado
@@ -346,6 +357,7 @@ class RelatorioController
 
             $hasServicoExterno = false;
             $motivoFaltaJustificada = null;
+            $hasFerias = false;
 
             $marcacaoFaltaId = null;
             $marcacaoFaltaEstado = null;
@@ -371,8 +383,16 @@ class RelatorioController
                 }
             }
 
+            if (isset($feriasPedidos)) {
+                foreach ($feriasPedidos as $fp) {
+                    if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim']) {
+                        $hasFerias = true;
+                    }
+                }
+            }
+
             $calculoService = new \App\Services\CalculoHorasService();
-            $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, false, false, $contarEntradaAntecipada);
+            $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, false, $hasFerias, $contarEntradaAntecipada);
 
             $minutosEsperados = 0;
             if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
@@ -400,7 +420,8 @@ class RelatorioController
                     'motivo_falta_justificada'       => $motivoFaltaJustificada ?? null,
                     'marcacao_falta_id'              => $marcacaoFaltaId,
                     'marcacao_falta_estado'          => $marcacaoFaltaEstado,
-                    'marcacao_falta_nota'            => $marcacaoFaltaNota
+                    'marcacao_falta_nota'            => $marcacaoFaltaNota,
+                    'tipo_presenca'                  => $resultadoDia['tipo_presenca'] ?? null
                 ]
             ];
 

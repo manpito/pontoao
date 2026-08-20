@@ -3481,7 +3481,9 @@ function gerarHTMLRelatorioIndividual(res) {
     else if (r.tipo_dia === 'sabado') ocor = 'Sábado';
     else if (r.tipo_dia === 'domingo') ocor = 'Domingo';
     else if (!ent && !sai) {
-        if (r.has_servico_externo) {
+        if (r.tipo_presenca === 'ferias') {
+            ocor = '<span class="badge badge-blue">Férias</span>';
+        } else if (r.has_servico_externo) {
             ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
             diasPresentes++;
         } else if (r.motivo_falta_justificada) {
