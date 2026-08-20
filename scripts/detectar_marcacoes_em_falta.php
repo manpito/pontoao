@@ -101,16 +101,29 @@ foreach ($tenants as $tenant) {
                 continue;
             }
 
-            // iv. Verificar se existe férias aprovada
+            // iv. Verificar se existe férias aprovada (apenas aprovação final RH)
             $stmtFerias = $pdo->prepare("
                 SELECT id FROM ferias_pedidos
                 WHERE funcionario_id = :fid
                 AND :data BETWEEN data_inicio AND data_fim
-                AND estado IN ('aprovado_supervisor', 'aprovado_rh')
+                AND estado = 'aprovado_rh'
                 LIMIT 1
             ");
             $stmtFerias->execute(['fid' => $funcId, 'data' => $targetDate]);
             if ($stmtFerias->fetch()) {
+                continue;
+            }
+
+            // iv.b. Verificar se existe justificação de ausência aprovada (qualquer tipo)
+            $stmtJustificacao = $pdo->prepare("
+                SELECT id FROM justificacoes_ausencia
+                WHERE funcionario_id = :fid
+                AND :data BETWEEN data_inicio AND data_fim
+                AND estado = 'aprovado'
+                LIMIT 1
+            ");
+            $stmtJustificacao->execute(['fid' => $funcId, 'data' => $targetDate]);
+            if ($stmtJustificacao->fetch()) {
                 continue;
             }
 
