@@ -1651,6 +1651,10 @@ function applyPermissions() {
       hide('nav-cargos', true);
   }
 }
+
+let periodoActualFaltas = null;
+let filtroFaltasInicializado = false;
+
 function nav(page) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -2141,6 +2145,9 @@ async function verificarMarcacoesPendentes() {
   if (!el) return;
   try {
     const res = await api('GET', '/api/marcacoes-falta/pendentes');
+    if (res.periodo_actual) {
+        periodoActualFaltas = res.periodo_actual;
+    }
     const n = res.total || 0;
     countEl.textContent = n;
     el.style.display = n > 0 ? 'block' : 'none';
@@ -2284,6 +2291,20 @@ async function carregarMarcacoesFalta() {
   const el = document.getElementById('marcacoesFaltaTable');
   if (!el) return;
   el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+
+  if (!filtroFaltasInicializado) {
+      if (!periodoActualFaltas) {
+          try {
+              const res = await api('GET', '/api/marcacoes-falta/pendentes');
+              if (res.periodo_actual) periodoActualFaltas = res.periodo_actual;
+          } catch(_) {}
+      }
+      if (periodoActualFaltas) {
+          document.getElementById('faltaFiltroInicio').value = periodoActualFaltas.inicio;
+          document.getElementById('faltaFiltroFim').value = periodoActualFaltas.fim;
+      }
+      filtroFaltasInicializado = true;
+  }
 
   const estado = document.getElementById('faltaFiltroEstado').value;
   const inicio = document.getElementById('faltaFiltroInicio').value;

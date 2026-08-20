@@ -41,34 +41,12 @@ class ExportacaoController
         $mes        = $params['mes'] ?? date('Y-m');
         $db         = $this->db();
 
-        // Obter configuração do ciclo de pagamento
-        $stmtCfg = $db->query("SELECT chave, valor FROM configuracoes WHERE chave IN ('periodo_dia_inicio','periodo_dia_fim')");
-        $config = [];
-        while ($row = $stmtCfg->fetch(PDO::FETCH_ASSOC)) {
-            $config[$row['chave']] = $row['valor'];
-        }
-
-        $diaInicio = (int) ($config['periodo_dia_inicio'] ?? 1);
-        $diaFim = (int) ($config['periodo_dia_fim'] ?? 31);
+        $periodoService = new \App\Services\PeriodoService($db);
+        $periodo = $periodoService->getPeriodoActual($mes);
+        $dataInicio = $periodo['inicio'];
+        $dataFim = $periodo['fim'];
         $ano = (int) substr($mes, 0, 4);
         $mesInt = (int) substr($mes, 5, 2);
-
-        if ($diaInicio > 1) {
-            $mesAnterior = $mesInt === 1 ? 12 : $mesInt - 1;
-            $anoAnterior = $mesInt === 1 ? $ano - 1 : $ano;
-            $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mesAnterior, $anoAnterior);
-            $diaReal = min($diaInicio, $ultimoDia);
-            $dataInicio = sprintf('%04d-%02d-%02d', $anoAnterior, $mesAnterior, $diaReal);
-        } else {
-            $dataInicio = sprintf('%04d-%02d-%02d', $ano, $mesInt, 1);
-        }
-
-        $ultimoDiaMesFim = cal_days_in_month(CAL_GREGORIAN, $mesInt, $ano);
-        if ($diaFim >= $ultimoDiaMesFim || $diaFim === 31) {
-            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $ultimoDiaMesFim);
-        } else {
-            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mesInt, $diaFim);
-        }
 
         // 2.2 — Buscar funcionários activos
         $idsParam = $params['funcionario_ids'] ?? '';

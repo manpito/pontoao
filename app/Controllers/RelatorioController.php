@@ -60,33 +60,11 @@ class RelatorioController
 
         $db = $this->db();
 
-        // Obter configuração do ciclo de pagamento
-        $stmtCfg = $db->query("SELECT chave, valor FROM configuracoes WHERE chave IN ('periodo_dia_inicio','periodo_dia_fim')");
-        $config = [];
-        while ($row = $stmtCfg->fetch(PDO::FETCH_ASSOC)) {
-            $config[$row['chave']] = $row['valor'];
-        }
-
-        $diaInicio = (int) ($config['periodo_dia_inicio'] ?? 1);
-        $diaFim = (int) ($config['periodo_dia_fim'] ?? 31);
-
-        // Calcular datas tal como PeriodoController::calcularDataInicio/Fim
-        if ($diaInicio > 1) {
-            $mesAnterior = $mes === 1 ? 12 : $mes - 1;
-            $anoAnterior = $mes === 1 ? $ano - 1 : $ano;
-            $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mesAnterior, $anoAnterior);
-            $diaReal = min($diaInicio, $ultimoDia);
-            $dataInicio = sprintf('%04d-%02d-%02d', $anoAnterior, $mesAnterior, $diaReal);
-        } else {
-            $dataInicio = sprintf('%04d-%02d-%02d', $ano, $mes, 1);
-        }
-
-        $ultimoDia = cal_days_in_month(CAL_GREGORIAN, $mes, $ano);
-        if ($diaFim >= $ultimoDia || $diaFim === 31) {
-            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mes, $ultimoDia);
-        } else {
-            $dataFim = sprintf('%04d-%02d-%02d', $ano, $mes, $diaFim);
-        }
+        $periodoService = new \App\Services\PeriodoService($db);
+        $mesFormat = sprintf('%04d-%02d', $ano, $mes);
+        $periodo = $periodoService->getPeriodoActual($mesFormat);
+        $dataInicio = $periodo['inicio'];
+        $dataFim = $periodo['fim'];
 
         // Se forneceram datas explícitas, usar as datas explícitas
         if (!empty($params['data_inicio'])) $dataInicio = $params['data_inicio'];

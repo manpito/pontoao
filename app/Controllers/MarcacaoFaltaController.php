@@ -124,8 +124,18 @@ class MarcacaoFaltaController
         $perfil = $request->getAttribute('auth_perfil');
         $db     = $this->db();
 
-        $where = ["mf.estado = 'pendente'"];
-        $bind  = [];
+        $periodoService = new \App\Services\PeriodoService($db);
+        $periodo = $periodoService->getPeriodoActual(null);
+
+        $where = [
+            "mf.estado = 'pendente'",
+            "mf.data >= :data_inicio",
+            "mf.data <= :data_fim"
+        ];
+        $bind  = [
+            ':data_inicio' => $periodo['inicio'],
+            ':data_fim'    => $periodo['fim']
+        ];
 
         if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
             $where[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
@@ -144,7 +154,7 @@ class MarcacaoFaltaController
         $stmt->execute($bind);
         $total = (int) $stmt->fetchColumn();
 
-        return $this->json(200, ['total' => $total]);
+        return $this->json(200, ['total' => $total, 'periodo_actual' => $periodo]);
     }
 
     /**
