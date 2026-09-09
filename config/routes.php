@@ -430,6 +430,17 @@ $group->get('/relatorios/periodo/exportar',            [\App\Controllers\Relator
 
     $group->get('/terminais/{id}/ping',                   [\App\Controllers\TerminalController::class, 'ping'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
+    // --- Dahua Sync ---
+    $group->post('/dahua/sync/funcionario/{id}',          [\App\Controllers\DahuaSyncController::class, 'syncFuncionario'])
+          ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+    $group->post('/dahua/sync/all',                       [\App\Controllers\DahuaSyncController::class, 'syncAll'])
+          ->add(AuthMiddleware::role(['super_admin_tenant']));
+
+    $group->delete('/dahua/sync/funcionario/{numero}',    [\App\Controllers\DahuaSyncController::class, 'deleteFuncionario'])
+          ->add(AuthMiddleware::role(['super_admin_tenant']));
+
 })->add(TenantMiddleware::tenantOnly());
 
 // ============================================================
