@@ -60,12 +60,7 @@ class DahuaBridgeController
             return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
         }
 
-        // Obfuscate keys to prevent triggering automated grep/security scanners
-        $kF = 'Finger' . 'PrintData';
-        $kP = 'Pass' . 'word';
-        $kC = 'Card' . 'No';
-
-        if (isset($data[$kF]) || isset($data[$kP]) || isset($data[$kC])) {
+        if (isset($data['FingerPrintData']) || isset($data['Password']) || isset($data['CardNo'])) {
             $response->getBody()->write(json_encode(["result" => "ok"]));
             return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
         }

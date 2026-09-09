@@ -166,14 +166,11 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testPayloadComBiometricos()
     {
-        // Obfuscate key to prevent grep failures
-        $kF = 'Finger' . 'PrintData';
-
         $payload = json_encode([
             "Code" => "AccessControl",
             "Data" => [
                 "UserID" => "1",
-                $kF => base64_encode("dummy"),
+                "FingerPrintData" => base64_encode("dummy"),
             ]
         ]);
 
