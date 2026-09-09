@@ -6,10 +6,27 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use App\Config\Database;
 use App\Services\DahuaISAPIService;
-use Dotenv\Dotenv;
 
-$dotenv = Dotenv::createImmutable(__DIR__ . '/..');
-$dotenv->load();
+$envFile = __DIR__ . '/../.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (str_starts_with(trim($line), '#')) continue;
+        $pos = strpos($line, '=');
+        if ($pos === false) continue;
+        $key = trim(substr($line, 0, $pos));
+        $value = trim(substr($line, $pos + 1));
+        // Remover aspas envolventes se existirem
+        if (strlen($value) >= 2 && (
+            (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+            (str_starts_with($value, "'") && str_ends_with($value, "'"))
+        )) {
+            $value = substr($value, 1, -1);
+        }
+        putenv("$key=$value");
+        $_ENV[$key] = $value;
+    }
+}
 
 $tenantId = $argv[1] ?? null;
 
