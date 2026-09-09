@@ -59,7 +59,7 @@ try {
         exit(0);
     }
 
-    $stmtFuncionarios = $db->query("SELECT numero_funcionario, nome FROM funcionarios WHERE estado = 'activo'");
+    $stmtFuncionarios = $db->query("SELECT numero_funcionario, nome_completo AS nome FROM funcionarios WHERE estado = 'activo'");
     $funcionarios = $stmtFuncionarios->fetchAll(PDO::FETCH_ASSOC);
 
     if (empty($funcionarios)) {
