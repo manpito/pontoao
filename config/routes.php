@@ -449,6 +449,9 @@ $app->get('/iclock/getrequest', [\App\Controllers\ZkBridgeController::class, 'ad
 $app->post('/iclock/devicecmd', [\App\Controllers\ZkBridgeController::class, 'admsDeviceCmd'])
     ;
 
+$app->post('/dahua/events', [\App\Controllers\DahuaBridgeController::class, 'receive'])
+    ->add(\App\Middleware\DahuaBridgeAuthMiddleware::class);
+
 $app->get('/ponto[/{params:.*}]', function ($request, $response) {
     $file = __DIR__ . '/../public/ponto.html';
     if (file_exists($file)) {
