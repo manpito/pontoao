@@ -42,7 +42,7 @@ class DahuaSyncController
         $db = Database::tenant($tenantId);
         $id = (int)$args['id'];
 
-        $stmtFunc = $db->prepare("SELECT numero_funcionario, nome, estado FROM funcionarios WHERE id = :id");
+        $stmtFunc = $db->prepare("SELECT numero_funcionario, nome_completo AS nome, estado FROM funcionarios WHERE id = :id");
         $stmtFunc->execute(['id' => $id]);
         $funcionario = $stmtFunc->fetch(PDO::FETCH_ASSOC);
 
