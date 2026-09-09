@@ -14,13 +14,8 @@ $dotenv->load();
 $tenantId = $argv[1] ?? null;
 
 if (!$tenantId || $tenantId === 'default') {
-    // Para simplificar, num ambiente real o tenantId é obrigatório ou iteramos todos
-    // Como o controller passa o TenantResolver::resolve() ?? 'default', lidamos com o 'default' aqui, se for o caso
-    // Para já vamos assumir que o tenant é passado correctamente ou abortamos
-    if (!$tenantId || $tenantId === 'default') {
-        echo "Tenant ID não fornecido ou inválido.\n";
-        exit(1);
-    }
+    echo "Tenant ID não fornecido ou inválido.\n";
+    exit(1);
 }
 
 $logFile = '/var/www/saas/logs/dahua_sync.log';
@@ -33,7 +28,11 @@ $logSync = function(string $message) use ($logFile) {
 try {
     $db = Database::tenant($tenantId);
     $dahuaService = new DahuaISAPIService();
-    $appKey = $_ENV['APP_KEY'] ?? 'default_app_key_if_missing';
+    if (empty($_ENV['APP_KEY'])) {
+        $logSync("CRITICAL: APP_KEY não configurada no .env. Abortando.");
+        exit(1);
+    }
+    $appKey = $_ENV['APP_KEY'];
 
     $stmtRelogios = $db->query("SELECT * FROM relogios WHERE tipo_protocolo = 'dahua' AND activo = 1");
     $relogios = $stmtRelogios->fetchAll(PDO::FETCH_ASSOC);

@@ -19,7 +19,10 @@ class DahuaSyncController
     public function __construct()
     {
         $this->dahuaService = new DahuaISAPIService();
-        $this->appKey = $_ENV['APP_KEY'] ?? 'default_app_key_if_missing';
+        if (empty($_ENV['APP_KEY'])) {
+            throw new \RuntimeException('APP_KEY não configurada no .env — não é possível cifrar/decifrar passwords de dispositivos.');
+        }
+        $this->appKey = $_ENV['APP_KEY'];
     }
 
     private function decryptPassword(string $encrypted): string
@@ -81,7 +84,10 @@ class DahuaSyncController
 
     public function syncAll(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $tenantId = TenantResolver::resolve() ?? 'default';
+        $tenantId = TenantResolver::resolve();
+        if (!$tenantId) {
+            return $this->jsonResponse($response, ['error' => 'Tenant não identificado'], 400);
+        }
 
         $scriptPath = realpath(__DIR__ . '/../../scripts/dahua_sync_all.php');
         if (!$scriptPath) {
