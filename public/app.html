@@ -617,6 +617,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
             <button class="btn" onclick="abrirModalAssociarDep()">+ Associar departamento</button>
           </div>
         </div>
+        <div id="terminalAgentInstall" style="display:none;margin-top:20px;padding:15px;background:var(--bg2);border-radius:var(--radius)">
+          <div class="card-title">Agente de Sincronização</div>
+          <p style="margin:10px 0;font-size:0.9rem;color:var(--text)">O agente sincroniza automaticamente os funcionários do PontoAO para este relógio. Instale-o num PC ligado à mesma rede local que o relógio.</p>
+          <button class="btn" onclick="obterComandoAgente()">Obter comando de instalação</button>
+          <p style="margin-top:10px;font-size:0.85rem;color:var(--muted2)">Nota: Execute o comando no PowerShell como Administrador no PC do escritório.</p>
+        </div>
         <div id="terminalDepsLista"></div>
         <div id="terminalPingResult" style="margin-top:12px"></div>
       </div>
@@ -3042,20 +3048,36 @@ async function carregarTerminais() {
   try {
     const res = await api('GET', '/api/terminais');
     _terminais = res.dados || [];
-    const rows = _terminais.map(t => `<tr>
-      <td><strong>${t.nome}</strong></td>
-      <td>${t.localizacao || '—'}</td>
-      <td><span style="font-family:var(--mono)">${t.ip}:${t.porta}</span></td>
-      <td>${t.modelo}</td>
-      <td><span class="badge badge-${t.online ? 'green' : 'gray'}">${t.online ? 'Online' : 'Offline'}</span></td>
-      <td><small style="color:var(--muted2)">${t.ultimo_heartbeat || 'Nunca'}</small></td>
-      <td>
-        <button class="btn btn-sm" onclick="verDetalheTerminal(${t.id})">Detalhe</button>
-        <button class="btn btn-sm" onclick="abrirModalTerminal(${t.id})">Editar</button>
-      </td>
-    </tr>`).join('');
+    const rows = _terminais.map(t => {
+      let estadoTd, heartbeatTd;
+      if (t.modelo === 'dahua') {
+        let ultimaSync = 'Nunca sincronizado';
+        if (t.ultima_sincronizacao) {
+            const d = new Date(t.ultima_sincronizacao);
+            const m = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][d.getMonth()];
+            ultimaSync = `${d.getDate()} ${m} ${d.getFullYear()}, ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+        estadoTd = `<td>Última Sincronização</td>`;
+        heartbeatTd = `<td><small style="color:var(--muted2)">${ultimaSync}</small></td>`;
+      } else {
+        estadoTd = `<td><span class="badge badge-${t.online ? 'green' : 'gray'}">${t.online ? 'Online' : 'Offline'}</span></td>`;
+        heartbeatTd = `<td><small style="color:var(--muted2)">${t.ultimo_heartbeat || 'Nunca'}</small></td>`;
+      }
+      return `<tr>
+        <td><strong>${t.nome}</strong></td>
+        <td>${t.localizacao || '—'}</td>
+        <td><span style="font-family:var(--mono)">${t.ip}:${t.porta}</span></td>
+        <td>${t.modelo}</td>
+        ${estadoTd}
+        ${heartbeatTd}
+        <td>
+          <button class="btn btn-sm" onclick="verDetalheTerminal(${t.id})">Detalhe</button>
+          <button class="btn btn-sm" onclick="abrirModalTerminal(${t.id})">Editar</button>
+        </td>
+      </tr>`;
+    }).join('');
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Nome</th><th>Localização</th><th>IP:Porta</th><th>Modelo</th><th>Estado</th><th>Último Heartbeat</th><th>Acções</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Localização</th><th>IP:Porta</th><th>Modelo</th><th>Estado</th><th>Último Heartbeat/Sync</th><th>Acções</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="7" class="empty">Nenhum terminal registado.</td></tr>'}</tbody>
     </table>`;
   } catch (e) { el.innerHTML = '<div class="empty">Erro ao carregar terminais.</div>'; }
@@ -3132,6 +3154,12 @@ async function verDetalheTerminal(id) {
     document.getElementById('assocTermId').value = t.id;
     document.getElementById('terminalPingResult').innerHTML = '';
 
+    if (t.modelo === 'dahua') {
+      document.getElementById('terminalAgentInstall').style.display = 'block';
+    } else {
+      document.getElementById('terminalAgentInstall').style.display = 'none';
+    }
+
     const deps = t.departamentos || [];
     let depsHtml = '<div style="margin-top:20px"><div class="card-title">Departamentos Autorizados</div>';
     depsHtml += `<table class="tbl" style="margin-top:12px"><thead><tr><th>Departamento</th><th>Acções</th></tr></thead><tbody>`;
@@ -3145,6 +3173,24 @@ async function verDetalheTerminal(id) {
     document.getElementById('terminalDetalhe').style.display = 'block';
     document.getElementById('terminalDetalhe').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { toast('Erro ao carregar detalhes: ' + e.message, 'err'); }
+}
+
+async function obterComandoAgente() {
+  const id = document.getElementById('assocTermId').value;
+  try {
+    const res = await api('GET', `/api/terminais/${id}/agent-installer`);
+    if (res.erro) {
+      toast(res.mensagem, 'err');
+      return;
+    }
+    const html = `
+      <p>${esc(res.instrucoes)}</p>
+      <textarea readonly style="width:100%;height:100px;margin-top:10px;font-family:monospace;padding:10px;" onclick="this.select()">${esc(res.comando)}</textarea>
+    `;
+    modalContent('Instalar Agente', html);
+  } catch (e) {
+    toast('Erro ao obter comando: ' + e.message, 'err');
+  }
 }
 
 async function pingTerminal() {
