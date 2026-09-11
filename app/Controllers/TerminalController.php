@@ -24,7 +24,8 @@ class TerminalController
         $db  = Database::tenant($sub);
 
         $stmt = $db->query("
-            SELECT r.*, d.nome AS departamento_default_nome
+            SELECT r.*, d.nome AS departamento_default_nome,
+                   (SELECT MAX(timestamp) FROM agent_sync_log WHERE relogio_id = r.id AND sucesso = 1) AS ultima_sincronizacao
             FROM relogios r
             LEFT JOIN departamentos d ON r.default_departamento_id = d.id
             ORDER BY r.nome ASC
@@ -38,6 +39,35 @@ class TerminalController
         }
 
         return $this->json($response, 200, ['dados' => $dados]);
+    }
+
+    /**
+     * GET /api/terminais/{id}/agent-installer
+     */
+    public function agentInstaller(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id  = (int) $args['id'];
+        $sub = TenantResolver::resolve();
+        $db  = Database::tenant($sub);
+
+        $stmt = $db->prepare("SELECT * FROM relogios WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $terminal = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$terminal) {
+            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Terminal não encontrado.']);
+        }
+
+        if ($terminal['tipo_protocolo'] !== 'dahua') {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Este terminal não usa o protocolo Dahua.']);
+        }
+
+        $comando = "iwr -useb 'https://rh.ftl-angola.net/install/agent.ps1?tenant={$sub}&key=SUBSTITUIR_PELA_CHAVE_RAW' | iex";
+
+        return $this->json($response, 200, [
+            'comando' => $comando,
+            'instrucoes' => 'Substitua SUBSTITUIR_PELA_CHAVE_RAW pela chave de API do agente. Execute este comando no PowerShell como Administrador no PC do escritório.'
+        ]);
     }
 
     /**
