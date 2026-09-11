@@ -11,6 +11,8 @@ use App\Controllers\Auth\SuperAdminAuthController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\SuperAdminMiddleware;
 use App\Middleware\TenantMiddleware;
+use App\Controllers\AgentController;
+use App\Middleware\AgentAuthMiddleware;
 use App\Middleware\RateLimitMiddleware;
 use App\Config\TenantResolver;
 
@@ -69,6 +71,12 @@ $app->group('/super-admin', function (\Slim\Routing\RouteCollectorProxy $group) 
 // ============================================================
 
 $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
+
+    $group->group('/agent', function (\Slim\Routing\RouteCollectorProxy $group) {
+        $group->get('/funcionarios', [AgentController::class, 'getFuncionarios']);
+        $group->get('/relogios',     [AgentController::class, 'getRelogios']);
+        $group->post('/sync-log',    [AgentController::class, 'postSyncLog']);
+    })->add(AgentAuthMiddleware::class);
 
     // --- Autenticação tenant ---
     $group->post('/auth/login',   [AuthController::class, 'login'])

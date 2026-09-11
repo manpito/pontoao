@@ -172,6 +172,33 @@ function bootstrap_db(): PDO
             aprovado_em TEXT NULL,
             motivo_rejeicao TEXT NULL
         );
+        CREATE TABLE relogios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            device_url TEXT,
+            device_user TEXT,
+            device_password_enc TEXT,
+            tipo_protocolo TEXT NOT NULL DEFAULT 'zkteco',
+            api_key_hash TEXT,
+            activo INTEGER NOT NULL DEFAULT 1
+        );
+
+        CREATE TABLE relogio_departamentos (
+            relogio_id INTEGER NOT NULL,
+            departamento_id INTEGER NOT NULL,
+            PRIMARY KEY (relogio_id, departamento_id)
+        );
+
+        CREATE TABLE agent_sync_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            relogio_id INTEGER NOT NULL,
+            funcionario_id INTEGER NOT NULL,
+            operacao TEXT NOT NULL,
+            sucesso INTEGER NOT NULL DEFAULT 1,
+            erro TEXT,
+            timestamp TEXT NOT NULL,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
     ");
 
     return $pdo;
