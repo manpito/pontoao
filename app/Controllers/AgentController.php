@@ -110,9 +110,9 @@ class AgentController
         try {
             $stmt = $db->prepare("
                 INSERT INTO agent_sync_log
-                (relogio_id, funcionario_id, operacao, sucesso, erro, timestamp, criado_em)
+                (relogio_id, funcionario_id, operacao, sucesso, erro, timestamp)
                 VALUES
-                (:relogio_id, :funcionario_id, :operacao, :sucesso, :erro, :timestamp, NOW())
+                (:relogio_id, :funcionario_id, :operacao, :sucesso, :erro, :timestamp)
             ");
 
             $stmt->execute([

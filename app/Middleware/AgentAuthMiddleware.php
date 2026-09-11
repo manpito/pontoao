@@ -26,28 +26,20 @@ class AgentAuthMiddleware implements MiddlewareInterface
             return (new Response(401))->withHeader('Content-Type', 'application/json');
         }
 
-        $apiKey = substr($authHeader, 7);
-        $hashedApiKey = hash('sha256', $apiKey);
+        $apiKey         = substr($authHeader, 7);
+        $expectedHash   = $_ENV['AGENT_API_KEY_HASH'] ?? '';
+
+        if (empty($expectedHash)) {
+            return (new Response(401))->withHeader('Content-Type', 'application/json');
+        }
+
+        if (!hash_equals($expectedHash, hash('sha256', $apiKey))) {
+            return (new Response(401))->withHeader('Content-Type', 'application/json');
+        }
 
         try {
             $db = Database::tenant($tenantId);
         } catch (\Exception $e) {
-            return (new Response(401))->withHeader('Content-Type', 'application/json');
-        }
-
-        $stmt = $db->prepare("SELECT api_key_hash FROM relogios WHERE activo = 1");
-        $stmt->execute();
-        $hashes = $stmt->fetchAll(\PDO::FETCH_COLUMN);
-
-        $valid = false;
-        foreach ($hashes as $dbHash) {
-            if ($dbHash && hash_equals($dbHash, $hashedApiKey)) {
-                $valid = true;
-                break;
-            }
-        }
-
-        if (!$valid) {
             return (new Response(401))->withHeader('Content-Type', 'application/json');
         }
 

@@ -35,13 +35,7 @@ class AgentControllerTest extends TestCase
 
         $appKey = '12345678901234567890123456789012'; // 32 chars
         $_ENV['APP_KEY'] = $appKey;
-
-        // Mock DB credentials for Database::tenant in Middleware by directly mocking static method if possible,
-        // or just test middleware directly bypassing Database::tenant.
-        // Actually, since Database is a hardcoded static call, testing AgentAuthMiddleware might throw Exception
-        // because Database::tenant('test') will fail without saas_master setup.
-        // I will use a dummy request setup and mock the DB connection directly on it for Controller tests,
-        // and mock Database connection error for the middleware just to ensure it throws 401 if unauthorized.
+        $_ENV['AGENT_API_KEY_HASH'] = hash('sha256', 'agent-secret');
     }
 
     private function createRequestWithBody(string $body): ServerRequestInterface
@@ -89,6 +83,8 @@ class AgentControllerTest extends TestCase
     public function testMiddlewareSemApiKey(): void
     {
         $middleware = new AgentAuthMiddleware();
+
+        // Sem authorization
         $request = $this->createRequest();
         $request->method('getHeaderLine')->willReturnMap([
             ['Authorization', ''],
@@ -99,8 +95,17 @@ class AgentControllerTest extends TestCase
         $handler->expects($this->never())->method('handle');
 
         $response = $middleware->process($request, $handler);
-
         $this->assertEquals(401, $response->getStatusCode());
+
+        // Com authorization errada
+        $request2 = $this->createRequest();
+        $request2->method('getHeaderLine')->willReturnMap([
+            ['Authorization', 'Bearer invalid-key'],
+            ['X-Tenant-ID', 'tenant1']
+        ]);
+
+        $response2 = $middleware->process($request2, $handler);
+        $this->assertEquals(401, $response2->getStatusCode());
     }
 
     // 3. GET /api/agent/relogios with valid API key -> 200 and decrypted password
