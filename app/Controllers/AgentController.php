@@ -28,7 +28,7 @@ class AgentController
                 f.nome_completo,
                 f.departamento_id,
                 f.estado,
-                f.atualizado_em
+                f.actualizado_em AS atualizado_em
             FROM funcionarios f
             WHERE f.estado IN ('activo', 'inactivo')
             ORDER BY f.numero_funcionario ASC
@@ -40,6 +40,7 @@ class AgentController
         foreach ($funcionarios as &$func) {
             $func['id'] = (int) $func['id'];
             $func['departamento_id'] = $func['departamento_id'] ? (int) $func['departamento_id'] : null;
+            $func['atualizado_em'] = $func['atualizado_em'] ?? null;
         }
 
         return $this->json($response, 200, ['funcionarios' => $funcionarios]);
