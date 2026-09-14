@@ -3177,9 +3177,10 @@ async function verDetalheTerminal(id) {
 async function downloadAgenteInstalador() {
     const id = document.getElementById('assocTermId').value;
     try {
-        const res = await fetch(`/api/terminais/${id}/agent-download`, {
-            headers: { 'Authorization': 'Bearer ' + getToken() }
-        });
+        const opts = { headers: { 'Authorization': 'Bearer ' + TOKEN } };
+        if (TENANT) opts.headers['X-Tenant'] = TENANT;
+
+        const res = await fetch(`/api/terminais/${id}/agent-download`, opts);
         if (!res.ok) { toast('Erro ao gerar instalador', 'err'); return; }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
