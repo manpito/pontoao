@@ -3152,7 +3152,6 @@ async function verDetalheTerminal(id) {
     document.getElementById('terminalDetalheNome').textContent = t.nome;
     document.getElementById('assocTermId').value = t.id;
     document.getElementById('terminalPingResult').innerHTML = '';
-    document.getElementById('agentInstallerResult').style.display = 'none';
 
     if (t.modelo === 'dahua') {
       document.getElementById('terminalAgentInstall').style.display = 'block';
