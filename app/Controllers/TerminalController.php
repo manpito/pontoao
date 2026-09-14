@@ -60,7 +60,10 @@ class TerminalController
         }
 
         $tenantId = $sub;
-        $pontoaoUrl = 'https://rh.ftl-angola.net';
+        // LIMITAÇÃO CONHECIDA: usa APP_URL global, assume um único domínio para todos os tenants.
+        // Antes de activar esta funcionalidade para outro tenant além da FTL Angola,
+        // implementar resolução de domínio por tenant (ver tabela de tenants na base master).
+        $pontoaoUrl = rtrim($_ENV['APP_URL'] ?? 'https://rh.ftl-angola.net', '/');
 
         // Gerar chave nova para esta instalação
         $rawKey  = bin2hex(random_bytes(16)); // 32 caracteres hex
