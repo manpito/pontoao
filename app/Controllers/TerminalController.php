@@ -123,12 +123,13 @@ class TerminalController
         $zipContent = file_get_contents($zipPath);
         unlink($zipPath);
 
+        $response->getBody()->write($zipContent);
+
         return $response
             ->withHeader('Content-Type', 'application/zip')
             ->withHeader('Content-Disposition', "attachment; filename=\"pontoao-agent-$tenantId.zip\"")
             ->withHeader('Content-Length', (string) strlen($zipContent))
-            ->withStatus(200)
-            ->write($zipContent);
+            ->withStatus(200);
     }
 
     /**
