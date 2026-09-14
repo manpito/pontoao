@@ -60,7 +60,7 @@ class TerminalController
         }
 
         $tenantId = $sub;
-        $pontoaoUrl = rtrim($_ENV['APP_URL'] ?? 'https://rh.ftl-angola.net', '/');
+        $pontoaoUrl = 'https://rh.ftl-angola.net';
 
         // Gerar chave nova para esta instalação
         $rawKey  = bin2hex(random_bytes(16)); // 32 caracteres hex
