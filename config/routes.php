@@ -421,7 +421,7 @@ $group->get('/relatorios/periodo/exportar',            [\App\Controllers\Relator
     $group->get('/terminais/{id}',                        [\App\Controllers\TerminalController::class, 'show'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
-    $group->get('/terminais/{id}/agent-installer',        [\App\Controllers\TerminalController::class, 'agentInstaller'])
+    $group->get('/terminais/{id}/agent-download',         [\App\Controllers\TerminalController::class, 'downloadAgente'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     $group->put('/terminais/{id}',                        [\App\Controllers\TerminalController::class, 'update'])
@@ -490,5 +490,3 @@ $app->get('/', function ($request, $response) {
     }
     return $response->withStatus(404);
 });
-
-$app->get('/install/agent.ps1', [\App\Controllers\InstallController::class, 'agentScript']);
