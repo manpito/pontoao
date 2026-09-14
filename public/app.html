@@ -620,9 +620,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div id="terminalAgentInstall" style="display:none;margin-top:20px;padding:15px;background:var(--bg2);border-radius:var(--radius)">
           <div class="card-title">Agente de Sincronização</div>
           <p style="margin:10px 0;font-size:0.9rem;color:var(--text)">O agente sincroniza automaticamente os funcionários do PontoAO para este relógio. Instale-o num PC ligado à mesma rede local que o relógio.</p>
-          <button class="btn" onclick="obterComandoAgente()">Obter comando de instalação</button>
-          <div id="agentInstallerResult" style="display:none;margin-top:10px;"></div>
-          <p style="margin-top:10px;font-size:0.85rem;color:var(--muted2)">Nota: Execute o comando no PowerShell como Administrador no PC do escritório.</p>
+          <button class="btn" onclick="downloadAgenteInstalador()">Descarregar Instalador</button>
         </div>
         <div id="terminalDepsLista"></div>
         <div id="terminalPingResult" style="margin-top:12px"></div>
@@ -3177,23 +3175,24 @@ async function verDetalheTerminal(id) {
   } catch (e) { toast('Erro ao carregar detalhes: ' + e.message, 'err'); }
 }
 
-async function obterComandoAgente() {
-  const id = document.getElementById('assocTermId').value;
-  try {
-    const res = await api('GET', `/api/terminais/${id}/agent-installer`);
-    if (res.erro) {
-      toast(res.mensagem, 'err');
-      return;
+async function downloadAgenteInstalador() {
+    const id = document.getElementById('assocTermId').value;
+    try {
+        const res = await fetch(`/api/terminais/${id}/agent-download`, {
+            headers: { 'Authorization': 'Bearer ' + getToken() }
+        });
+        if (!res.ok) { toast('Erro ao gerar instalador', 'err'); return; }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'pontoao-agent.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+        toast('Instalador descarregado com sucesso', 'ok');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'err');
     }
-    const container = document.getElementById('agentInstallerResult');
-    container.innerHTML = `
-      <p style="margin:10px 0;font-size:0.85rem;color:var(--muted2)">${esc(res.instrucoes)}</p>
-      <textarea readonly onclick="this.select()" style="width:100%;height:80px;margin-top:8px;font-family:var(--mono);font-size:0.8rem;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);resize:none;">${esc(res.comando)}</textarea>
-    `;
-    container.style.display = 'block';
-  } catch (e) {
-    toast('Erro ao obter comando: ' + e.message, 'err');
-  }
 }
 
 async function pingTerminal() {

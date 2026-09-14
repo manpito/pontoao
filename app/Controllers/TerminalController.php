@@ -42,11 +42,12 @@ class TerminalController
     }
 
     /**
-     * GET /api/terminais/{id}/agent-installer
+     * GET /api/terminais/{id}/agent-download
      */
-    public function agentInstaller(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    public function downloadAgente(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $id  = (int) $args['id'];
+        $id = (int) $args['id'];
+
         $sub = TenantResolver::resolve();
         $db  = Database::tenant($sub);
 
@@ -54,20 +55,80 @@ class TerminalController
         $stmt->execute([':id' => $id]);
         $terminal = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$terminal) {
-            return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Terminal não encontrado.']);
+        if (!$terminal || $terminal['tipo_protocolo'] !== 'dahua') {
+            return $response->withStatus(400);
         }
 
-        if ($terminal['tipo_protocolo'] !== 'dahua') {
-            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Este terminal não usa o protocolo Dahua.']);
+        $tenantId = $sub;
+        $pontoaoUrl = rtrim($_ENV['APP_URL'] ?? 'https://rh.ftl-angola.net', '/');
+
+        // Gerar chave nova para esta instalação
+        $rawKey  = bin2hex(random_bytes(16)); // 32 caracteres hex
+        $keyHash = hash('sha256', $rawKey);
+
+        // Actualizar AGENT_API_KEY_HASH no .env (substituir a linha existente)
+        $envPath = __DIR__ . '/../../.env';
+        $envContent = file_get_contents($envPath);
+        if (preg_match('/^AGENT_API_KEY_HASH=.*/m', $envContent)) {
+            $envContent = preg_replace('/^AGENT_API_KEY_HASH=.*/m', "AGENT_API_KEY_HASH=$keyHash", $envContent);
+        } else {
+            $envContent .= "\nAGENT_API_KEY_HASH=$keyHash\n";
         }
+        file_put_contents($envPath, $envContent);
 
-        $comando = "iwr -useb 'https://rh.ftl-angola.net/install/agent.ps1?tenant={$sub}&key=SUBSTITUIR_PELA_CHAVE_RAW' | iex";
+        // Gerar config.ini com a chave raw — este é o ÚNICO sítio onde o raw existe
+        $configIni  = "[pontoao]\n";
+        $configIni .= "url = $pontoaoUrl\n";
+        $configIni .= "api_key = $rawKey\n";
+        $configIni .= "tenant_id = $tenantId\n";
+        $configIni .= "\n[agent]\n";
+        $configIni .= "poll_interval_seconds = 300\n";
+        $configIni .= "log_file = agent.log\n";
+        $configIni .= "state_db = state.db\n";
 
-        return $this->json($response, 200, [
-            'comando' => $comando,
-            'instrucoes' => 'Substitua SUBSTITUIR_PELA_CHAVE_RAW pela chave de API do agente. Execute este comando no PowerShell como Administrador no PC do escritório.'
-        ]);
+        // Gerar install.bat — instala o .exe pré-compilado como serviço Windows via NSSM
+        $installBat  = "@echo off\r\n";
+        $installBat .= "echo A instalar o Agente PontoAO...\r\n";
+        $installBat .= "set AGENT_DIR=%~dp0\r\n\r\n";
+        $installBat .= "where nssm >nul 2>&1\r\n";
+        $installBat .= "if %errorlevel% neq 0 (\r\n";
+        $installBat .= "    echo A descarregar NSSM...\r\n";
+        $installBat .= "    powershell -Command \"Invoke-WebRequest -Uri 'https://nssm.cc/release/nssm-2.24.zip' -OutFile '%TEMP%\\nssm.zip'; Expand-Archive -Path '%TEMP%\\nssm.zip' -DestinationPath '%TEMP%\\nssm' -Force; Copy-Item '%TEMP%\\nssm\\nssm-2.24\\win64\\nssm.exe' 'C:\\Windows\\System32\\nssm.exe'\"\r\n";
+        $installBat .= ")\r\n\r\n";
+        $installBat .= "nssm install PontoAO-Agent \"%AGENT_DIR%pontoao-agent.exe\"\r\n";
+        $installBat .= "nssm set PontoAO-Agent AppDirectory \"%AGENT_DIR%\"\r\n";
+        $installBat .= "nssm set PontoAO-Agent AppRestartDelay 10000\r\n";
+        $installBat .= "nssm set PontoAO-Agent AppStdout \"%AGENT_DIR%agent.log\"\r\n";
+        $installBat .= "nssm set PontoAO-Agent AppStderr \"%AGENT_DIR%agent.log\"\r\n";
+        $installBat .= "nssm start PontoAO-Agent\r\n\r\n";
+        $installBat .= "echo Agente PontoAO instalado com sucesso!\r\n";
+        $installBat .= "pause\r\n";
+
+        $uninstallBat  = "@echo off\r\n";
+        $uninstallBat .= "nssm stop PontoAO-Agent\r\n";
+        $uninstallBat .= "nssm remove PontoAO-Agent confirm\r\n";
+        $uninstallBat .= "echo Agente removido.\r\n";
+        $uninstallBat .= "pause\r\n";
+
+        // Montar o .zip
+        $zipPath = sys_get_temp_dir() . '/pontoao-agent-' . $tenantId . '-' . time() . '.zip';
+        $zip = new \ZipArchive();
+        $zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE);
+        $zip->addFile('/var/www/saas/public/install/pontoao-agent.exe', 'pontoao-agent.exe');
+        $zip->addFromString('config.ini', $configIni);
+        $zip->addFromString('install.bat', $installBat);
+        $zip->addFromString('uninstall.bat', $uninstallBat);
+        $zip->close();
+
+        $zipContent = file_get_contents($zipPath);
+        unlink($zipPath);
+
+        return $response
+            ->withHeader('Content-Type', 'application/zip')
+            ->withHeader('Content-Disposition', "attachment; filename=\"pontoao-agent-$tenantId.zip\"")
+            ->withHeader('Content-Length', (string) strlen($zipContent))
+            ->withStatus(200)
+            ->write($zipContent);
     }
 
     /**
