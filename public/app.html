@@ -393,6 +393,13 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <button class="btn" onclick="loadDashboard()">↺ Actualizar</button>
       </div>
       <div class="kpi-row" id="kpiRow"><div class="empty"><span class="spinner"></span></div></div>
+      <div id="alertaAdmsAvisos" class="card" style="display:none; border-left: 3px solid #f39c12; margin-bottom: 15px;">
+        <div class="card-head"><div class="card-title">⚠ Avisos de Sincronização (ADMS)</div></div>
+        <div class="card-body">
+          <p><strong id="alertaAdmsAvisosCount">0</strong> aviso(s) não resolvido(s).</p>
+          <div id="alertaAdmsAvisosList" style="margin-top:10px;"></div>
+        </div>
+      </div>
       <div id="alertaMarcacoesFalta" style="display:none" class="card" style="border-left: 3px solid var(--danger, #e74c3c)">
         <div class="card-body" style="display:flex;align-items:center;justify-content:space-between">
           <div>
@@ -1818,6 +1825,7 @@ async function loadDashboard() {
     const nPend = pendFerias.dados?.length || 0;
 
     verificarMarcacoesPendentes();
+    carregarAdmsAvisos();
 
     document.getElementById('kpiRow').innerHTML = `
       <div class="kpi"><div class="kpi-val green">${presentes}</div><div class="kpi-label">Presentes hoje</div></div>
@@ -1837,6 +1845,46 @@ async function loadDashboard() {
       : '<div class="empty">Sem marcações hoje.</div>';
   } catch(e) {
     document.getElementById('kpiRow').innerHTML = '<div class="empty">Erro ao carregar.</div>';
+  }
+}
+
+async function carregarAdmsAvisos() {
+  if (USER.perfil === 'funcionario') return;
+  try {
+    const res = await api('GET', '/api/adms-avisos');
+    if (res && res.dados && res.dados.length > 0) {
+      document.getElementById('alertaAdmsAvisos').style.display = 'block';
+      document.getElementById('alertaAdmsAvisosCount').textContent = res.dados.length;
+      document.getElementById('alertaAdmsAvisosList').innerHTML = res.dados.map(a => `
+        <div style="padding:8px; border-bottom:1px solid var(--border,#eee); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <span class="badge badge-warn">${a.tipo === 'sn_desconhecido' ? 'SN Desconhecido' : 'Func. Desconhecido'}</span>
+            <span style="font-size:0.9em; margin-left:8px;">
+              ${a.tipo === 'sn_desconhecido'
+                ? 'Relógio SN: ' + esc(a.sn_relogio)
+                : 'Relógio SN: ' + esc(a.sn_relogio) + ' | Func: ' + esc(a.numero_funcionario || '')}
+            </span>
+            <div style="font-size:0.8em; color:gray; margin-top:4px;">${esc(a.criado_em)}</div>
+          </div>
+          <button class="btn btn-sm" onclick="resolverAdmsAviso(${a.id})">Marcar resolvido</button>
+        </div>
+      `).join('');
+    } else {
+      document.getElementById('alertaAdmsAvisos').style.display = 'none';
+    }
+  } catch(e) {
+    console.error('Erro ao carregar avisos ADMS:', e);
+  }
+}
+
+async function resolverAdmsAviso(id) {
+  if(!confirm('Tem a certeza que este aviso foi tratado?')) return;
+  try {
+    await api('PATCH', `/api/adms-avisos/${id}`);
+    toast('Aviso resolvido.');
+    carregarAdmsAvisos();
+  } catch(e) {
+    alert('Erro ao resolver aviso: ' + e.message);
   }
 }
 
