@@ -215,6 +215,12 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->get('/relatorios/escala/{escala_id}', [\App\Controllers\RelatorioController::class, 'porEscala'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
+    // Avisos ADMS
+    $group->get('/adms-avisos', [\App\Controllers\AdmsAvisosController::class, 'listar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+    $group->patch('/adms-avisos/{id}', [\App\Controllers\AdmsAvisosController::class, 'resolver'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
     $group->get('/relatorios/individual/{funcionario_id}', [\App\Controllers\RelatorioController::class, 'individual'])
           ->add(AuthMiddleware::class);
 

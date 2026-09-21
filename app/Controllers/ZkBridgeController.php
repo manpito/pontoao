@@ -39,6 +39,35 @@ class ZkBridgeController
         file_put_contents(self::LOG, date('Y-m-d H:i:s') . ' ' . $msg . "\n", FILE_APPEND);
     }
 
+    private function registarAvisoSnDesconhecido(string $sn, string $payload): void
+    {
+        try {
+            $masterDsn = "mysql:host=" . ($_ENV['DB_MASTER_HOST'] ?? 'localhost') .
+                         ";dbname=" . ($_ENV['DB_MASTER_DATABASE'] ?? '') . ";charset=utf8mb4";
+            $master = new PDO($masterDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+            $master->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+            $stmt = $master->query("SELECT db_nome, db_host FROM tenants WHERE estado = 'activo' LIMIT 1");
+            $tenant = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($tenant) {
+                $tenantDsn = "mysql:host=" . ($tenant['db_host'] ?? 'localhost') .
+                             ";dbname=" . $tenant['db_nome'] . ";charset=utf8mb4";
+                $db = new PDO($tenantDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+
+                $db->prepare("
+                    INSERT INTO adms_avisos (tipo, sn_relogio, payload_bruto)
+                    VALUES ('sn_desconhecido', :sn, :payload)
+                ")->execute([
+                    ':sn' => $sn,
+                    ':payload' => $payload
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $this->log("ERRO registarAvisoSnDesconhecido: " . $e->getMessage());
+        }
+    }
+
     // -------------------------------------------------------------------------
     // GET /api/zk-bridge/ping
     // -------------------------------------------------------------------------
@@ -255,6 +284,13 @@ class ZkBridgeController
 
         $raw = (string) $request->getBody();
 
+        if (!$db || !$relogio) {
+            $this->log("AVISO: SN={$sn} desconhecido. A registar em adms_avisos.");
+            $this->registarAvisoSnDesconhecido($sn, $raw);
+            $response->getBody()->write("OK: 0");
+            return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
+        }
+
         if ($table !== 'ATTLOG' || empty($raw)) {
             $response->getBody()->write("OK");
             return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
@@ -288,7 +324,23 @@ class ZkBridgeController
                     $processados++;
                 }
             } catch (\Throwable $e) {
-                $this->log("ERRO uid={$registo['UserID']}: " . $e->getMessage());
+                $msg = $e->getMessage();
+                $this->log("ERRO uid={$registo['UserID']}: " . $msg);
+
+                if (str_contains($msg, "Funcionário '") && str_contains($msg, "' não encontrado.")) {
+                    try {
+                        $db->prepare("
+                            INSERT INTO adms_avisos (tipo, sn_relogio, numero_funcionario, payload_bruto)
+                            VALUES ('funcionario_desconhecido', :sn, :func, :payload)
+                        ")->execute([
+                            ':sn' => $sn,
+                            ':func' => $registo['UserID'],
+                            ':payload' => $linha
+                        ]);
+                    } catch (\Throwable $e2) {
+                        $this->log("ERRO ao inserir adms_avisos para uid={$registo['UserID']}: " . $e2->getMessage());
+                    }
+                }
             }
         }
 
@@ -313,6 +365,8 @@ class ZkBridgeController
         [$db, $relogio] = $this->terminalService->resolverTenantPorSN($sn);
 
         if (!$db || !$relogio) {
+            $this->log("AVISO GETREQUEST: SN={$sn} desconhecido. A registar em adms_avisos.");
+            $this->registarAvisoSnDesconhecido($sn, "GETREQUEST");
             $response->getBody()->write("OK");
             return $response->withStatus(200)->withHeader('Content-Type', 'text/plain');
         }
@@ -347,6 +401,11 @@ class ZkBridgeController
         $this->log("DEVICECMD SN={$sn} raw={$raw}");
 
         [$db, $relogio] = $this->terminalService->resolverTenantPorSN($sn);
+
+        if (!$db || !$relogio) {
+            $this->log("AVISO DEVICECMD: SN={$sn} desconhecido. A registar em adms_avisos.");
+            $this->registarAvisoSnDesconhecido($sn, "DEVICECMD raw={$raw}");
+        }
 
         if ($db && $relogio) {
             // Formato de confirmação do relógio: "ID=1\nReturn=0\nCMD=DATA UPDATE USERINFO"
