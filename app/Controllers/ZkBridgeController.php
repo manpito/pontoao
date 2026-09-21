@@ -47,16 +47,16 @@ class ZkBridgeController
             $master = new PDO($masterDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
             $master->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-            $stmt = $master->query("SELECT db_nome, db_host FROM tenants WHERE estado = 'activo' LIMIT 1");
-            $tenant = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stmt = $master->prepare("
+                UPDATE adms_avisos_globais
+                SET criado_em = NOW(), payload_bruto = :payload
+                WHERE sn_relogio = :sn AND tipo = 'sn_desconhecido' AND resolvido = 0
+            ");
+            $stmt->execute([':sn' => $sn, ':payload' => $payload]);
 
-            if ($tenant) {
-                $tenantDsn = "mysql:host=" . ($tenant['db_host'] ?? 'localhost') .
-                             ";dbname=" . $tenant['db_nome'] . ";charset=utf8mb4";
-                $db = new PDO($tenantDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
-
-                $db->prepare("
-                    INSERT INTO adms_avisos (tipo, sn_relogio, payload_bruto)
+            if ($stmt->rowCount() === 0) {
+                $master->prepare("
+                    INSERT INTO adms_avisos_globais (tipo, sn_relogio, payload_bruto)
                     VALUES ('sn_desconhecido', :sn, :payload)
                 ")->execute([
                     ':sn' => $sn,
@@ -329,14 +329,27 @@ class ZkBridgeController
 
                 if (str_contains($msg, "Funcionário '") && str_contains($msg, "' não encontrado.")) {
                     try {
-                        $db->prepare("
-                            INSERT INTO adms_avisos (tipo, sn_relogio, numero_funcionario, payload_bruto)
-                            VALUES ('funcionario_desconhecido', :sn, :func, :payload)
-                        ")->execute([
+                        $stmt = $db->prepare("
+                            UPDATE adms_avisos
+                            SET criado_em = NOW(), payload_bruto = :payload
+                            WHERE tipo = 'funcionario_desconhecido' AND sn_relogio = :sn AND numero_funcionario = :func AND resolvido = 0
+                        ");
+                        $stmt->execute([
                             ':sn' => $sn,
                             ':func' => $registo['UserID'],
                             ':payload' => $linha
                         ]);
+
+                        if ($stmt->rowCount() === 0) {
+                            $db->prepare("
+                                INSERT INTO adms_avisos (tipo, sn_relogio, numero_funcionario, payload_bruto)
+                                VALUES ('funcionario_desconhecido', :sn, :func, :payload)
+                            ")->execute([
+                                ':sn' => $sn,
+                                ':func' => $registo['UserID'],
+                                ':payload' => $linha
+                            ]);
+                        }
                     } catch (\Throwable $e2) {
                         $this->log("ERRO ao inserir adms_avisos para uid={$registo['UserID']}: " . $e2->getMessage());
                     }

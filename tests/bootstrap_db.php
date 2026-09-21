@@ -193,6 +193,15 @@ function bootstrap_db(): PDO
             criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE adms_avisos_globais (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo TEXT NOT NULL,
+            sn_relogio TEXT NOT NULL,
+            payload_bruto TEXT,
+            resolvido INTEGER NOT NULL DEFAULT 0,
+            criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE relogio_departamentos (
             relogio_id INTEGER NOT NULL,
             departamento_id INTEGER NOT NULL,
