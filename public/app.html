@@ -1814,13 +1814,14 @@ async function loadDashboard() {
   // KPIs
   document.getElementById('kpiRow').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   try {
-    const [funcs, marc] = await Promise.all([
+    const [funcs, marc, presencas] = await Promise.all([
       api('GET', '/api/funcionarios?estado=activo'),
-      api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}`)
+      api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}`),
+      api('GET', '/api/presenca-hoje')
     ]);
 
     const total    = funcs.dados?.length || 0;
-    const presentes = new Set((marc.dados||[]).filter(m=>m.tipo==='entrada').map(m=>m.funcionario)).size;
+    const presentes = (presencas.dados||[]).filter(m => m.total_marcacoes_hoje > 0 && m.ultima_marcacao_tipo !== 'saida').length;
     const pendFerias = await api('GET', '/api/ferias?estado=pendente');
     const nPend = pendFerias.dados?.length || 0;
 
@@ -1891,34 +1892,22 @@ async function resolverAdmsAviso(id) {
 // ── PRESENÇAS ──
 async function loadPresenca() {
   document.getElementById('presencaTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-  const hoje = new Date().toISOString().slice(0,10);
   try {
-    const [funcs, marc] = await Promise.all([
-      api('GET', '/api/funcionarios?estado=activo'),
-      api('GET', `/api/marcacoes?data_inicio=${hoje}&data_fim=${hoje}`)
-    ]);
+    const presencas = await api('GET', '/api/presenca-hoje');
 
-    const marcPorFunc = {};
-    (marc.dados||[]).forEach(m => {
-      if (!marcPorFunc[m.funcionario]) marcPorFunc[m.funcionario] = [];
-      marcPorFunc[m.funcionario].push(m);
-    });
-
-    const rows = (funcs.dados||[]).map(f => {
-      const ms     = marcPorFunc[f.nome_completo] || [];
-      const ultima = ms[0];
-      const estado = ms.length === 0 ? 'ausente'
-        : ultima?.tipo === 'saida' ? 'saiu'
-        : ultima?.tipo?.includes('intervalo') ? 'intervalo'
+    const rows = (presencas.dados||[]).map(m => {
+      const estado = m.total_marcacoes_hoje === 0 ? 'ausente'
+        : m.ultima_marcacao_tipo === 'saida' ? 'saiu'
+        : (m.ultima_marcacao_tipo || '').includes('intervalo') ? 'intervalo'
         : 'presente';
       const dotClass = estado === 'presente' ? 'in' : estado === 'intervalo' ? 'int' : 'out';
       return `<tr>
         <td><span class="presence ${dotClass}"></span></td>
-        <td><strong>${f.nome_completo}</strong><br><span style="font-size:11px;color:var(--muted2)">${f.numero_funcionario}</span></td>
-        <td>${f.departamento||'—'}</td>
+        <td><strong>${esc(m.nome_completo)}</strong><br><span style="font-size:11px;color:var(--muted2)">${esc(m.numero_funcionario || '')}</span></td>
+        <td>${esc(m.departamento || '—')}</td>
         <td><span class="badge badge-${estado==='presente'?'green':estado==='intervalo'?'blue':'gray'}">${estado}</span></td>
-        <td>${ultima ? ultima.data_hora.slice(11,16) + ' · ' + labelTipo(ultima.tipo) : '—'}</td>
-        <td>${ms.length}</td>
+        <td>${m.ultima_marcacao_hora ? m.ultima_marcacao_hora.slice(11,16) + ' · ' + labelTipo(m.ultima_marcacao_tipo) : '—'}</td>
+        <td>${m.total_marcacoes_hoje}</td>
       </tr>`;
     }).join('');
 
