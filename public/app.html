@@ -1822,6 +1822,7 @@ async function loadDashboard() {
 
     const total    = funcs.dados?.length || 0;
     const presentes = (presencas.dados||[]).filter(m => m.total_marcacoes_hoje > 0 && m.ultima_marcacao_tipo !== 'saida').length;
+    const totalMarcacoesHoje = (presencas.dados||[]).reduce((sum, m) => sum + (m.total_marcacoes_hoje || 0), 0);
     const pendFerias = await api('GET', '/api/ferias?estado=pendente');
     const nPend = pendFerias.dados?.length || 0;
 
@@ -1832,7 +1833,7 @@ async function loadDashboard() {
       <div class="kpi"><div class="kpi-val green">${presentes}</div><div class="kpi-label">Presentes hoje</div></div>
       <div class="kpi"><div class="kpi-val blue">${total}</div><div class="kpi-label">Funcionários activos</div></div>
       <div class="kpi"><div class="kpi-val ${nPend>0?'warn':'green'}">${nPend}</div><div class="kpi-label">Férias pendentes</div></div>
-      <div class="kpi"><div class="kpi-val">${(marc.dados||[]).length}</div><div class="kpi-label">Marcações hoje</div></div>
+      <div class="kpi"><div class="kpi-val">${totalMarcacoesHoje}</div><div class="kpi-label">Marcações hoje</div></div>
     `;
 
     const recentes = (marc.dados||[]).slice(0,8);
