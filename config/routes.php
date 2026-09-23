@@ -156,6 +156,9 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
     // --- Marcações ---
+    $group->get('/presenca-hoje',       [\App\Controllers\MarcacaoController::class, 'presencaHoje'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+
     $group->get('/marcacoes',           [\App\Controllers\MarcacaoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 

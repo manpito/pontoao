@@ -84,6 +84,91 @@ class MarcacaoController
     }
 
     /**
+     * GET /api/presenca-hoje
+     * Retorna o estado de presença atual de todos os funcionários ativos para o dia de hoje,
+     * resolvendo o problema do limite de 500 registos do endpoint /api/marcacoes.
+     */
+    public function presencaHoje(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+    {
+        $user = $request->getAttribute('auth_user');
+        $where = [];
+        $bind = [];
+
+        // Filtro supervisor: apenas a sua equipa
+        if ($user && $user->perfil === 'supervisor' && !empty($user->funcionario_id)) {
+            $where[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
+            $bind[':sid'] = (int) $user->funcionario_id;
+            $bind[':sid_self'] = (int) $user->funcionario_id;
+        }
+
+        // Calcula hoje em hora local de Angola
+        $dtHoje = new \DateTime('now', new \DateTimeZone('Africa/Luanda'));
+        $hoje = $dtHoje->format('Y-m-d');
+        $inicio_dia = "$hoje 00:00:00";
+
+        $dtSeguinte = clone $dtHoje;
+        $dtSeguinte->modify('+1 day');
+        $inicio_dia_seguinte = $dtSeguinte->format('Y-m-d 00:00:00');
+
+        $bind[':inicio_dia'] = $inicio_dia;
+        $bind[':inicio_dia2'] = $inicio_dia;
+        $bind[':inicio_dia3'] = $inicio_dia;
+
+        $bind[':inicio_dia_seguinte'] = $inicio_dia_seguinte;
+        $bind[':inicio_dia_seguinte2'] = $inicio_dia_seguinte;
+        $bind[':inicio_dia_seguinte3'] = $inicio_dia_seguinte;
+
+        $whereStr = '';
+        if (!empty($where)) {
+            $whereStr = ' AND ' . implode(' AND ', $where);
+        }
+
+        // Importante: atributos únicos PDO para evitar erro de número de parâmetros inválido
+        // PDO::ATTR_EMULATE_PREPARES=false exige placeholders únicos por ocorrência.
+        $stmt = $this->db()->prepare("
+            SELECT
+                f.id AS funcionario_id,
+                f.numero_funcionario,
+                f.nome_completo,
+                f.departamento_id,
+                d.nome AS departamento,
+                (
+                    SELECT m.tipo
+                    FROM marcacoes m
+                    WHERE m.funcionario_id = f.id
+                      AND m.data_hora >= :inicio_dia
+                      AND m.data_hora < :inicio_dia_seguinte
+                    ORDER BY m.data_hora DESC
+                    LIMIT 1
+                ) AS ultima_marcacao_tipo,
+                (
+                    SELECT m.data_hora
+                    FROM marcacoes m
+                    WHERE m.funcionario_id = f.id
+                      AND m.data_hora >= :inicio_dia2
+                      AND m.data_hora < :inicio_dia_seguinte2
+                    ORDER BY m.data_hora DESC
+                    LIMIT 1
+                ) AS ultima_marcacao_hora,
+                (
+                    SELECT COUNT(m.id)
+                    FROM marcacoes m
+                    WHERE m.funcionario_id = f.id
+                      AND m.data_hora >= :inicio_dia3
+                      AND m.data_hora < :inicio_dia_seguinte3
+                ) AS total_marcacoes_hoje
+            FROM funcionarios f
+            LEFT JOIN departamentos d ON f.departamento_id = d.id
+            WHERE f.estado = 'activo' {$whereStr}
+            ORDER BY f.nome_completo ASC
+        ");
+
+        $stmt->execute($bind);
+
+        return $this->json(200, ['dados' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+    }
+
+    /**
      * POST /api/marcacoes
      * Regista uma marcação manual ou web
      */
