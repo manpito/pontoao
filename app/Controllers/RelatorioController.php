@@ -198,18 +198,46 @@ class RelatorioController
 
         // Agrupar por dia
         $marcPorDia = [];
+        $cacheTurnos = [];
+
         foreach ($marcacoesRaw as $m) {
+            $ts = strtotime($m['data_hora']);
             $dia = substr($m['data_hora'], 0, 10);
             $hora = (int) substr($m['data_hora'], 11, 2);
 
             if ($hora < 12) {
                 $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
-                $turnoAnterior = $escalaService->calcularTurnoEm($funcId, $diaAnterior);
+
+                if (!array_key_exists($diaAnterior, $cacheTurnos)) {
+                    $cacheTurnos[$diaAnterior] = $escalaService->calcularTurnoEm($funcId, $diaAnterior);
+                }
+                $turnoAnterior = $cacheTurnos[$diaAnterior];
+
                 if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
                     // Saída que pertence ao turno nocturno iniciado no dia anterior
                     // OU entrada após meia-noite que é continuação do mesmo turno
                     if ($m['tipo'] === 'saida' || $m['tipo'] === 'entrada') {
-                        $dia = $diaAnterior;
+                        $reatribuir = true;
+
+                        if ($m['tipo'] === 'entrada') {
+                            if (!array_key_exists($dia, $cacheTurnos)) {
+                                $cacheTurnos[$dia] = $escalaService->calcularTurnoEm($funcId, $dia);
+                            }
+                            $turnoAtual = $cacheTurnos[$dia];
+
+                            if ($turnoAtual && empty($turnoAtual['atravessa_dia_civil']) && $turnoAtual['tipo'] !== 'folga') {
+                                $horaEntrada = $turnoAtual['hora_entrada'] ?? '08:00:00';
+                                $tsEsperado = strtotime($dia . ' ' . $horaEntrada);
+                                // Se a entrada for até 2 horas antes do início do turno diurno (ou depois), pertence ao novo turno
+                                if ($ts >= ($tsEsperado - 7200)) {
+                                    $reatribuir = false;
+                                }
+                            }
+                        }
+
+                        if ($reatribuir) {
+                            $dia = $diaAnterior;
+                        }
                     }
                 }
             }

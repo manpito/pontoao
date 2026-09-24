@@ -175,14 +175,44 @@ class ExportacaoController
 
             $marcFunc = $marcacoesMap[$fId] ?? [];
             $marcPorDia = [];
+            $cacheTurnos = [];
+
             foreach ($marcFunc as $m) {
+                $ts = strtotime($m['data_hora']);
                 $dia = substr($m['data_hora'], 0, 10);
                 $hora = (int) substr($m['data_hora'], 11, 2);
-                if ($m['tipo'] === 'saida' && $hora < 12) {
+
+                if ($hora < 12) {
                     $diaAnterior = date('Y-m-d', strtotime($dia . ' -1 day'));
-                    $turnoAnterior = $escalaService->calcularTurnoEm($fId, $diaAnterior);
+
+                    if (!array_key_exists($diaAnterior, $cacheTurnos)) {
+                        $cacheTurnos[$diaAnterior] = $escalaService->calcularTurnoEm($fId, $diaAnterior);
+                    }
+                    $turnoAnterior = $cacheTurnos[$diaAnterior];
+
                     if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
-                        $dia = $diaAnterior;
+                        if ($m['tipo'] === 'saida' || $m['tipo'] === 'entrada') {
+                            $reatribuir = true;
+
+                            if ($m['tipo'] === 'entrada') {
+                                if (!array_key_exists($dia, $cacheTurnos)) {
+                                    $cacheTurnos[$dia] = $escalaService->calcularTurnoEm($fId, $dia);
+                                }
+                                $turnoAtual = $cacheTurnos[$dia];
+
+                                if ($turnoAtual && empty($turnoAtual['atravessa_dia_civil']) && $turnoAtual['tipo'] !== 'folga') {
+                                    $horaEntrada = $turnoAtual['hora_entrada'] ?? '08:00:00';
+                                    $tsEsperado = strtotime($dia . ' ' . $horaEntrada);
+                                    if ($ts >= ($tsEsperado - 7200)) {
+                                        $reatribuir = false;
+                                    }
+                                }
+                            }
+
+                            if ($reatribuir) {
+                                $dia = $diaAnterior;
+                            }
+                        }
                     }
                 }
                 $marcPorDia[$dia][] = $m;
