@@ -247,6 +247,7 @@ class RelatorioPeriodoService
         $dias = [];
         $inicioTs = strtotime($inicioStr);
         $fimTs = strtotime($fimStr);
+        $cacheTurnos = [];
 
         foreach ($marcacoes as $m) {
             $ts = strtotime($m['data_hora']);
@@ -256,9 +257,34 @@ class RelatorioPeriodoService
             // Reatribuição para turnos nocturnos
             if ($horaStr >= '00:00:00' && $horaStr <= '12:00:00') {
                 $diaAnteriorStr = date('Y-m-d', strtotime($diaStr . ' -1 day'));
-                $turnoAnterior = $this->escalaService->calcularTurnoEm($funcId, $diaAnteriorStr);
+
+                if (!array_key_exists($diaAnteriorStr, $cacheTurnos)) {
+                    $cacheTurnos[$diaAnteriorStr] = $this->escalaService->calcularTurnoEm($funcId, $diaAnteriorStr);
+                }
+                $turnoAnterior = $cacheTurnos[$diaAnteriorStr];
+
                 if ($turnoAnterior && $turnoAnterior['atravessa_dia_civil']) {
-                    $diaStr = $diaAnteriorStr;
+                    $reatribuir = true;
+
+                    if ($m['tipo'] === 'entrada') {
+                        if (!array_key_exists($diaStr, $cacheTurnos)) {
+                            $cacheTurnos[$diaStr] = $this->escalaService->calcularTurnoEm($funcId, $diaStr);
+                        }
+                        $turnoAtual = $cacheTurnos[$diaStr];
+
+                        if ($turnoAtual && empty($turnoAtual['atravessa_dia_civil']) && $turnoAtual['tipo'] !== 'folga') {
+                            $horaEntrada = $turnoAtual['hora_entrada'] ?? '08:00:00';
+                            $tsEsperado = strtotime($diaStr . ' ' . $horaEntrada);
+                            // If the entry is within 2 hours before the expected start time or later, it belongs to the new day shift
+                            if ($ts >= ($tsEsperado - 7200)) {
+                                $reatribuir = false;
+                            }
+                        }
+                    }
+
+                    if ($reatribuir) {
+                        $diaStr = $diaAnteriorStr;
+                    }
                 }
             }
 
