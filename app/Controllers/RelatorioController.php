@@ -115,6 +115,10 @@ class RelatorioController
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
         $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
+        $stmtCfg2 = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_saida_tardia'");
+        $rowCfg2 = $stmtCfg2->fetch(PDO::FETCH_ASSOC);
+        $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
+
         // 3. Marcações com origem e auditoria
         $fimQuery = $dataFim . ' 23:59:59';
         if ($this->periodoTemTurnoNocturno($db, $funcId, $dataInicio, $dataFim)) {
@@ -343,46 +347,6 @@ class RelatorioController
                 $tipoDia = 'domingo';
             }
 
-            // Manter arredondamento automático antes do cálculo do serviço
-            if ($turno && $turno['tipo'] !== 'folga' && $turno['hora_saida'] && $ultimaSaida) {
-                $horaCorteSaida = substr($turno['hora_saida'], 0, 5);
-                if ($ultimaSaida > $horaCorteSaida) {
-                    $tsCorte = strtotime($dataStr . ' ' . $horaCorteSaida . ($turno['atravessa_dia_civil'] ? ' +1 day' : ''));
-                    $tsReal  = strtotime($dataStr . ' ' . $ultimaSaida . ($turno['atravessa_dia_civil'] ? ' +1 day' : ''));
-                    $minutosExtraReais = (int) round(($tsReal - $tsCorte) / 60);
-                    $minutosAprovados = $horasExtraAprovadas[$dataStr] ?? 0;
-
-                    if ($minutosExtraReais > $minutosAprovados) {
-                        $novaHoraSaida = date('H:i', strtotime($horaCorteSaida . " +{$minutosAprovados} minutes"));
-
-                        $db->prepare("
-                            UPDATE marcacoes SET data_hora = :nova, editada = 1,
-                                motivo_edicao = 'Arredondamento automático - horas extra não aprovadas',
-                                data_edicao = NOW()
-                            WHERE funcionario_id = :fid AND tipo = 'saida'
-                              AND DATE(data_hora) = :data
-                              AND data_hora = (SELECT max_dh FROM (SELECT MAX(data_hora) as max_dh FROM marcacoes WHERE funcionario_id = :fid2 AND tipo = 'saida' AND DATE(data_hora) = :data2) t)
-                        ")->execute([
-                            ':nova'  => ($turno['atravessa_dia_civil'] && $novaHoraSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr) . ' ' . $novaHoraSaida . ':00',
-                            ':fid'   => $funcId,
-                            ':data'  => $turno['atravessa_dia_civil'] && $ultimaSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr,
-                            ':fid2'  => $funcId,
-                            ':data2' => $turno['atravessa_dia_civil'] && $ultimaSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr
-                        ]);
-
-                        $ultimaSaida = $novaHoraSaida;
-
-                        // Necessário atualizar a array $mDia para o calculo
-                        foreach ($mDia as &$mRef) {
-                            if ($mRef['tipo'] === 'saida' && substr($mRef['data_hora'], 11, 5) > $horaCorteSaida) {
-                                $mRef['data_hora'] = ($turno['atravessa_dia_civil'] && $novaHoraSaida < '12:00' ? date('Y-m-d', strtotime($dataStr . ' +1 day')) : $dataStr) . ' ' . $novaHoraSaida . ':00';
-                            }
-                        }
-                        unset($mRef);
-                    }
-                }
-            }
-
             $hasServicoExterno = false;
             $motivoFaltaJustificada = null;
             $hasFerias = false;
@@ -420,7 +384,12 @@ class RelatorioController
             }
 
             $calculoService = new \App\Services\CalculoHorasService();
-            $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, false, $hasFerias, $contarEntradaAntecipada);
+            $minutosExtraAprovadosParaCorte = $horasExtraAprovadas[$dataStr] ?? 0;
+            $resultadoDia = $calculoService->calcularDia(
+                $mDia, $turno, $tipoDia, $regimeEscala, $dataStr,
+                $hasServicoExterno, false, $hasFerias, $contarEntradaAntecipada,
+                $contarSaidaTardia, $minutosExtraAprovadosParaCorte
+            );
 
             $minutosEsperados = 0;
             if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
@@ -575,6 +544,23 @@ class RelatorioController
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
         $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
+        $stmtCfg2 = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_saida_tardia'");
+        $rowCfg2 = $stmtCfg2->fetch(PDO::FETCH_ASSOC);
+        $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
+
+        // Carregar pedidos de horas extra aprovados do período
+        $stmtPHE = $db->prepare("
+            SELECT data, minutos FROM pedidos_horas_extra
+            WHERE funcionario_id = :fid
+              AND estado = 'aprovado'
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtPHE->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $horasExtraAprovadas = [];
+        foreach ($stmtPHE->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $horasExtraAprovadas[$r['data']] = (int) $r['minutos'];
+        }
+
         // 3. Marcações
         $stmtM = $db->prepare("
             SELECT tipo, data_hora
@@ -687,7 +673,46 @@ class RelatorioController
                 $diaInfo['estado'] = 'presente';
                 $totalPresente++;
                 $saidaCalc = $saida ?? $entrada;
-                $minutos = (int)round(($saidaCalc - $entrada)/60) - $minutosIntervalo;
+                $entradaCalc = $entrada;
+
+                $turnoAtual = $escalaService->calcularTurnoEm($funcId, $dataStr);
+
+                // Aplicar truncamento de entrada e saída visual apenas para os cálculos manuais
+                if ($turnoAtual && $turnoAtual['tipo'] !== 'folga') {
+                    if (!$contarEntradaAntecipada && !empty($turnoAtual['hora_entrada'])) {
+                        $tsPrevistoEntrada = strtotime($dataStr . ' ' . $turnoAtual['hora_entrada']);
+                        if ($entradaCalc < $tsPrevistoEntrada) {
+                            $entradaCalc = $tsPrevistoEntrada;
+                        }
+                    }
+
+                    if (!$contarSaidaTardia && !empty($turnoAtual['hora_saida'])) {
+                        $minutosAprovados = $horasExtraAprovadas[$dataStr] ?? 0;
+                        $tsPrevistoSaida = strtotime($dataStr . ' ' . $turnoAtual['hora_saida'] . ($turnoAtual['atravessa_dia_civil'] ? ' +1 day' : ''));
+                        $tsLimiteSaida = $tsPrevistoSaida + ($minutosAprovados * 60);
+
+                        $tsPrevistoEntrada = strtotime($dataStr . ' ' . ($turnoAtual['hora_entrada'] ?? '00:00'));
+
+                        $tsUltimaSaidaAjustada = $saidaCalc;
+                        if ($turnoAtual['atravessa_dia_civil'] && $tsUltimaSaidaAjustada < $tsPrevistoEntrada) {
+                            $tsUltimaSaidaAjustada += 86400;
+                        }
+
+                        if ($tsUltimaSaidaAjustada > $tsLimiteSaida) {
+                            $saidaCalc = $tsLimiteSaida;
+                        } else {
+                            $saidaCalc = $tsUltimaSaidaAjustada;
+                        }
+                    } else {
+                        if ($turnoAtual['atravessa_dia_civil'] && $saidaCalc < $entradaCalc) {
+                            $saidaCalc += 86400;
+                        }
+                    }
+                }
+
+                $minutos = (int)round(($saidaCalc - $entradaCalc)/60) - $minutosIntervalo;
+                if ($minutos < 0) $minutos = 0;
+
                 $diaInfo['horas'] = round($minutos/60, 2);
                 $totalMinutos += $minutos;
             } elseif ($diaInfo['estado'] === 'ausente') {
@@ -1114,6 +1139,23 @@ class RelatorioController
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
         $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
+        $stmtCfg2 = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_saida_tardia'");
+        $rowCfg2 = $stmtCfg2->fetch(PDO::FETCH_ASSOC);
+        $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
+
+        $stmtPHE = $db->prepare("
+            SELECT funcionario_id, data, minutos
+            FROM pedidos_horas_extra
+            WHERE funcionario_id IN ({$inStr})
+              AND estado = 'aprovado'
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtPHE->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        $horasExtraAprovadasMap = [];
+        foreach ($stmtPHE->fetchAll(PDO::FETCH_ASSOC) as $phe) {
+            $horasExtraAprovadasMap[$phe['funcionario_id']][$phe['data']] = (int)$phe['minutos'];
+        }
+
         $resultado = [];
         $escalaService = new \App\Services\EscalaService($db);
 
@@ -1219,6 +1261,27 @@ class RelatorioController
                         $minutosTrabalhados -= $minutosAntecipados;
                     }
                 }
+
+                // Ajuste se a saída tardia não deve contar
+                if (!$contarSaidaTardia && $turnoHoras && $turnoHoras['hora_saida'] && $saidaEfetiva) {
+                    $minutosAprovados = $horasExtraAprovadasMap[$func['id']][$dia] ?? 0;
+                    $saidaPrevistaCorte = strtotime($dia . ' ' . substr($turnoHoras['hora_saida'], 0, 5) . ($turnoHoras['atravessa_dia_civil'] ? ' +1 day' : ''));
+                    $tsLimiteSaida = $saidaPrevistaCorte + ($minutosAprovados * 60);
+
+                    $tsPrevistoEntrada = strtotime($dia . ' ' . ($turnoHoras['hora_entrada'] ?? '00:00'));
+
+                    $tsUltimaSaidaAjustada = $saidaEfetiva;
+                    if ($turnoHoras['atravessa_dia_civil'] && $tsUltimaSaidaAjustada < $tsPrevistoEntrada) {
+                        $tsUltimaSaidaAjustada += 86400;
+                    }
+
+                    if ($tsUltimaSaidaAjustada > $tsLimiteSaida) {
+                        $minutosASubtrair = (int) round(($tsUltimaSaidaAjustada - $tsLimiteSaida) / 60);
+                        $minutosTrabalhados -= $minutosASubtrair;
+                    }
+                }
+
+                if ($minutosTrabalhados < 0) $minutosTrabalhados = 0;
 
                 $minutosEsperados   = (int) ($horasEsperadasDiaTurno * 60);
 

@@ -167,6 +167,25 @@ class ExportacaoController
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
         $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
+        $stmtCfg2 = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_saida_tardia'");
+        $rowCfg2 = $stmtCfg2->fetch(PDO::FETCH_ASSOC);
+        $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
+
+        $stmtPHE = $db->prepare("
+            SELECT funcionario_id, data, minutos
+            FROM pedidos_horas_extra
+            WHERE funcionario_id IN ({$inStr})
+              AND estado = 'aprovado'
+              AND data BETWEEN :ini AND :fim
+        ");
+        $stmtPHE->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+        $todasPHE = $stmtPHE->fetchAll(PDO::FETCH_ASSOC);
+        $horasExtraAprovadasMap = [];
+        foreach ($todasPHE as $phe) {
+            $fId = (int)$phe['funcionario_id'];
+            $horasExtraAprovadasMap[$fId][$phe['data']] = (int)$phe['minutos'];
+        }
+
         $linhas = [];
 
         foreach ($funcionarios as $func) {
@@ -278,7 +297,12 @@ class ExportacaoController
                     $hasFaltaJustificada = true;
                 }
 
-                $resultadoDia = $calculoService->calcularDia($mDia, $turno, $tipoDia, $regimeEscala, $dataStr, $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada);
+                $minutosExtraAprovadosParaCorte = $horasExtraAprovadasMap[$fId][$dataStr] ?? 0;
+                $resultadoDia = $calculoService->calcularDia(
+                    $mDia, $turno, $tipoDia, $regimeEscala, $dataStr,
+                    $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada,
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte
+                );
 
                 // Faltas (priorizar presença real)
                 $faltaEmitida = false;
