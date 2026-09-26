@@ -108,6 +108,8 @@ class RelatorioController
             return null; // Sem permissão para ver este relatório (não pertence à sua equipa).
         }
 
+        $escalaService = new \App\Services\EscalaService($db);
+
         // 2. Feriados
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
 
@@ -536,6 +538,8 @@ class RelatorioController
         if ($perfil === 'supervisor' && $func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id) {
             return null; // Sem permissão para ver este relatório (não pertence à sua equipa).
         }
+
+        $escalaService = new \App\Services\EscalaService($db);
 
         // 2. Feriados
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
