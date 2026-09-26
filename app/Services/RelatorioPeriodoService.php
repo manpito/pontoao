@@ -45,6 +45,10 @@ class RelatorioPeriodoService
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
         $contarEntradaAntecipada = ($rowCfg && $rowCfg['valor'] === '1');
 
+        $stmtCfg2 = $this->pdo->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_saida_tardia'");
+        $rowCfg2 = $stmtCfg2->fetch(PDO::FETCH_ASSOC);
+        $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
+
         // Ajuste para turnos nocturnos: estendemos a query até ao meio-dia do dia seguinte.
         // A filtragem e reatribuição de marcações (para turnos nocturnos) é tratada em agruparMarcacoesPorDia().
         $fimQuery = date('Y-m-d', strtotime($dataFim . ' +1 day')) . ' 12:00:00';
@@ -100,6 +104,20 @@ class RelatorioPeriodoService
 
             foreach ($todasFerias as $fp) {
                 $feriasPorFunc[$fp['funcionario_id']][] = $fp;
+            }
+
+            // 7. Horas Extra Aprovadas
+            $stmtPHE = $this->pdo->prepare("
+                SELECT funcionario_id, data, minutos
+                FROM pedidos_horas_extra
+                WHERE funcionario_id IN ({$inStr})
+                  AND estado = 'aprovado'
+                  AND data BETWEEN :ini AND :fim
+            ");
+            $stmtPHE->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
+            $todasPHE = $stmtPHE->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($todasPHE as $phe) {
+                $horasExtraAprovadasMap[$phe['funcionario_id']][$phe['data']] = (int)$phe['minutos'];
             }
         }
 
@@ -166,7 +184,13 @@ class RelatorioPeriodoService
 
                 $regimeEscala = $func['regime_escala'] ?? 'normal';
 
-                $resultadoDia = $calculoService->calcularDia($marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia, $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada);
+                $minutosExtraAprovadosParaCorte = $horasExtraAprovadasMap[$funcId][$dia] ?? 0;
+
+                $resultadoDia = $calculoService->calcularDia(
+                    $marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia,
+                    $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada,
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte
+                );
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
                     $meioDias += 1;

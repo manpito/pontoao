@@ -22,7 +22,9 @@ class CalculoHorasService
         bool $hasServicoExterno = false,
         bool $hasFaltaJustificada = false,
         bool $hasFerias = false,
-        bool $contarEntradaAntecipada = true
+        bool $contarEntradaAntecipada = true,
+        bool $contarSaidaTardia = false,
+        int $minutosExtraAprovados = 0
     ): array {
         // Inicializar o resultado
         $resultado = [
@@ -139,6 +141,9 @@ class CalculoHorasService
         } elseif ($resultado['tipo_presenca'] === 'completo') {
             // Regra autoritativa: (saída - entrada) - 1h de almoço fixa
             $entradaCalculoTs = $primeiraEntradaTs;
+            $saidaCalculoTs = $ultimaSaidaTs;
+
+            $tsPrevistoEntrada = null;
 
             // Truncar entrada antecipada se a configuração assim o ditar
             if (!$contarEntradaAntecipada && $turno && $turno['tipo'] !== 'folga' && !empty($turno['hora_entrada'])) {
@@ -148,11 +153,38 @@ class CalculoHorasService
                 }
             }
 
-            $diffBruto = $ultimaSaidaTs - $entradaCalculoTs;
+            // Truncar saída tardia se a configuração assim o ditar (usando minutos extra aprovados)
+            if (!$contarSaidaTardia && $turno && $turno['tipo'] !== 'folga' && !empty($turno['hora_saida'])) {
+                $tsPrevistoSaida = strtotime($dataStr . ' ' . $turno['hora_saida'] . ($turno['atravessa_dia_civil'] ? ' +1 day' : ''));
+                $tsLimiteSaida = $tsPrevistoSaida + ($minutosExtraAprovados * 60);
 
-            // Tratamento de travessia civil manual baseada em turno atravessa dia civil, apenas se diffBruto negativo e for turno.
-            if ($turno && $turno['atravessa_dia_civil'] && $diffBruto < 0) {
-                $diffBruto += 86400;
+                if ($tsPrevistoEntrada === null && !empty($turno['hora_entrada'])) {
+                    $tsPrevistoEntrada = strtotime($dataStr . ' ' . $turno['hora_entrada']);
+                }
+
+                // Trata caso a última saída real pareça ser do dia anterior na mesma data nominal
+                $tsUltimaSaidaAjustada = $ultimaSaidaTs;
+                if ($turno['atravessa_dia_civil'] && $tsPrevistoEntrada !== null && $tsUltimaSaidaAjustada < $tsPrevistoEntrada) {
+                    $tsUltimaSaidaAjustada += 86400;
+                }
+
+                if ($tsUltimaSaidaAjustada > $tsLimiteSaida) {
+                    // A saída efetiva para o cálculo é limitada
+                    $saidaCalculoTs = $tsLimiteSaida;
+                } else {
+                    $saidaCalculoTs = $tsUltimaSaidaAjustada;
+                }
+            } else {
+                if ($turno && $turno['atravessa_dia_civil'] && $saidaCalculoTs < $entradaCalculoTs) {
+                    $saidaCalculoTs += 86400;
+                }
+            }
+
+            $diffBruto = $saidaCalculoTs - $entradaCalculoTs;
+
+            // Garantir que a diferença não seja negativa por segurança
+            if ($diffBruto < 0) {
+                $diffBruto = 0;
             }
 
             $minutosBruto = (int) round($diffBruto / 60);
