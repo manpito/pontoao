@@ -1860,11 +1860,13 @@ async function carregarAdmsAvisos() {
       document.getElementById('alertaAdmsAvisosList').innerHTML = res.dados.map(a => `
         <div style="padding:8px; border-bottom:1px solid var(--border,#eee); display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <span class="badge badge-warn">${a.tipo === 'sn_desconhecido' ? 'SN Desconhecido' : 'Func. Desconhecido'}</span>
+            <span class="badge badge-warn">${a.tipo === 'sn_desconhecido' ? 'SN Desconhecido' : (a.tipo === 'periodo_fechado' ? 'Período Fechado' : 'Func. Desconhecido')}</span>
             <span style="font-size:0.9em; margin-left:8px;">
               ${a.tipo === 'sn_desconhecido'
                 ? 'Relógio SN: ' + esc(a.sn_relogio)
-                : 'Relógio SN: ' + esc(a.sn_relogio) + ' | Func: ' + esc(a.numero_funcionario || '')}
+                : (a.tipo === 'periodo_fechado'
+                  ? 'Relógio SN: ' + esc(a.sn_relogio) + ' | Func: ' + esc(a.numero_funcionario || '') + '<br><small>Payload: ' + esc(a.payload_bruto || '') + '</small>'
+                  : 'Relógio SN: ' + esc(a.sn_relogio) + ' | Func: ' + esc(a.numero_funcionario || ''))}
             </span>
             <div style="font-size:0.8em; color:gray; margin-top:4px;">${esc(a.criado_em)}</div>
           </div>
