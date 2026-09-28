@@ -1,0 +1,1 @@
+ALTER TABLE utilizadores MODIFY perfil ENUM('super_admin_tenant','rh_manager','rh_colaborador','supervisor','funcionario') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'funcionario';
