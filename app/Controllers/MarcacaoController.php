@@ -193,11 +193,18 @@ class MarcacaoController
         }
 
         // Verificar se o período está fechado
-        [$ano, $mes] = explode('-', substr($dataHora, 0, 7));
-        $periodo = $db->prepare("SELECT estado FROM periodos_mensais WHERE ano = :ano AND mes = :mes LIMIT 1");
-        $periodo->execute([':ano' => $ano, ':mes' => (int) $mes]);
+        $dataApenas = substr($dataHora, 0, 10);
+        $periodo = $db->prepare("
+            SELECT estado
+            FROM periodos_mensais
+            WHERE estado = 'fechado'
+              AND :data BETWEEN data_inicio AND data_fim
+            LIMIT 1
+        ");
+        $periodo->execute([':data' => $dataApenas]);
         $p = $periodo->fetch(PDO::FETCH_ASSOC);
-        if ($p && $p['estado'] === 'fechado') {
+
+        if ($p) {
             return $this->json(409, ['erro' => true, 'mensagem' => 'O período mensal está fechado. Não é possível registar marcações.']);
         }
 
@@ -261,7 +268,28 @@ class MarcacaoController
             return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação não encontrada.']);
         }
 
-        if ($marcacao['bloqueada']) {
+        // Check if the original or new date falls in a closed period
+        $dataOriginal = substr($marcacao['data_hora'], 0, 10);
+        $dataNova = isset($body['data_hora']) ? substr($body['data_hora'], 0, 10) : $dataOriginal;
+
+        $periodo = $db->prepare("
+            SELECT estado
+            FROM periodos_mensais
+            WHERE estado = 'fechado'
+              AND (
+                  (:data_orig BETWEEN data_inicio AND data_fim)
+                  OR
+                  (:data_nova BETWEEN data_inicio AND data_fim)
+              )
+            LIMIT 1
+        ");
+        $periodo->execute([
+            ':data_orig' => $dataOriginal,
+            ':data_nova' => $dataNova,
+        ]);
+        $p = $periodo->fetch(PDO::FETCH_ASSOC);
+
+        if ($p || $marcacao['bloqueada']) {
             return $this->json(409, ['erro' => true, 'mensagem' => 'Marcação bloqueada — período mensal fechado. Não é possível editar.']);
         }
 
