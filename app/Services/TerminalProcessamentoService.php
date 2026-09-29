@@ -94,12 +94,35 @@ class TerminalProcessamentoService
             return false;
         }
 
-        // Verificar período mensal fechado
-        [$ano, $mes] = explode('-', substr($dataHora, 0, 7));
-        $periodo = $db->prepare("SELECT estado FROM periodos_mensais WHERE ano = :ano AND mes = :mes LIMIT 1");
-        $periodo->execute([':ano' => $ano, ':mes' => (int) $mes]);
+        // Verificar período mensal fechado pelo intervalo
+        $dataApenas = substr($dataHora, 0, 10);
+        $periodo = $db->prepare("
+            SELECT estado
+            FROM periodos_mensais
+            WHERE estado = 'fechado'
+              AND :data BETWEEN data_inicio AND data_fim
+            LIMIT 1
+        ");
+        $periodo->execute([':data' => $dataApenas]);
         $p = $periodo->fetch(PDO::FETCH_ASSOC);
-        if ($p && $p['estado'] === 'fechado') {
+
+        if ($p) {
+            $sn = $relogio['device_id'] ?? 'unknown';
+            $payload = json_encode($registo, JSON_UNESCAPED_UNICODE);
+
+            try {
+                $db->prepare("
+                    INSERT INTO adms_avisos (tipo, sn_relogio, numero_funcionario, payload_bruto)
+                    VALUES ('periodo_fechado', :sn, :func, :payload)
+                ")->execute([
+                    ':sn' => $sn,
+                    ':func' => $userId,
+                    ':payload' => $payload
+                ]);
+            } catch (\Throwable $e2) {
+                $this->log("ERRO ao inserir adms_avisos (periodo_fechado) para uid={$userId}: " . $e2->getMessage());
+            }
+
             throw new \RuntimeException("Período mensal fechado — marcação rejeitada.");
         }
 
