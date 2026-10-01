@@ -733,7 +733,7 @@ class RelatorioController
                             if ($ja['tipo'] === 'falta_justificada') {
                                 $diaInfo['estado'] = 'justificado (' . $ja['motivo'] . ')';
                             } elseif ($ja['tipo'] === 'servico_externo') {
-                                $turnoAtual = $escalaService->calcularTurnoEm($funcionario['id'], clone $dia);
+                                $turnoAtual = $escalaService->calcularTurnoEm($funcId, $dataStr);
                                 if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
                                     $diaInfo['estado'] = 'presente';
                                     $totalPresente++;
@@ -996,7 +996,10 @@ class RelatorioController
                                     break;
                                 } elseif ($ja['tipo'] === 'servico_externo') {
                                     $diaInfo['servico_externo'] = true;
-                                    $turnoAtual = $escalaService->calcularTurnoEm($funcId, clone $dia);
+                                    if (!isset($escalaService)) {
+                                        $escalaService = new \App\Services\EscalaService($db);
+                                    }
+                                    $turnoAtual = $escalaService->calcularTurnoEm($func['id'], $dataStr);
                                     if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
                                         $diaInfo['tipo'] = 'presente';
                                         $totalPresente++;
