@@ -61,8 +61,12 @@ class CalculoHorasService
         // Se houver serviço externo justificado, tratar como dia de trabalho completo
         if ($hasServicoExterno) {
             $minutosEsperados = 0;
-            if ($turno && $turno['tipo'] !== 'folga' && $turno['horas_efectivas']) {
-                $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+            if ($turno) {
+                if ($turno['tipo'] !== 'folga' && !empty($turno['horas_efectivas'])) {
+                    $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+                } else {
+                    $minutosEsperados = 0;
+                }
             } else {
                 $minutosEsperados = 8 * 60; // fallback para 8 horas
             }
