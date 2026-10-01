@@ -1197,8 +1197,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>Funcionário *</label>
-        <select id="jaFuncionarioId"></select>
+        <label>Funcionários *</label>
+        <select id="jaFuncionarioId" multiple size="4" style="height:auto;"></select>
       </div>
       <div class="form-row">
           <div class="form-group">
@@ -1213,8 +1213,6 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div class="form-group">
         <label>Tipo *</label>
         <select id="jaTipo" onchange="toggleJaMotivo()">
-          <option value="servico_externo">Serviço externo / Viagem de trabalho</option>
-          <option value="falta_justificada">Falta justificada</option>
         </select>
       </div>
       <div class="form-group" id="jaMotivoGroup" style="display:none">
@@ -2200,37 +2198,56 @@ async function verificarMarcacoesPendentes() {
 }
 
 function toggleJaMotivo() {
-  const tipo = document.getElementById('jaTipo').value;
-  document.getElementById('jaMotivoGroup').style.display = tipo === 'falta_justificada' ? 'block' : 'none';
+  const selectTipo = document.getElementById('jaTipo');
+  if (selectTipo.selectedIndex > -1) {
+    const behavior = selectTipo.options[selectTipo.selectedIndex].dataset.behavior;
+    document.getElementById('jaMotivoGroup').style.display = behavior === 'falta_justificada' ? 'block' : 'none';
+  } else {
+    document.getElementById('jaMotivoGroup').style.display = 'none';
+  }
 }
 
 async function abrirModalNovaJustificacao() {
   const select = document.getElementById('jaFuncionarioId');
   select.innerHTML = '<option value="">A carregar...</option>';
+  const tipoSelect = document.getElementById('jaTipo');
+  tipoSelect.innerHTML = '<option value="">A carregar...</option>';
+
   document.getElementById('jaDataInicio').value = '';
   document.getElementById('jaDataFim').value = '';
-  document.getElementById('jaTipo').value = 'servico_externo';
   document.getElementById('jaMotivo').value = 'saude';
   document.getElementById('jaNota').value = '';
   document.getElementById('jaDocumento').value = '';
-  toggleJaMotivo();
   document.getElementById('modalNovaJustificacao').classList.add('open');
 
   try {
-    const res = await api('GET', '/api/funcionarios?estado=activo');
-    select.innerHTML = '<option value="">Selecione o funcionário</option>' +
-      (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
+    const [resFuncs, resTipos] = await Promise.all([
+      api('GET', '/api/funcionarios?estado=activo'),
+      api('GET', '/api/tipos-justificacao?activo=1')
+    ]);
+
+    select.innerHTML = (resFuncs.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
+
+    tipoSelect.innerHTML = (resTipos.dados||[]).map(t => `<option value="${t.codigo}" data-behavior="${t.comportamento}">${esc(t.nome)}</option>`).join('');
+
+    toggleJaMotivo();
   } catch(e) {
     select.innerHTML = '<option value="">Erro ao carregar</option>';
+    tipoSelect.innerHTML = '<option value="">Erro ao carregar</option>';
   }
 }
 
 async function guardarNovaJustificacao() {
-  const funcId = document.getElementById('jaFuncionarioId').value;
+  const select = document.getElementById('jaFuncionarioId');
+  const funcIds = Array.from(select.selectedOptions).map(opt => opt.value);
   const dataIn = document.getElementById('jaDataInicio').value;
   const dataFim = document.getElementById('jaDataFim').value;
   const tipo = document.getElementById('jaTipo').value;
-  if (!funcId || !dataIn || !dataFim || !tipo) return toast('Preencha os campos obrigatórios.', 'err');
+
+  if (funcIds.length === 0 || !dataIn || !dataFim || !tipo) return toast('Preencha os campos obrigatórios.', 'err');
+
+  const selectTipo = document.getElementById('jaTipo');
+  const behavior = selectTipo.options[selectTipo.selectedIndex].dataset.behavior;
 
   const btn = document.getElementById('btnGuardarJa');
   btn.disabled = true;
@@ -2253,11 +2270,11 @@ async function guardarNovaJustificacao() {
     }
 
     const payload = {
-      funcionario_id: funcId,
+      funcionario_ids: funcIds,
       data_inicio: dataIn,
       data_fim: dataFim,
       tipo: tipo,
-      motivo: tipo === 'falta_justificada' ? document.getElementById('jaMotivo').value : null,
+      motivo: behavior === 'falta_justificada' ? document.getElementById('jaMotivo').value : null,
       nota: document.getElementById('jaNota').value.trim() || null,
       documento_url: docUrl
     };
@@ -2280,10 +2297,15 @@ async function carregarJustificacoesAusencia() {
   if (!el) return;
   el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   try {
-    const res = await api('GET', '/api/justificacoes-ausencia');
+    const [resJa, resTipos] = await Promise.all([
+      api('GET', '/api/justificacoes-ausencia'),
+      api('GET', '/api/tipos-justificacao')
+    ]);
     const canApprove = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
+    const mapTipos = {};
+    (resTipos.dados||[]).forEach(t => mapTipos[t.codigo] = t);
 
-    const rows = (res.dados||[]).map(j => {
+    const rows = (resJa.dados||[]).map(j => {
       let badgeClass = j.estado === 'pendente' ? 'warn' : (j.estado === 'aprovado' ? 'green' : 'red');
       let actBtn = '';
       if (j.estado === 'pendente' && canApprove) {
@@ -2292,7 +2314,11 @@ async function carregarJustificacoesAusencia() {
       }
 
       let docLink = j.documento_url ? `<a href="${j.documento_url}" target="_blank" title="Ver documento">📄</a>` : '';
-      let tipoStr = j.tipo === 'servico_externo' ? 'Serviço Externo' : `Falta (${j.motivo})`;
+      let tipoObj = mapTipos[j.tipo] || { nome: 'Falta Justificada (Órfão)', comportamento: 'falta_justificada' };
+      let tipoStr = tipoObj.nome;
+      if (tipoObj.comportamento === 'falta_justificada' && j.motivo) {
+        tipoStr += ` (${j.motivo})`;
+      }
 
       return `<tr>
         <td><span style="font-family:var(--mono)">${j.data_inicio} → ${j.data_fim}</span></td>
@@ -2876,8 +2902,72 @@ async function loadConfigs() {
   try {
     const res = await api('GET', '/api/configuracoes');
     _configs = res.dados || {};
+    const resTipos = await api('GET', '/api/tipos-justificacao');
+    const tipos = resTipos.dados || [];
+
     const c = _configs;
     document.getElementById('configsContent').innerHTML = `
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-head">
+          <div class="card-title">Motivos de Justificação</div>
+        </div>
+        <div class="card-body">
+          <p style="font-size:13px;color:var(--muted2);margin-bottom:12px">Os motivos inactivos não aparecem para novas justificações, mas são mantidos no histórico. Não é possível apagá-los.</p>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Nome (Visível no Relatório)</th>
+                <th>Comportamento no Relatório</th>
+                <th>Estado</th>
+                <th width="80">Acções</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tipos.map(t => `
+              <tr>
+                <td style="font-family:var(--mono)">${esc(t.codigo)}</td>
+                <td><input type="text" id="tjn_${t.id}" value="${esc(t.nome)}" class="select-input" style="width:100%"></td>
+                <td>
+                  <span class="badge badge-${t.comportamento === 'trabalho' ? 'blue' : 'orange'}">
+                    ${t.comportamento === 'trabalho' ? 'Conta como trabalho' : 'Falta Justificada'}
+                  </span>
+                </td>
+                <td>
+                  <select id="tja_${t.id}" class="select-input">
+                    <option value="1" ${t.activo ? 'selected' : ''}>Activo</option>
+                    <option value="0" ${!t.activo ? 'selected' : ''}>Inactivo</option>
+                  </select>
+                </td>
+                <td><button class="btn btn-sm btn-accent" onclick="guardarTipoJustificacao(${t.id})">Guardar</button></td>
+              </tr>
+              `).join('')}
+              <tr>
+                <td colspan="5" style="background:var(--bg2);padding-top:16px">
+                  <div style="font-weight:600;margin-bottom:8px">Criar Novo Motivo</div>
+                  <div class="form-row">
+                    <div class="form-group" style="flex:2">
+                      <label>Nome do Motivo</label>
+                      <input type="text" id="novoTjNome" placeholder="Ex: Formação Externa">
+                    </div>
+                    <div class="form-group" style="flex:2">
+                      <label>Comportamento</label>
+                      <select id="novoTjComportamento">
+                        <option value="trabalho">Conta como Trabalho (Ex: Serviço Externo)</option>
+                        <option value="falta_justificada">Falta Justificada (Sem perda de retribuição base)</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="display:flex;align-items:flex-end;">
+                      <button class="btn btn-accent" onclick="criarTipoJustificacao()">+ Adicionar</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head"><div class="card-title">Geofencing</div></div>
         <div class="card-body">
@@ -2921,6 +3011,37 @@ async function loadConfigs() {
         </div>
       </div>`;
   } catch(e) { document.getElementById('configsContent').innerHTML = '<div class="empty">Erro ao carregar.</div>'; }
+}
+
+async function guardarTipoJustificacao(id) {
+  const nome = document.getElementById(`tjn_${id}`).value.trim();
+  const activo = document.getElementById(`tja_${id}`).value;
+  if (!nome) return toast('O nome não pode estar vazio.', 'err');
+
+  try {
+    const res = await api('PUT', `/api/tipos-justificacao/${id}`, { nome, activo });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    loadConfigs();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
+}
+
+async function criarTipoJustificacao() {
+  const nome = document.getElementById('novoTjNome').value.trim();
+  const comportamento = document.getElementById('novoTjComportamento').value;
+
+  if (!nome) return toast('O nome é obrigatório.', 'err');
+
+  try {
+    const res = await api('POST', '/api/tipos-justificacao', { nome, comportamento });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(res.mensagem, 'ok');
+    loadConfigs();
+  } catch (e) {
+    toast(e.message, 'err');
+  }
 }
 
 async function guardarConfigs() {
@@ -3572,7 +3693,7 @@ function gerarHTMLRelatorioIndividual(res) {
         if (r.tipo_presenca === 'ferias') {
             ocor = '<span class="badge badge-blue">Férias</span>';
         } else if (r.has_servico_externo) {
-            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
+            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd">Trabalho Externo</span>';
             diasPresentes++;
         } else if (r.motivo_falta_justificada) {
             ocor = `<span class="badge badge-blue">Justificado: ${esc(r.motivo_falta_justificada)}</span>`;
@@ -3592,7 +3713,7 @@ function gerarHTMLRelatorioIndividual(res) {
     else if (ent && !sai) ocor = r.is_incoerente ? '' : '<span class="badge badge-warn">Meio Dia (só entrada)</span>';
     else {
         if (r.has_servico_externo) {
-            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
+            ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd">Trabalho Externo</span>';
         }
         let badges = [];
         if (r.atraso_minutos > 0) badges.push(`<span class="badge" style="background:rgba(255,235,59,.15);color:#d4af37">Entrada Tardia (+${r.atraso_minutos}min)</span>`);

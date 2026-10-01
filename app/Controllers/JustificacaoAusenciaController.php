@@ -52,7 +52,11 @@ class JustificacaoAusenciaController
         $data = $request->getParsedBody();
         $db = $this->db();
 
-        $funcionarioId = (int)($data['funcionario_id'] ?? 0);
+        $funcionarioIds = $data['funcionario_ids'] ?? [];
+        if (!is_array($funcionarioIds) && !empty($data['funcionario_id'])) {
+            $funcionarioIds = [$data['funcionario_id']]; // fallback se vier do formato antigo
+        }
+
         $dataInicio = $data['data_inicio'] ?? '';
         $dataFim = $data['data_fim'] ?? '';
         $tipo = $data['tipo'] ?? '';
@@ -60,29 +64,51 @@ class JustificacaoAusenciaController
         $nota = $data['nota'] ?? null;
         $documentoUrl = $data['documento_url'] ?? null;
 
-        if (!$funcionarioId || !$dataInicio || !$dataFim || !$tipo) {
+        if (empty($funcionarioIds) || !$dataInicio || !$dataFim || !$tipo) {
             $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'Dados incompletos.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        $stmt = $db->prepare("SELECT comportamento FROM tipos_justificacao WHERE codigo = :codigo AND activo = 1 LIMIT 1");
+        $stmt->execute([':codigo' => $tipo]);
+        $tipoJustificacao = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$tipoJustificacao) {
+            $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'Tipo de justificação inválido ou inativo.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $comportamento = $tipoJustificacao['comportamento'];
         $criadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
 
-        $stmt = $db->prepare("
-            INSERT INTO justificacoes_ausencia
-            (funcionario_id, data_inicio, data_fim, tipo, motivo, nota, documento_url, estado, criado_por)
-            VALUES (:fid, :dini, :dfim, :tipo, :motivo, :nota, :doc, 'pendente', :criado_por)
-        ");
+        try {
+            $db->beginTransaction();
 
-        $stmt->execute([
-            ':fid' => $funcionarioId,
-            ':dini' => $dataInicio,
-            ':dfim' => $dataFim,
-            ':tipo' => $tipo,
-            ':motivo' => $tipo === 'falta_justificada' ? $motivo : null,
-            ':nota' => $nota,
-            ':doc' => $documentoUrl,
-            ':criado_por' => $criadoPor
-        ]);
+            $stmtInsert = $db->prepare("
+                INSERT INTO justificacoes_ausencia
+                (funcionario_id, data_inicio, data_fim, tipo, motivo, nota, documento_url, estado, criado_por)
+                VALUES (:fid, :dini, :dfim, :tipo, :motivo, :nota, :doc, 'pendente', :criado_por)
+            ");
+
+            foreach ($funcionarioIds as $fId) {
+                $stmtInsert->execute([
+                    ':fid' => (int)$fId,
+                    ':dini' => $dataInicio,
+                    ':dfim' => $dataFim,
+                    ':tipo' => $tipo,
+                    ':motivo' => $comportamento === 'falta_justificada' ? $motivo : null,
+                    ':nota' => $nota,
+                    ':doc' => $documentoUrl,
+                    ':criado_por' => $criadoPor
+                ]);
+            }
+
+            $db->commit();
+        } catch (\Exception $e) {
+            $db->rollBack();
+            $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'Erro ao submeter justificação.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
 
         $response->getBody()->write(json_encode(['erro' => false, 'mensagem' => 'Justificação submetida com sucesso.']));
         return $response->withHeader('Content-Type', 'application/json');

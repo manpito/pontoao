@@ -180,6 +180,13 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->get('/justificacoes-ausencia/documento/{filename}', [\App\Controllers\JustificacaoAusenciaController::class, 'downloadDocumento'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));
 
+    $group->get('/tipos-justificacao', [\App\Controllers\TipoJustificacaoController::class, 'index'])
+        ->add(new \App\Middleware\AuthMiddleware(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+    $group->post('/tipos-justificacao', [\App\Controllers\TipoJustificacaoController::class, 'store'])
+        ->add(new \App\Middleware\AuthMiddleware(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+    $group->put('/tipos-justificacao/{id}', [\App\Controllers\TipoJustificacaoController::class, 'update'])
+        ->add(new \App\Middleware\AuthMiddleware(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+
     // --- Marcações em Falta ---
     $group->get('/marcacoes-falta',           [\App\Controllers\MarcacaoFaltaController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'supervisor']));

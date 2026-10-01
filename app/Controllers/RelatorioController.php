@@ -172,11 +172,14 @@ class RelatorioController
 
         // Justificações de ausência aprovadas no período (serviço externo / falta justificada)
         $stmtJA = $db->prepare("
-            SELECT tipo, data_inicio, data_fim, motivo
-            FROM justificacoes_ausencia
-            WHERE funcionario_id = :fid
-              AND estado = 'aprovado'
-              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+            SELECT j.tipo, j.data_inicio, j.data_fim, j.motivo,
+                   COALESCE(tj.comportamento, 'falta_justificada') as comportamento,
+                   COALESCE(tj.nome, 'Falta Justificada (Órfão)') as tipo_nome
+            FROM justificacoes_ausencia j
+            LEFT JOIN tipos_justificacao tj ON j.tipo = tj.codigo
+            WHERE j.funcionario_id = :fid
+              AND j.estado = 'aprovado'
+              AND j.data_inicio <= :dataFim AND j.data_fim >= :dataInicio
         ");
         $stmtJA->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
@@ -368,9 +371,9 @@ class RelatorioController
             if (isset($justificacoesAusencia)) {
                 foreach ($justificacoesAusencia as $ja) {
                     if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                        if ($ja['tipo'] === 'servico_externo') {
+                        if ($ja['comportamento'] === 'trabalho') {
                             $hasServicoExterno = true;
-                        } elseif ($ja['tipo'] === 'falta_justificada') {
+                        } elseif ($ja['comportamento'] === 'falta_justificada') {
                             $motivoFaltaJustificada = $ja['motivo'];
                         }
                     }
@@ -602,11 +605,14 @@ class RelatorioController
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
         $stmtJA = $db->prepare("
-            SELECT data_inicio, data_fim, tipo, estado, motivo
-            FROM justificacoes_ausencia
-            WHERE funcionario_id = :fid
-              AND data_inicio <= :fim AND data_fim >= :ini
-              AND estado = 'aprovado'
+            SELECT j.data_inicio, j.data_fim, j.tipo, j.estado, j.motivo,
+                   COALESCE(tj.comportamento, 'falta_justificada') as comportamento,
+                   COALESCE(tj.nome, 'Falta Justificada (Órfão)') as tipo_nome
+            FROM justificacoes_ausencia j
+            LEFT JOIN tipos_justificacao tj ON j.tipo = tj.codigo
+            WHERE j.funcionario_id = :fid
+              AND j.data_inicio <= :fim AND j.data_fim >= :ini
+              AND j.estado = 'aprovado'
         ");
         $stmtJA->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
@@ -730,9 +736,9 @@ class RelatorioController
                 if ($diaInfo['estado'] === 'ausente' && isset($justificacoesAusencia)) {
                     foreach ($justificacoesAusencia as $ja) {
                         if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                            if ($ja['tipo'] === 'falta_justificada') {
-                                $diaInfo['estado'] = 'justificado (' . $ja['motivo'] . ')';
-                            } elseif ($ja['tipo'] === 'servico_externo') {
+                            if ($ja['comportamento'] === 'falta_justificada') {
+                                $diaInfo['estado'] = 'justificado (' . $ja['tipo_nome'] . ($ja['motivo'] ? ' - ' . $ja['motivo'] : '') . ')';
+                            } elseif ($ja['comportamento'] === 'trabalho') {
                                 $diaInfo['estado'] = 'presente';
                                 $totalPresente++;
                             }
@@ -874,11 +880,14 @@ class RelatorioController
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
         $stmtJA = $db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo, estado, motivo
-            FROM justificacoes_ausencia
-            WHERE funcionario_id IN ({$inStr})
-              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
-              AND estado = 'aprovado'
+            SELECT j.funcionario_id, j.data_inicio, j.data_fim, j.tipo, j.estado, j.motivo,
+                   COALESCE(tj.comportamento, 'falta_justificada') as comportamento,
+                   COALESCE(tj.nome, 'Falta Justificada (Órfão)') as tipo_nome
+            FROM justificacoes_ausencia j
+            LEFT JOIN tipos_justificacao tj ON j.tipo = tj.codigo
+            WHERE j.funcionario_id IN ({$inStr})
+              AND j.data_inicio <= :dataFim AND j.data_fim >= :dataInicio
+              AND j.estado = 'aprovado'
         ");
         $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
@@ -987,11 +996,11 @@ class RelatorioController
                     if (!$justificado && isset($justAusFunc)) {
                         foreach ($justAusFunc as $ja) {
                             if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                                if ($ja['tipo'] === 'falta_justificada') {
+                                if ($ja['comportamento'] === 'falta_justificada') {
                                     $justificado = true;
-                                    $diaInfo['justificacao'] = 'Falta Justificada (' . $ja['motivo'] . ')';
+                                    $diaInfo['justificacao'] = $ja['tipo_nome'] . ($ja['motivo'] ? ' (' . $ja['motivo'] : '') . ')';
                                     break;
-                                } elseif ($ja['tipo'] === 'servico_externo') {
+                                } elseif ($ja['comportamento'] === 'trabalho') {
                                     $diaInfo['tipo'] = 'presente';
                                     $diaInfo['servico_externo'] = true;
                                     $totalPresente++;

@@ -67,6 +67,8 @@ class CalculoHorasService
                 $minutosEsperados = 8 * 60; // fallback para 8 horas
             }
 
+            // O comportamento agora é dinâmico, mas logicamente continua a chamar-se 'servico_externo' no resultado
+            // para compatibilidade com o resto do sistema.
             $resultado['tipo_presenca'] = 'servico_externo';
             $resultado['minutos_totais'] = $minutosEsperados;
             $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);

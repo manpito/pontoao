@@ -151,11 +151,12 @@ class ExportacaoController
 
         // 2.6b — Buscar justificações de ausência aprovadas do período (serviço externo)
         $stmtJA = $db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo
-            FROM justificacoes_ausencia
-            WHERE funcionario_id IN ({$inStr})
-              AND estado = 'aprovado'
-              AND data_inicio <= :fim AND data_fim >= :ini
+            SELECT j.funcionario_id, j.data_inicio, j.data_fim, j.tipo, COALESCE(tj.comportamento, 'falta_justificada') as comportamento
+            FROM justificacoes_ausencia j
+            LEFT JOIN tipos_justificacao tj ON j.tipo = tj.codigo
+            WHERE j.funcionario_id IN ({$inStr})
+              AND j.estado = 'aprovado'
+              AND j.data_inicio <= :fim AND j.data_fim >= :ini
         ");
         $stmtJA->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
         $todasJA = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
@@ -249,7 +250,7 @@ class ExportacaoController
 
                 $hasServicoExterno = false;
                 foreach ($todasJA as $ja) {
-                    if ($ja['funcionario_id'] == $fId && $ja['tipo'] === 'servico_externo' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                    if ($ja['funcionario_id'] == $fId && $ja['comportamento'] === 'trabalho' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
                         $hasServicoExterno = true;
                         break;
                     }

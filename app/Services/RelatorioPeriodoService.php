@@ -78,11 +78,12 @@ class RelatorioPeriodoService
 
             // Justificações de ausência
             $stmtJA = $this->pdo->prepare("
-                SELECT funcionario_id, data_inicio, data_fim, tipo, estado
-                FROM justificacoes_ausencia
-                WHERE funcionario_id IN ({$inStr})
-                  AND data_inicio <= :dataFim AND data_fim >= :dataInicio
-                  AND estado = 'aprovado'
+                SELECT j.funcionario_id, j.data_inicio, j.data_fim, j.tipo, j.estado, COALESCE(tj.comportamento, 'falta_justificada') as comportamento
+                FROM justificacoes_ausencia j
+                LEFT JOIN tipos_justificacao tj ON j.tipo = tj.codigo
+                WHERE j.funcionario_id IN ({$inStr})
+                  AND j.data_inicio <= :dataFim AND j.data_fim >= :dataInicio
+                  AND j.estado = 'aprovado'
             ");
             $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
             $todasJustificacoes = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
@@ -156,9 +157,9 @@ class RelatorioPeriodoService
 
                 foreach ($justificacoesFunc as $ja) {
                     if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
-                        if ($ja['tipo'] === 'servico_externo') {
+                        if ($ja['comportamento'] === 'trabalho') {
                             $hasServicoExterno = true;
-                        } elseif ($ja['tipo'] === 'falta_justificada') {
+                        } elseif ($ja['comportamento'] === 'falta_justificada') {
                             $hasFaltaJustificada = true;
                         }
                     }

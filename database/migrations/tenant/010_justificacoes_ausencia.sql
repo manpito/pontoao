@@ -3,7 +3,7 @@ CREATE TABLE `justificacoes_ausencia` (
     `funcionario_id`        INT UNSIGNED    NOT NULL,
     `data_inicio`           DATE            NOT NULL,
     `data_fim`              DATE            NOT NULL,
-    `tipo`                  ENUM('servico_externo', 'falta_justificada') NOT NULL,
+    `tipo`                  VARCHAR(50) NOT NULL,
     `motivo`                ENUM('saude', 'luto', 'casamento', 'assistencia_familiar', 'outro') NULL,
     `nota`                  TEXT            NULL,
     `documento_url`         VARCHAR(255)    NULL,
