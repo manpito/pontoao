@@ -65,6 +65,14 @@ class JustificacaoAusenciaController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        $stmtTipos = $db->query("SELECT codigo FROM tipos_justificacao WHERE activo = TRUE");
+        $tiposValidos = $stmtTipos->fetchAll(PDO::FETCH_COLUMN);
+
+        if (!in_array($tipo, $tiposValidos)) {
+            $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'Tipo de justificação inválido.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         $criadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
 
         $stmt = $db->prepare("

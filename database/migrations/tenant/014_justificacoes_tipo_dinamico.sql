@@ -1,0 +1,1 @@
+ALTER TABLE justificacoes_ausencia MODIFY COLUMN tipo VARCHAR(50) NOT NULL;
