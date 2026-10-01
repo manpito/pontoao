@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Corrigido o cálculo de horas em dias de serviço externo que caem num dia de folga — deixam de contar como 8h de trabalho.
 - Justificação de ausência passa a validar que a data de fim não é anterior à data de início, evitando registos que nunca se aplicam a nenhum dia.
 - Corrigido perfil 'Colaborador RH' em falta nos tenants criados antes de 27/05/2026 (FTL, KWD, MTM) — criar acesso com esse perfil já não falha.
 - Relatórios deixam de alterar marcações ao serem abertos; corte de saída tardia passa a ser só de visualização, consistente entre Período, Individual e Exportação Primavera.
