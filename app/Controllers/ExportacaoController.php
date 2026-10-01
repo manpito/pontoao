@@ -160,6 +160,12 @@ class ExportacaoController
         $stmtJA->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
         $todasJA = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
+        $stmtTipos = $db->query("SELECT codigo, comportamento FROM tipos_justificacao");
+        $tiposComportamentoMap = [];
+        foreach ($stmtTipos->fetchAll(PDO::FETCH_ASSOC) as $t) {
+            $tiposComportamentoMap[$t['codigo']] = $t['comportamento'];
+        }
+
         // 2.7 — Processar e gerar linhas
         $escalaService = new \App\Services\EscalaService($db);
 
@@ -249,9 +255,12 @@ class ExportacaoController
 
                 $hasServicoExterno = false;
                 foreach ($todasJA as $ja) {
-                    if ($ja['funcionario_id'] == $fId && $ja['tipo'] === 'servico_externo' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                        $hasServicoExterno = true;
-                        break;
+                    if ($ja['funcionario_id'] == $fId && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                        $comp = $tiposComportamentoMap[$ja['tipo']] ?? 'falta_justificada_nao_remunerada';
+                        if ($comp === 'trabalho') {
+                            $hasServicoExterno = true;
+                            break;
+                        }
                     }
                 }
 
