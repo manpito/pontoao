@@ -733,8 +733,11 @@ class RelatorioController
                             if ($ja['tipo'] === 'falta_justificada') {
                                 $diaInfo['estado'] = 'justificado (' . $ja['motivo'] . ')';
                             } elseif ($ja['tipo'] === 'servico_externo') {
-                                $diaInfo['estado'] = 'presente';
-                                $totalPresente++;
+                                $turnoAtual = $escalaService->calcularTurnoEm($funcionario['id'], clone $dia);
+                                if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
+                                    $diaInfo['estado'] = 'presente';
+                                    $totalPresente++;
+                                }
                             }
                             break;
                         }
@@ -992,9 +995,13 @@ class RelatorioController
                                     $diaInfo['justificacao'] = 'Falta Justificada (' . $ja['motivo'] . ')';
                                     break;
                                 } elseif ($ja['tipo'] === 'servico_externo') {
-                                    $diaInfo['tipo'] = 'presente';
                                     $diaInfo['servico_externo'] = true;
-                                    $totalPresente++;
+                                    $turnoAtual = $escalaService->calcularTurnoEm($funcId, clone $dia);
+                                    if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
+                                        $diaInfo['tipo'] = 'presente';
+                                        $totalPresente++;
+                                    }
+
                                     $justificado = true;
                                     break;
                                 }
