@@ -65,6 +65,11 @@ class JustificacaoAusenciaController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
+        if ($dataFim < $dataInicio) {
+            $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'A data de fim não pode ser anterior à data de início.']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
         $stmtTipos = $db->query("SELECT codigo FROM tipos_justificacao WHERE activo = TRUE");
         $tiposValidos = $stmtTipos->fetchAll(PDO::FETCH_COLUMN);
 
