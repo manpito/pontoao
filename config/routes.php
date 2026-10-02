@@ -136,6 +136,19 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
     $group->get('/departamentos',       [\App\Controllers\DepartamentoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
+    // --- Tipos de Justificação ---
+    $group->get('/tipos-justificacao',                [\App\Controllers\TipoJustificacaoController::class, 'listar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+
+    $group->post('/tipos-justificacao',               [\App\Controllers\TipoJustificacaoController::class, 'criar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->put('/tipos-justificacao/{id}',           [\App\Controllers\TipoJustificacaoController::class, 'actualizar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->patch('/tipos-justificacao/{id}/activo',  [\App\Controllers\TipoJustificacaoController::class, 'alternarActivo'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
     $group->post('/departamentos',      [\App\Controllers\DepartamentoController::class, 'store'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
