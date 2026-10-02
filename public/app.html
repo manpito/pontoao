@@ -356,6 +356,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <button class="nav-item" onclick="nav('departamentos')" id="nav-departamentos"><span class="ni">◫</span> Departamentos</button>
     <button class="nav-item" onclick="nav('cargos')" id="nav-cargos"><span class="ni">◈</span> Cargos</button>
     <button class="nav-item" onclick="nav('horarios')" id="nav-horarios"><span class="ni">◷</span> Horários</button>
+    <button class="nav-item" onclick="nav('tipos-justificacao')" id="nav-tipos-justificacao"><span class="ni">◈</span> Motivos de Justificação</button>
 
     <hr class="sb-divider">
     <div class="sb-section">Relatórios e Dados</div>
@@ -664,6 +665,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <button class="btn btn-accent" id="btnGuardarConfigs" onclick="guardarConfigs()">Guardar</button>
       </div>
       <div id="configsContent"><div class="empty"><span class="spinner"></span></div></div>
+    </div>
+
+    <!-- TIPOS JUSTIFICAÇÃO -->
+    <div class="page" id="page-tipos-justificacao">
+      <div class="page-header">
+        <div><div class="page-title">Motivos de Justificação</div><div class="page-sub">Gestão de motivos para justificação de ausências</div></div>
+        <button class="btn btn-accent" id="btnNovoTipoJustificacao" onclick="abrirModalTipoJustificacao()">Novo motivo</button>
+      </div>
+      <div id="tiposJustificacaoTable"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
 
@@ -1035,6 +1045,34 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   </div>
 </div>
 
+
+<!-- MODAL TIPOS JUSTIFICACAO -->
+<div class="overlay" id="modalTipoJustificacao">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="modalTipoJustificacaoTitle">Novo motivo</h3>
+      <button class="modal-close" onclick="fecharModal('modalTipoJustificacao')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tjId">
+      <div class="form-group"><label>Código *</label><input id="tjCodigo" placeholder="Ex: falta_injustificada"></div>
+      <div class="form-group"><label>Nome *</label><input id="tjNome" placeholder="Ex: Falta Injustificada"></div>
+      <div class="form-group">
+        <label>Comportamento *</label>
+        <select id="tjComportamento">
+          <option value="trabalho">Conta como trabalho</option>
+          <option value="falta_justificada_remunerada">Falta justificada, remunerada</option>
+          <option value="falta_justificada_nao_remunerada">Falta justificada, não remunerada</option>
+        </select>
+      </div>
+      <div id="tjErro" class="err-box" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalTipoJustificacao')">Cancelar</button>
+      <button class="btn btn-accent" onclick="guardarTipoJustificacao()">Guardar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL ROTAÇÁO -->
 <!-- MODAL TURNO -->
@@ -1544,6 +1582,96 @@ function showApp() {
 
 // ── NAV ──
 
+// ── TIPOS DE JUSTIFICAÇÃO ──
+async function loadTiposJustificacao() {
+  const el = document.getElementById("tiposJustificacaoTable");
+  if (!el) return;
+  el.innerHTML = "<div class=\"empty\"><span class=\"spinner\"></span></div>";
+  try {
+    const res = await api("GET", "/api/tipos-justificacao");
+    const dados = res.dados || [];
+
+    const comportamentos = {
+      'trabalho': 'Conta como trabalho',
+      'falta_justificada_remunerada': 'Falta justificada, remunerada',
+      'falta_justificada_nao_remunerada': 'Falta justificada, não remunerada'
+    };
+
+    const rows = dados.map(t => {
+      const comportamentoDisplay = comportamentos[t.comportamento] || t.comportamento;
+      return `<tr>
+        <td><strong>${esc(t.nome)}</strong></td>
+        <td style="font-family:var(--mono)">${esc(t.codigo)}</td>
+        <td>${esc(comportamentoDisplay)}</td>
+        <td>
+          <input type="checkbox" ${t.activo ? 'checked' : ''} onchange="alternarActivoTipoJustificacao(${t.id}, '${esc(t.codigo)}', ${t.activo})">
+        </td>
+        <td>
+          <button class="btn btn-sm" onclick="abrirModalTipoJustificacao(${t.id}, '${esc(t.codigo)}', '${esc(t.nome)}', '${esc(t.comportamento)}')">Editar</button>
+        </td>
+      </tr>`;
+    }).join("");
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Nome</th><th>Código</th><th>Comportamento</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows||"<tr><td colspan=\"5\" class=\"empty\">Sem motivos configurados.</td></tr>"}</tbody>
+    </table>`;
+  } catch(e) { el.innerHTML = "<div class=\"empty\">Erro ao carregar motivos de justificação.</div>"; }
+}
+
+function abrirModalTipoJustificacao(id = null, codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada') {
+  document.getElementById("tjId").value = id || "";
+  document.getElementById("tjCodigo").value = codigo;
+  document.getElementById("tjCodigo").disabled = !!id;
+  document.getElementById("tjNome").value = nome;
+  document.getElementById("tjComportamento").value = comportamento;
+  document.getElementById("tjErro").style.display = 'none';
+  document.getElementById("modalTipoJustificacaoTitle").textContent = id ? "Editar motivo" : "Novo motivo";
+  document.getElementById("modalTipoJustificacao").classList.add("open");
+}
+
+async function guardarTipoJustificacao() {
+  const id = document.getElementById("tjId").value;
+  const payload = {
+    codigo: document.getElementById("tjCodigo").value.trim(),
+    nome: document.getElementById("tjNome").value.trim(),
+    comportamento: document.getElementById("tjComportamento").value
+  };
+
+  const errBox = document.getElementById("tjErro");
+  errBox.style.display = 'none';
+
+  if (!payload.codigo && !id) { errBox.textContent = "O código é obrigatório."; errBox.style.display = 'block'; return; }
+  if (!payload.nome) { errBox.textContent = "O nome é obrigatório."; errBox.style.display = 'block'; return; }
+
+  try {
+    const res = id ? await api("PUT", `/api/tipos-justificacao/${id}`, payload) : await api("POST", "/api/tipos-justificacao", payload);
+    if (res.erro) throw new Error(res.mensagem);
+    fecharModal("modalTipoJustificacao");
+    loadTiposJustificacao();
+  } catch(e) {
+    errBox.textContent = e.message;
+    errBox.style.display = 'block';
+  }
+}
+
+async function alternarActivoTipoJustificacao(id, codigo, estadoActual) {
+  if (estadoActual && (codigo === 'servico_externo' || codigo === 'falta_justificada')) {
+    if (!confirm("Atenção: Desactivar este motivo base impede novas justificações deste tipo, mas não afecta as já existentes. Deseja continuar?")) {
+      loadTiposJustificacao(); // Revert toggle visual state
+      return;
+    }
+  }
+
+  try {
+    const res = await api("PATCH", `/api/tipos-justificacao/${id}/activo`);
+    if (res.erro) throw new Error(res.mensagem);
+    loadTiposJustificacao();
+  } catch(e) {
+    toast(e.message, 'err');
+    loadTiposJustificacao(); // Revert toggle visual state on error
+  }
+}
+
 // ── CARGOS ──
 let _cargos = [];
 let _editCargoId = null;
@@ -1639,6 +1767,7 @@ function applyPermissions() {
   hide('nav-configs', p !== 'super_admin_tenant');
   hide('nav-relatorio-periodo', p === 'supervisor');
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
+  hide('nav-tipos-justificacao', p === 'supervisor');
 
   // Action buttons
   hide('btnNovoAno', ['rh_colaborador', 'supervisor'].includes(p));
@@ -1653,7 +1782,7 @@ function applyPermissions() {
   if (p === 'supervisor') {
       sections.forEach((s, i) => { if (i >= 2) s.style.display = 'none'; });
       dividers.forEach((d, i) => { if (i >= 1) d.style.display = 'none'; });
-      ['nav-departamentos', 'nav-horarios', 'nav-relatorios', 'nav-exportacao', 'nav-importacao', 'nav-turnos', 'nav-escalas', 'nav-periodos', 'nav-configs', 'nav-cargos'].forEach(id => hide(id, true));
+      ['nav-departamentos', 'nav-horarios', 'nav-relatorios', 'nav-exportacao', 'nav-importacao', 'nav-turnos', 'nav-escalas', 'nav-periodos', 'nav-configs', 'nav-cargos', 'nav-tipos-justificacao'].forEach(id => hide(id, true));
   }
 
   if (p === 'rh_colaborador') {
@@ -1681,7 +1810,8 @@ function nav(page) {
     'relatorio-periodo': initRelatorioPeriodo,
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: () => { carregarEscalas(); carregarExcecoes(); },
     calendario: carregarAnosLaborais,
-    exportacao: loadExportacao
+    exportacao: loadExportacao,
+    'tipos-justificacao': loadTiposJustificacao
   };
   loaders[page]?.();
 }
