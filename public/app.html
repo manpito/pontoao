@@ -3574,8 +3574,9 @@ function gerarHTMLRelatorioIndividual(res) {
         } else if (r.has_servico_externo) {
             ocor = '<span class="badge badge-blue" style="background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd" title="Serviço Externo / Viagem">Serviço Externo</span>';
             diasPresentes++;
-        } else if (r.motivo_falta_justificada) {
-            ocor = `<span class="badge badge-blue">Justificado: ${esc(r.motivo_falta_justificada)}</span>`;
+        } else if (r.is_justificado) {
+            const motivo = r.motivo_falta_justificada ? `: ${esc(r.motivo_falta_justificada)}` : '';
+            ocor = `<span class="badge badge-blue">Justificado${motivo}</span>`;
         } else if (r.marcacao_falta_estado && r.marcacao_falta_estado !== 'pendente') {
             const badgeClass = r.marcacao_falta_estado.startsWith('justificada') ? 'green' : 'red';
             ocor = `<span class="badge badge-${badgeClass}">${esc(labelEstadoFalta(r.marcacao_falta_estado))}</span>`;
