@@ -21,7 +21,7 @@ class TipoJustificacaoService
             }
             return $map;
         } catch (\Exception $e) {
-            // Em testes, a tabela pode não existir logo
+            error_log("Erro ao carregar tipos_justificacao: " . $e->getMessage());
             return [];
         }
     }

@@ -353,6 +353,7 @@ class RelatorioController
 
             $hasServicoExterno = false;
             $motivoFaltaJustificada = null;
+            $isJustificado = false;
             $hasFerias = false;
 
             $marcacaoFaltaId = null;
@@ -372,8 +373,11 @@ class RelatorioController
                     if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
                         $comp = $tiposComportamentoMap[$ja['tipo']] ?? 'falta_justificada_nao_remunerada';
                         if ($comp === 'trabalho') {
-                            $hasServicoExterno = true;
+                            if (!$turno || $turno['tipo'] !== 'folga') {
+                                $hasServicoExterno = true;
+                            }
                         } elseif (in_array($comp, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
+                            $isJustificado = true;
                             $motivoFaltaJustificada = $ja['motivo'];
                         }
                     }
@@ -420,6 +424,7 @@ class RelatorioController
                     'is_incoerente'                  => $resultadoDia['is_incoerente'] ?? false,
                     'has_servico_externo'            => $hasServicoExterno ?? false,
                     'motivo_falta_justificada'       => $motivoFaltaJustificada ?? null,
+                    'is_justificado'                 => $isJustificado,
                     'marcacao_falta_id'              => $marcacaoFaltaId,
                     'marcacao_falta_estado'          => $marcacaoFaltaEstado,
                     'marcacao_falta_nota'            => $marcacaoFaltaNota,
