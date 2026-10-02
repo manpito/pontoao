@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Relatório Individual e Assiduidade passam a reconhecer motivos de justificação configuráveis, não só os dois motivos originais.
 - Corrigido o cálculo de horas em dias de serviço externo que caem num dia de folga — deixam de contar como 8h de trabalho.
 - Justificação de ausência passa a validar que a data de fim não é anterior à data de início, evitando registos que nunca se aplicam a nenhum dia.
 - Corrigido perfil 'Colaborador RH' em falta nos tenants criados antes de 27/05/2026 (FTL, KWD, MTM) — criar acesso com esse perfil já não falha.

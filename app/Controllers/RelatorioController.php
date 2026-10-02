@@ -108,6 +108,8 @@ class RelatorioController
             return null; // Sem permissão para ver este relatório (não pertence à sua equipa).
         }
 
+        $tiposComportamentoMap = \App\Services\TipoJustificacaoService::getComportamentoMap($db);
+
         $escalaService = new \App\Services\EscalaService($db);
 
         // 2. Feriados
@@ -368,9 +370,10 @@ class RelatorioController
             if (isset($justificacoesAusencia)) {
                 foreach ($justificacoesAusencia as $ja) {
                     if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                        if ($ja['tipo'] === 'servico_externo') {
+                        $comp = $tiposComportamentoMap[$ja['tipo']] ?? 'falta_justificada_nao_remunerada';
+                        if ($comp === 'trabalho') {
                             $hasServicoExterno = true;
-                        } elseif ($ja['tipo'] === 'falta_justificada') {
+                        } elseif (in_array($comp, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                             $motivoFaltaJustificada = $ja['motivo'];
                         }
                     }
@@ -730,9 +733,10 @@ class RelatorioController
                 if ($diaInfo['estado'] === 'ausente' && isset($justificacoesAusencia)) {
                     foreach ($justificacoesAusencia as $ja) {
                         if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                            if ($ja['tipo'] === 'falta_justificada') {
+                            $comp = $tiposComportamentoMap[$ja['tipo']] ?? 'falta_justificada_nao_remunerada';
+                            if (in_array($comp, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                                 $diaInfo['estado'] = 'justificado (' . $ja['motivo'] . ')';
-                            } elseif ($ja['tipo'] === 'servico_externo') {
+                            } elseif ($comp === 'trabalho') {
                                 $turnoAtual = $escalaService->calcularTurnoEm($funcId, $dataStr);
                                 if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
                                     $diaInfo['estado'] = 'presente';
@@ -868,6 +872,8 @@ class RelatorioController
         $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
         // 4. Buscar justificações no período
+        $tiposComportamentoMap = \App\Services\TipoJustificacaoService::getComportamentoMap($db);
+
         $stmtJ = $db->prepare("
             SELECT funcionario_id, data_inicio, data_fim, tipo, estado
             FROM justificacoes
@@ -992,11 +998,12 @@ class RelatorioController
                     if (!$justificado && isset($justAusFunc)) {
                         foreach ($justAusFunc as $ja) {
                             if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                                if ($ja['tipo'] === 'falta_justificada') {
+                                $comp = $tiposComportamentoMap[$ja['tipo']] ?? 'falta_justificada_nao_remunerada';
+                                if (in_array($comp, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                                     $justificado = true;
                                     $diaInfo['justificacao'] = 'Falta Justificada (' . $ja['motivo'] . ')';
                                     break;
-                                } elseif ($ja['tipo'] === 'servico_externo') {
+                                } elseif ($comp === 'trabalho') {
                                     $diaInfo['servico_externo'] = true;
                                     if (!isset($escalaService)) {
                                         $escalaService = new \App\Services\EscalaService($db);
