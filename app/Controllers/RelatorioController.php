@@ -548,6 +548,7 @@ class RelatorioController
         }
 
         $escalaService = new \App\Services\EscalaService($db);
+        $tiposComportamentoMap = \App\Services\TipoJustificacaoService::getComportamentoMap($db);
 
         // 2. Feriados
         $feriados = $this->getFeriados($db, $dataInicio, $dataFim);
