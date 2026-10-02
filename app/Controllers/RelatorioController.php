@@ -737,6 +737,8 @@ class RelatorioController
                                 if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
                                     $diaInfo['estado'] = 'presente';
                                     $totalPresente++;
+                                } else {
+                                    $diaInfo['estado'] = 'folga';
                                 }
                             }
                             break;
@@ -1003,6 +1005,8 @@ class RelatorioController
                                     if (!$turnoAtual || $turnoAtual['tipo'] !== 'folga') {
                                         $diaInfo['tipo'] = 'presente';
                                         $totalPresente++;
+                                    } else {
+                                        $diaInfo['tipo'] = 'folga';
                                     }
 
                                     $justificado = true;
