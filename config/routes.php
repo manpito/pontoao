@@ -234,6 +234,8 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     // Avisos ADMS
     $group->get('/adms-avisos', [\App\Controllers\AdmsAvisosController::class, 'listar'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
+    $group->get('/adms-avisos/funcionario-desconhecido', [\App\Controllers\AdmsAvisosController::class, 'relatorioFuncionarioDesconhecido'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
     $group->patch('/adms-avisos/{id}', [\App\Controllers\AdmsAvisosController::class, 'resolver'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 

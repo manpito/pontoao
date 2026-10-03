@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Avisos de funcionário desconhecido saem do painel de alertas do Dashboard e passam a um relatório próprio, agrupado por relógio e número, com nome e localização do relógio em vez de só o número de série.
 - Corrigido erro que impedia o painel de avisos ADMS de carregar no Dashboard desde a sua criação.
 - Novo ecrã para o RH criar e gerir os seus próprios motivos de justificação de ausência, com o comportamento (conta como trabalho, falta remunerada ou não remunerada) configurável por motivo.
 - Relatório Individual e Assiduidade passam a reconhecer motivos de justificação configuráveis, não só os dois motivos originais.
