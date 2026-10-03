@@ -5,14 +5,22 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use PDO;
+use App\Config\Database;
+use App\Config\TenantResolver;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 class AdmsAvisosController
 {
+    private function db(): PDO
+    {
+        $sub = TenantResolver::resolve() ?? ($_SERVER['HTTP_X_TENANT'] ?? null);
+        return Database::tenant($sub);
+    }
+
     public function listar(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $db = $request->getAttribute('tenant_db');
+        $db = $this->db();
 
         $stmt = $db->query("
             SELECT id, tipo, sn_relogio, numero_funcionario, payload_bruto, resolvido, criado_em
@@ -33,7 +41,7 @@ class AdmsAvisosController
 
     public function resolver(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $db = $request->getAttribute('tenant_db');
+        $db = $this->db();
         $id = (int) $args['id'];
 
         $stmt = $db->prepare("UPDATE adms_avisos SET resolvido = 1 WHERE id = :id");
