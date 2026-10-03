@@ -1583,13 +1583,15 @@ function showApp() {
 // ── NAV ──
 
 // ── TIPOS DE JUSTIFICAÇÃO ──
+let _tiposJustificacao = [];
+
 async function loadTiposJustificacao() {
   const el = document.getElementById("tiposJustificacaoTable");
   if (!el) return;
   el.innerHTML = "<div class=\"empty\"><span class=\"spinner\"></span></div>";
   try {
     const res = await api("GET", "/api/tipos-justificacao");
-    const dados = res.dados || [];
+    _tiposJustificacao = res.dados || [];
 
     const comportamentos = {
       'trabalho': 'Conta como trabalho',
@@ -1597,28 +1599,46 @@ async function loadTiposJustificacao() {
       'falta_justificada_nao_remunerada': 'Falta justificada, não remunerada'
     };
 
-    const rows = dados.map(t => {
+    const readOnly = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
+
+    const rows = _tiposJustificacao.map(t => {
       const comportamentoDisplay = comportamentos[t.comportamento] || t.comportamento;
+
+      let state = '';
+      let actions = '';
+
+      if (readOnly) {
+         state = `<input type="checkbox" ${t.activo ? 'checked' : ''} disabled>`;
+      } else {
+         state = `<input type="checkbox" ${t.activo ? 'checked' : ''} onchange="alternarActivoTipoJustificacao(${t.id})">`;
+         actions = `<button class="btn btn-sm" onclick="abrirModalTipoJustificacao(${t.id})">Editar</button>`;
+      }
+
       return `<tr>
         <td><strong>${esc(t.nome)}</strong></td>
         <td style="font-family:var(--mono)">${esc(t.codigo)}</td>
         <td>${esc(comportamentoDisplay)}</td>
-        <td>
-          <input type="checkbox" ${t.activo ? 'checked' : ''} onchange="alternarActivoTipoJustificacao(${t.id}, '${esc(t.codigo)}', ${t.activo})">
-        </td>
-        <td>
-          <button class="btn btn-sm" onclick="abrirModalTipoJustificacao(${t.id}, '${esc(t.codigo)}', '${esc(t.nome)}', '${esc(t.comportamento)}')">Editar</button>
-        </td>
+        <td>${state}</td>
+        ${readOnly ? '' : `<td>${actions}</td>`}
       </tr>`;
     }).join("");
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Nome</th><th>Código</th><th>Comportamento</th><th>Estado</th><th>Acções</th></tr></thead>
+      <thead><tr><th>Nome</th><th>Código</th><th>Comportamento</th><th>Estado</th>${readOnly ? '' : '<th>Acções</th>'}</tr></thead>
       <tbody>${rows||"<tr><td colspan=\"5\" class=\"empty\">Sem motivos configurados.</td></tr>"}</tbody>
     </table>`;
   } catch(e) { el.innerHTML = "<div class=\"empty\">Erro ao carregar motivos de justificação.</div>"; }
 }
 
-function abrirModalTipoJustificacao(id = null, codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada') {
+function abrirModalTipoJustificacao(id = null) {
+  let codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada';
+  if (id) {
+    const tj = _tiposJustificacao.find(x => x.id === id);
+    if (tj) {
+      codigo = tj.codigo;
+      nome = tj.nome;
+      comportamento = tj.comportamento;
+    }
+  }
   document.getElementById("tjId").value = id || "";
   document.getElementById("tjCodigo").value = codigo;
   document.getElementById("tjCodigo").disabled = !!id;
@@ -1654,7 +1674,11 @@ async function guardarTipoJustificacao() {
   }
 }
 
-async function alternarActivoTipoJustificacao(id, codigo, estadoActual) {
+async function alternarActivoTipoJustificacao(id) {
+  const tj = _tiposJustificacao.find(x => x.id === id);
+  if (!tj) return;
+  const codigo = tj.codigo;
+  const estadoActual = tj.activo;
   if (estadoActual && (codigo === 'servico_externo' || codigo === 'falta_justificada')) {
     if (!confirm("Atenção: Desactivar este motivo base impede novas justificações deste tipo, mas não afecta as já existentes. Deseja continuar?")) {
       loadTiposJustificacao(); // Revert toggle visual state
@@ -1778,6 +1802,7 @@ function applyPermissions() {
   hide('btnGuardarConfigs', p !== 'super_admin_tenant');
   hide('btnNovoCargo', ['rh_colaborador', 'supervisor'].includes(p));
   hide('btnNovoTerminal', ['rh_colaborador', 'supervisor', 'funcionario'].includes(p));
+  hide('btnNovoTipoJustificacao', ['rh_colaborador', 'supervisor'].includes(p));
 
   if (p === 'supervisor') {
       sections.forEach((s, i) => { if (i >= 2) s.style.display = 'none'; });
