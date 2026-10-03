@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Novo ecrã para o RH criar e gerir os seus próprios motivos de justificação de ausência, com o comportamento (conta como trabalho, falta remunerada ou não remunerada) configurável por motivo.
 - Relatório Individual e Assiduidade passam a reconhecer motivos de justificação configuráveis, não só os dois motivos originais.
 - Corrigido o cálculo de horas em dias de serviço externo que caem num dia de folga — deixam de contar como 8h de trabalho.
 - Justificação de ausência passa a validar que a data de fim não é anterior à data de início, evitando registos que nunca se aplicam a nenhum dia.
