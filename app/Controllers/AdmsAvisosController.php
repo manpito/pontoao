@@ -49,14 +49,11 @@ class AdmsAvisosController
                 r.nome AS relogio_nome,
                 r.localizacao AS relogio_localizacao,
                 a.numero_funcionario,
-                COUNT(*) AS total_ocorrencias,
-                MIN(a.criado_em) AS primeira_ocorrencia,
-                MAX(a.criado_em) AS ultima_ocorrencia
+                a.criado_em AS ultima_ocorrencia
             FROM adms_avisos a
             LEFT JOIN relogios r ON a.sn_relogio = r.device_id
-            WHERE a.tipo = 'funcionario_desconhecido'
-            GROUP BY a.sn_relogio, a.numero_funcionario
-            ORDER BY ultima_ocorrencia DESC
+            WHERE a.tipo = 'funcionario_desconhecido' AND a.resolvido = 0
+            ORDER BY a.criado_em DESC
         ");
 
         $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);

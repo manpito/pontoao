@@ -772,9 +772,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
               <tr>
                 <th>Relógio</th>
                 <th>Nº Funcionário</th>
-                <th>Ocorrências</th>
-                <th>Primeira Ocorrência</th>
-                <th>Última Ocorrência</th>
+                <th>Última Vez</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -1805,6 +1803,7 @@ function applyPermissions() {
   hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-horarios', p === 'supervisor');
   hide('nav-relatorios', p === 'supervisor');
+  hide('nav-picagens-desconhecidas', p === 'supervisor');
   hide('nav-exportacao', p === 'supervisor');
   hide('nav-importacao', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-turnos', p === 'supervisor');
@@ -2086,8 +2085,6 @@ async function carregarPicagensDesconhecidas() {
       <tr>
         <td>${esc(a.relogio_nome || a.sn_relogio)} <div style="font-size:0.8em;color:var(--muted2)">${esc(a.relogio_localizacao || 'Sem localização')}</div></td>
         <td><span class="badge badge-warn">${esc(a.numero_funcionario)}</span></td>
-        <td>${a.total_ocorrencias}</td>
-        <td>${esc(a.primeira_ocorrencia)}</td>
         <td>${esc(a.ultima_ocorrencia)}</td>
       </tr>
     `).join('');
