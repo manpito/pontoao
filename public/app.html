@@ -362,6 +362,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="sb-section">Relatórios e Dados</div>
     <button class="nav-item" onclick="nav('relatorios')" id="nav-relatorios"><span class="ni">◈</span> Relatórios</button>
     <button class="nav-item" onclick="nav('relatorio-periodo')" id="nav-relatorio-periodo"><span class="ni">◈</span> Período (Folha)</button>
+    <button class="nav-item" onclick="nav('picagens-desconhecidas')" id="nav-picagens-desconhecidas"><span class="ni">◈</span> Picagens Não Identificadas</button>
     <button class="nav-item" onclick="nav('exportacao')" id="nav-exportacao"><span class="ni">↑</span> Exportação</button>
     <button class="nav-item" onclick="nav('importacao')" id="nav-importacao"><span class="ni">↓</span> Importação</button>
     <hr class="sb-divider">
@@ -756,6 +757,30 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
         <div id="relFuncPickerLabel" style="font-size:12px;color:var(--muted2);margin-top:6px;padding:4px 0">Seleccionar funcionários...</div>
       </div>
       <div id="relatorioOutput"></div>
+    </div>
+
+    <!-- PICAGENS NÃO IDENTIFICADAS -->
+    <div class="page" id="page-picagens-desconhecidas">
+      <div class="page-header">
+        <div><div class="page-title">Picagens Não Identificadas</div><div class="page-sub">Funcionários desconhecidos nos relógios</div></div>
+        <button class="btn" onclick="carregarPicagensDesconhecidas()">↺ Actualizar</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <table class="table" id="tablePicagensDesconhecidas">
+            <thead>
+              <tr>
+                <th>Relógio</th>
+                <th>Nº Funcionário</th>
+                <th>Ocorrências</th>
+                <th>Primeira Ocorrência</th>
+                <th>Última Ocorrência</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
 
@@ -1833,6 +1858,7 @@ function nav(page) {
     horarios: loadHorarios, periodos: loadPeriodos, terminais: carregarTerminais,
     'logs-auditoria': () => { carregarLogs(); carregarFiltrosLogs(); },
     'relatorio-periodo': initRelatorioPeriodo,
+    'picagens-desconhecidas': carregarPicagensDesconhecidas,
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: () => { carregarEscalas(); carregarExcecoes(); },
     calendario: carregarAnosLaborais,
     exportacao: loadExportacao,
@@ -2044,6 +2070,30 @@ async function resolverAdmsAviso(id) {
     carregarAdmsAvisos();
   } catch(e) {
     alert('Erro ao resolver aviso: ' + e.message);
+  }
+}
+
+async function carregarPicagensDesconhecidas() {
+  const tbody = document.querySelector('#tablePicagensDesconhecidas tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="empty"><span class="spinner"></span> A carregar...</td></tr>';
+  try {
+    const res = await api('GET', '/api/adms-avisos/funcionario-desconhecido');
+    if (!res.dados || res.dados.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">Nenhuma picagem não identificada registada.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = res.dados.map(a => `
+      <tr>
+        <td>${esc(a.relogio_nome || a.sn_relogio)} <div style="font-size:0.8em;color:var(--muted2)">${esc(a.relogio_localizacao || 'Sem localização')}</div></td>
+        <td><span class="badge badge-warn">${esc(a.numero_funcionario)}</span></td>
+        <td>${a.total_ocorrencias}</td>
+        <td>${esc(a.primeira_ocorrencia)}</td>
+        <td>${esc(a.ultima_ocorrencia)}</td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty" style="color:var(--danger)">Erro ao carregar dados.</td></tr>';
+    console.error(e);
   }
 }
 
