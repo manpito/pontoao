@@ -2421,7 +2421,7 @@ async function abrirModalNovaJustificacao() {
     const resTipos = await api('GET', '/api/tipos-justificacao?activo=1');
     _jaTiposCache = resTipos.dados || [];
     const selectTipo = document.getElementById('jaTipo');
-    selectTipo.innerHTML = _jaTiposCache.map(t => `<option value="${t.codigo}">${esc(t.nome)}</option>`).join('');
+    selectTipo.innerHTML = _jaTiposCache.map(t => `<option value="${esc(t.codigo)}">${esc(t.nome)}</option>`).join('');
     if (_jaTiposCache.length > 0) {
       selectTipo.value = _jaTiposCache[0].codigo;
     }

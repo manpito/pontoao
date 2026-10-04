@@ -121,6 +121,15 @@ class JustificacaoAusenciaController
             $sucessoCount++;
         }
 
+        if ($sucessoCount === 0) {
+            $response->getBody()->write(json_encode([
+                'erro' => true,
+                'mensagem' => 'Nenhum funcionário válido encontrado para submeter a justificação.',
+                'erros' => $erros
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(422);
+        }
+
         $msg = "Justificação submetida com sucesso para $sucessoCount funcionário(s).";
         $response->getBody()->write(json_encode([
             'erro' => false,
