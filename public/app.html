@@ -1078,8 +1078,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     </div>
     <div class="modal-body">
       <input type="hidden" id="tjId">
-      <div class="form-group"><label>Código *</label><input id="tjCodigo" placeholder="Ex: falta_injustificada"></div>
-      <div class="form-group"><label>Nome *</label><input id="tjNome" placeholder="Ex: Falta Injustificada"></div>
+      <div class="form-group"><label>Código *</label><input id="tjCodigo" placeholder="Ex: falta_injustificada" oninput="_tjCodigoEditadoManualmente = true"></div>
+      <div class="form-group"><label>Nome *</label><input id="tjNome" placeholder="Ex: Falta Injustificada" oninput="sugerirCodigoTipoJustificacao()"></div>
       <div class="form-group">
         <label>Comportamento *</label>
         <select id="tjComportamento">
@@ -1649,7 +1649,23 @@ async function loadTiposJustificacao() {
   } catch(e) { el.innerHTML = "<div class=\"empty\">Erro ao carregar motivos de justificação.</div>"; }
 }
 
+let _tjCodigoEditadoManualmente = false;
+
+function sugerirCodigoTipoJustificacao() {
+  const id = document.getElementById("tjId").value;
+  if (id || _tjCodigoEditadoManualmente) return; // Só na criação e se não tiver sido editado à mão
+
+  const nome = document.getElementById("tjNome").value;
+  const codigo = nome.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .replace(/\s+/g, '_') // Espaços para underscores
+    .replace(/[^a-z0-9_]/g, ''); // Remove o resto
+
+  document.getElementById("tjCodigo").value = codigo;
+}
+
 function abrirModalTipoJustificacao(id = null) {
+  _tjCodigoEditadoManualmente = false;
   let codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada';
   if (id) {
     const tj = _tiposJustificacao.find(x => x.id === id);
