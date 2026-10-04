@@ -52,7 +52,15 @@ class JustificacaoAusenciaController
         $data = $request->getParsedBody();
         $db = $this->db();
 
-        $funcionarioId = (int)($data['funcionario_id'] ?? 0);
+        $funcionarioIds = $data['funcionario_ids'] ?? null;
+        if (!$funcionarioIds && isset($data['funcionario_id'])) {
+            $funcionarioIds = [$data['funcionario_id']];
+        }
+
+        if (!is_array($funcionarioIds)) {
+            $funcionarioIds = [];
+        }
+
         $dataInicio = $data['data_inicio'] ?? '';
         $dataFim = $data['data_fim'] ?? '';
         $tipo = $data['tipo'] ?? '';
@@ -60,7 +68,7 @@ class JustificacaoAusenciaController
         $nota = $data['nota'] ?? null;
         $documentoUrl = $data['documento_url'] ?? null;
 
-        if (!$funcionarioId || !$dataInicio || !$dataFim || !$tipo) {
+        if (empty($funcionarioIds) || !$dataInicio || !$dataFim || !$tipo) {
             $response->getBody()->write(json_encode(['erro' => true, 'mensagem' => 'Dados incompletos.']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
@@ -80,24 +88,55 @@ class JustificacaoAusenciaController
 
         $criadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
 
+        $stmtValidarFunc = $db->prepare("SELECT id FROM funcionarios WHERE id = :id AND estado = 'activo'");
+
         $stmt = $db->prepare("
             INSERT INTO justificacoes_ausencia
             (funcionario_id, data_inicio, data_fim, tipo, motivo, nota, documento_url, estado, criado_por)
             VALUES (:fid, :dini, :dfim, :tipo, :motivo, :nota, :doc, 'pendente', :criado_por)
         ");
 
-        $stmt->execute([
-            ':fid' => $funcionarioId,
-            ':dini' => $dataInicio,
-            ':dfim' => $dataFim,
-            ':tipo' => $tipo,
-            ':motivo' => $tipo === 'falta_justificada' ? $motivo : null,
-            ':nota' => $nota,
-            ':doc' => $documentoUrl,
-            ':criado_por' => $criadoPor
-        ]);
+        $sucessoCount = 0;
+        $erros = [];
 
-        $response->getBody()->write(json_encode(['erro' => false, 'mensagem' => 'Justificação submetida com sucesso.']));
+        foreach ($funcionarioIds as $fid) {
+            $fid = (int)$fid;
+            $stmtValidarFunc->execute([':id' => $fid]);
+            if (!$stmtValidarFunc->fetch()) {
+                $erros[] = "Funcionário ID $fid não encontrado ou inactivo.";
+                continue;
+            }
+
+            $stmt->execute([
+                ':fid' => $fid,
+                ':dini' => $dataInicio,
+                ':dfim' => $dataFim,
+                ':tipo' => $tipo,
+                ':motivo' => $tipo === 'falta_justificada' ? $motivo : null,
+                ':nota' => $nota,
+                ':doc' => $documentoUrl,
+                ':criado_por' => $criadoPor
+            ]);
+
+            $sucessoCount++;
+        }
+
+        if ($sucessoCount === 0) {
+            $response->getBody()->write(json_encode([
+                'erro' => true,
+                'mensagem' => 'Nenhum funcionário válido encontrado para submeter a justificação.',
+                'erros' => $erros
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(422);
+        }
+
+        $msg = "Justificação submetida com sucesso para $sucessoCount funcionário(s).";
+        $response->getBody()->write(json_encode([
+            'erro' => false,
+            'mensagem' => $msg,
+            'sucesso_count' => $sucessoCount,
+            'erros' => $erros
+        ]));
         return $response->withHeader('Content-Type', 'application/json');
     }
 

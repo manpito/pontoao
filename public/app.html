@@ -1258,8 +1258,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label>Funcionário *</label>
-        <select id="jaFuncionarioId"></select>
+        <label>Funcionários *</label>
+        <div id="jaFuncionarioList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;"></div>
       </div>
       <div class="form-row">
           <div class="form-group">
@@ -1273,10 +1273,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       </div>
       <div class="form-group">
         <label>Tipo *</label>
-        <select id="jaTipo" onchange="toggleJaMotivo()">
-          <option value="servico_externo">Serviço externo / Viagem de trabalho</option>
-          <option value="falta_justificada">Falta justificada</option>
-        </select>
+        <select id="jaTipo" onchange="toggleJaMotivo()"></select>
       </div>
       <div class="form-group" id="jaMotivoGroup" style="display:none">
         <label>Motivo *</label>
@@ -2406,33 +2403,53 @@ function toggleJaMotivo() {
   document.getElementById('jaMotivoGroup').style.display = tipo === 'falta_justificada' ? 'block' : 'none';
 }
 
+let _jaTiposCache = [];
+
 async function abrirModalNovaJustificacao() {
-  const select = document.getElementById('jaFuncionarioId');
-  select.innerHTML = '<option value="">A carregar...</option>';
+  const listEl = document.getElementById('jaFuncionarioList');
+  listEl.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   document.getElementById('jaDataInicio').value = '';
   document.getElementById('jaDataFim').value = '';
-  document.getElementById('jaTipo').value = 'servico_externo';
+  document.getElementById('jaTipo').innerHTML = '<option value="">A carregar...</option>';
   document.getElementById('jaMotivo').value = 'saude';
   document.getElementById('jaNota').value = '';
   document.getElementById('jaDocumento').value = '';
-  toggleJaMotivo();
+  document.getElementById('jaMotivoGroup').style.display = 'none';
   document.getElementById('modalNovaJustificacao').classList.add('open');
 
   try {
-    const res = await api('GET', '/api/funcionarios?estado=activo');
-    select.innerHTML = '<option value="">Selecione o funcionário</option>' +
-      (res.dados||[]).map(f => `<option value="${f.id}">${f.nome_completo} (${f.numero_funcionario})</option>`).join('');
+    const resTipos = await api('GET', '/api/tipos-justificacao?activo=1');
+    _jaTiposCache = resTipos.dados || [];
+    const selectTipo = document.getElementById('jaTipo');
+    selectTipo.innerHTML = _jaTiposCache.map(t => `<option value="${esc(t.codigo)}">${esc(t.nome)}</option>`).join('');
+    if (_jaTiposCache.length > 0) {
+      selectTipo.value = _jaTiposCache[0].codigo;
+    }
+    toggleJaMotivo();
+
+    const resFunc = await api('GET', '/api/funcionarios?estado=activo');
+    const funcs = resFunc.dados || [];
+    listEl.innerHTML = funcs.map(f => `
+      <label style="display:flex;align-items:center;gap:12px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+        <input type="checkbox" class="ja-func-cb" value="${f.id}">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--muted2);width:52px">${esc(f.numero_funcionario)}</span>
+        <span style="flex:1;font-weight:600">${esc(f.nome_completo)}</span>
+      </label>
+    `).join('');
   } catch(e) {
-    select.innerHTML = '<option value="">Erro ao carregar</option>';
+    listEl.innerHTML = '<div class="empty" style="color:var(--err)">Erro ao carregar funcionários.</div>';
+    document.getElementById('jaTipo').innerHTML = '<option value="">Erro ao carregar</option>';
   }
 }
 
 async function guardarNovaJustificacao() {
-  const funcId = document.getElementById('jaFuncionarioId').value;
+  const funcCbs = document.querySelectorAll('.ja-func-cb:checked');
+  const funcIds = Array.from(funcCbs).map(cb => cb.value);
+
   const dataIn = document.getElementById('jaDataInicio').value;
   const dataFim = document.getElementById('jaDataFim').value;
   const tipo = document.getElementById('jaTipo').value;
-  if (!funcId || !dataIn || !dataFim || !tipo) return toast('Preencha os campos obrigatórios.', 'err');
+  if (funcIds.length === 0 || !dataIn || !dataFim || !tipo) return toast('Preencha os campos obrigatórios e seleccione pelo menos um funcionário.', 'err');
 
   const btn = document.getElementById('btnGuardarJa');
   btn.disabled = true;
@@ -2455,7 +2472,7 @@ async function guardarNovaJustificacao() {
     }
 
     const payload = {
-      funcionario_id: funcId,
+      funcionario_ids: funcIds,
       data_inicio: dataIn,
       data_fim: dataFim,
       tipo: tipo,
@@ -2466,7 +2483,14 @@ async function guardarNovaJustificacao() {
 
     const res = await api('POST', '/api/justificacoes-ausencia', payload);
     if (res.erro) throw new Error(res.mensagem);
-    toast('Justificação registada com sucesso.', 'ok');
+
+    if (res.erros && res.erros.length > 0) {
+      const errMsgs = res.erros.join('\n');
+      alert(`${res.mensagem}\n\nErros:\n${errMsgs}`);
+    } else {
+      toast(res.mensagem || 'Justificação registada com sucesso.', 'ok');
+    }
+
     fecharModal('modalNovaJustificacao');
     carregarJustificacoesAusencia();
   } catch(e) {

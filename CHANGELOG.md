@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- O formulário de Justificar Ausência passa a permitir seleccionar vários funcionários de uma vez e a mostrar todos os motivos configurados pelo RH, não só os dois originais.
 - Avisos de funcionário desconhecido saem do painel de alertas do Dashboard e passam a um relatório próprio, agrupado por relógio e número, com nome e localização do relógio em vez de só o número de série.
 - Corrigido erro que impedia o painel de avisos ADMS de carregar no Dashboard desde a sua criação.
 - Novo ecrã para o RH criar e gerir os seus próprios motivos de justificação de ausência, com o comportamento (conta como trabalho, falta remunerada ou não remunerada) configurável por motivo.
