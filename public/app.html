@@ -2458,7 +2458,7 @@ async function abrirModalNovaJustificacao() {
       <label class="ja-func-item" style="display:flex;align-items:center;gap:12px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border);text-transform:none;letter-spacing:normal;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
         <input type="checkbox" class="ja-func-cb" value="${esc(f.id)}" onchange="updateJaSelectedCount()" style="width:auto;margin:0;">
         <span style="font-family:var(--mono);font-size:12px;color:var(--muted2);width:52px;flex-shrink:0;">${esc(f.numero_funcionario)}</span>
-        <span style="flex:1;font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.nome_completo)}</span>
+        <span title="${esc(f.nome_completo)}" style="flex:1;font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.nome_completo)}</span>
       </label>
     `).join('');
   } catch(e) {

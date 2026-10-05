@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- O formulário de Justificar Ausência passa a ter pesquisa por número e nome na lista de funcionários, com contador de seleccionados.
 - O código de um novo motivo de justificação passa a ser sugerido automaticamente a partir do nome, continuando editável manualmente.
 - O formulário de Justificar Ausência passa a permitir seleccionar vários funcionários de uma vez e a mostrar todos os motivos configurados pelo RH, não só os dois originais.
 - Avisos de funcionário desconhecido saem do painel de alertas do Dashboard e passam a um relatório próprio, agrupado por relógio e número, com nome e localização do relógio em vez de só o número de série.
