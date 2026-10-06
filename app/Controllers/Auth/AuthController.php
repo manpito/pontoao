@@ -178,10 +178,11 @@ class AuthController
 
         try {
             $db = Database::tenant($sub);
-        } catch (\PDOException $e) {
-            throw $e;
         } catch (\RuntimeException $e) {
-            return $this->json(401, ['erro' => true, 'mensagem' => 'Token inválido ou expirado.']);
+            if (in_array($e->getCode(), [403, 404], true)) {
+                return $this->json(401, ['erro' => true, 'mensagem' => 'Token inválido ou expirado.']);
+            }
+            throw $e;
         }
 
         $stmt = $db->prepare("
