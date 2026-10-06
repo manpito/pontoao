@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Corrigido um erro em que, ao expirar a sessão, a aplicação ficava num ciclo de pedidos e impedia voltar a entrar. A sessão expirada passa a levar directamente ao ecrã de login.
 - O formulário de Justificar Ausência passa a ter pesquisa por número e nome na lista de funcionários, com contador de seleccionados.
 - O código de um novo motivo de justificação passa a ser sugerido automaticamente a partir do nome, continuando editável manualmente.
 - O formulário de Justificar Ausência passa a permitir seleccionar vários funcionários de uma vez e a mostrar todos os motivos configurados pelo RH, não só os dois originais.

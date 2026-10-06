@@ -1576,11 +1576,21 @@ async function doLogin() {
   } finally { btn.disabled = false; btn.textContent = 'Entrar no painel'; }
 }
 
+let _aTerminarSessao = false;
 async function doLogout() {
-  try { await api('POST', '/api/auth/logout', {}); } catch(_) {}
+  if (_aTerminarSessao) return;
+  _aTerminarSessao = true;
+  try {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
+    if (TENANT) opts.headers['X-Tenant'] = TENANT;
+    await fetch('/api/auth/logout', opts);
+  } catch(_) {}
+
   TOKEN = ''; USER = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+  _aTerminarSessao = false;
 }
 
 function showApp() {
@@ -3633,6 +3643,7 @@ async function api(method, path, body) {
       if (rd.access_token) { TOKEN = rd.access_token; return api(method,path,body); }
     } catch(_) {}
     doLogout();
+    throw new Error('Sessão expirada.');
   }
   return data;
 }

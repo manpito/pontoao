@@ -934,12 +934,22 @@ async function submeterAlteracaoPassword() {
   }
 }
 
+let _aTerminarSessao = false;
 async function doLogout() {
-  try { await api('POST', '/api/auth/logout', {}, true); } catch(_) {}
+  if (_aTerminarSessao) return;
+  _aTerminarSessao = true;
+  try {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    if (accessToken) opts.headers['Authorization'] = 'Bearer ' + accessToken;
+    if (tenant) opts.headers['X-Tenant'] = tenant;
+    await fetch(API + '/api/auth/logout', opts);
+  } catch(_) {}
+
   accessToken = '';
   currentUser = null;
   document.getElementById('portal').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+  _aTerminarSessao = false;
 }
 
 // ── PORTAL ──
@@ -1300,6 +1310,7 @@ async function api(method, path, body) {
       }
     } catch(_) {}
     doLogout();
+    throw new Error('Sessão expirada.');
   }
 
   return data;
