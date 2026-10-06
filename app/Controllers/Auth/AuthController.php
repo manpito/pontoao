@@ -98,8 +98,7 @@ class AuthController
 
         // Gerar tokens
         // Incluir funcionario_id no payload do token
-        $userPayload = $user;
-        $userPayload['funcionario_id'] = $user['funcionario_id'] ? (int) $user['funcionario_id'] : null;
+        $userPayload = $this->buildUserPayload($user);
         $accessToken  = $this->auth->generateAccessToken($userPayload, $sub);
         $refreshToken = $this->auth->generateRefreshToken();
 
@@ -165,17 +164,29 @@ class AuthController
      */
     public function refresh(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $sub   = TenantResolver::resolve();
+        $sub   = TenantResolver::resolve() ?? ($_SERVER['HTTP_X_TENANT'] ?? null);
         $body  = $request->getParsedBody();
         $token = $_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '');
+
+        if (empty($sub)) {
+            return $this->json(400, ['erro' => true, 'mensagem' => 'Tenant não identificado.']);
+        }
 
         if (empty($token)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'refresh_token em falta.']);
         }
 
-        $db   = Database::tenant($sub);
+        try {
+            $db = Database::tenant($sub);
+        } catch (\RuntimeException $e) {
+            if (in_array($e->getCode(), [403, 404], true)) {
+                return $this->json(401, ['erro' => true, 'mensagem' => 'Token inválido ou expirado.']);
+            }
+            throw $e;
+        }
+
         $stmt = $db->prepare("
-            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`, u.`deve_alterar_password`
+            SELECT t.*, u.`nome`, u.`email`, u.`perfil`, u.`activo`, u.`uuid`, u.`deve_alterar_password`, u.`funcionario_id`
             FROM `utilizador_tokens` t
             JOIN `utilizadores` u ON t.`utilizador_id` = u.`id`
             WHERE t.`token_hash` = :hash AND t.`revogado` = 0 AND t.`expira_em` > NOW()
@@ -188,13 +199,10 @@ class AuthController
             return $this->json(401, ['erro' => true, 'mensagem' => 'Token inválido ou expirado.']);
         }
 
-        $accessToken = $this->auth->generateAccessToken([
-            'id'     => $row['utilizador_id'],
-            'uuid'   => $row['uuid'],
-            'nome'   => $row['nome'],
-            'email'  => $row['email'],
-            'perfil' => $row['perfil'],
-        ], $sub);
+        // Remapear ID para o helper
+        $row['id'] = $row['utilizador_id'];
+
+        $accessToken = $this->auth->generateAccessToken($this->buildUserPayload($row), $sub);
 
         return $this->json(200, [
             'access_token' => $accessToken,
@@ -247,6 +255,18 @@ class AuthController
         $stmt->execute([':hash' => $newHash, ':id' => $userId]);
 
         return $this->json(200, ['mensagem' => 'Password alterada com sucesso.']);
+    }
+
+    private function buildUserPayload(array $user): array
+    {
+        return [
+            'id'             => $user['id'],
+            'uuid'           => $user['uuid'],
+            'nome'           => $user['nome'],
+            'email'          => $user['email'],
+            'perfil'         => $user['perfil'],
+            'funcionario_id' => !empty($user['funcionario_id']) ? (int) $user['funcionario_id'] : null,
+        ];
     }
 
     private function json(int $status, array $data): ResponseInterface
