@@ -1576,21 +1576,20 @@ async function doLogin() {
   } finally { btn.disabled = false; btn.textContent = 'Entrar no painel'; }
 }
 
-let _aTerminarSessao = false;
 async function doLogout() {
-  if (_aTerminarSessao) return;
-  _aTerminarSessao = true;
-  try {
-    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
-    if (TOKEN) opts.headers['Authorization'] = 'Bearer ' + TOKEN;
-    if (TENANT) opts.headers['X-Tenant'] = TENANT;
-    await fetch('/api/auth/logout', opts);
-  } catch(_) {}
+  const currentToken = TOKEN;
+  const currentTenant = TENANT;
 
   TOKEN = ''; USER = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
-  _aTerminarSessao = false;
+
+  if (currentToken) {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    opts.headers['Authorization'] = 'Bearer ' + currentToken;
+    if (currentTenant) opts.headers['X-Tenant'] = currentTenant;
+    fetch('/api/auth/logout', opts).catch(() => {});
+  }
 }
 
 function showApp() {
@@ -3637,6 +3636,9 @@ async function api(method, path, body) {
   const res  = await fetch(path, opts);
   const data = await res.json();
   if (res.status === 401) {
+    if (path.startsWith('/api/auth/')) {
+      return data;
+    }
     try {
       const r  = await fetch('/api/auth/refresh', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
       const rd = await r.json();

@@ -934,22 +934,21 @@ async function submeterAlteracaoPassword() {
   }
 }
 
-let _aTerminarSessao = false;
 async function doLogout() {
-  if (_aTerminarSessao) return;
-  _aTerminarSessao = true;
-  try {
-    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
-    if (accessToken) opts.headers['Authorization'] = 'Bearer ' + accessToken;
-    if (tenant) opts.headers['X-Tenant'] = tenant;
-    await fetch(API + '/api/auth/logout', opts);
-  } catch(_) {}
+  const currentToken = accessToken;
+  const currentTenant = new URLSearchParams(location.search).get('tenant');
 
   accessToken = '';
   currentUser = null;
   document.getElementById('portal').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
-  _aTerminarSessao = false;
+
+  if (currentToken) {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    opts.headers['Authorization'] = 'Bearer ' + currentToken;
+    if (currentTenant) opts.headers['X-Tenant'] = currentTenant;
+    fetch(API + '/api/auth/logout', opts).catch(() => {});
+  }
 }
 
 // ── PORTAL ──
@@ -1296,6 +1295,9 @@ async function api(method, path, body) {
 
   // Auto-refresh token expirado
   if (res.status === 401) {
+    if (path.startsWith('/api/auth/')) {
+      return data;
+    }
     try {
       const r = await fetch(API + '/api/auth/refresh', {
         method: 'POST',
