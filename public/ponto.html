@@ -935,11 +935,20 @@ async function submeterAlteracaoPassword() {
 }
 
 async function doLogout() {
-  try { await api('POST', '/api/auth/logout', {}, true); } catch(_) {}
+  const currentToken = accessToken;
+  const currentTenant = new URLSearchParams(location.search).get('tenant');
+
   accessToken = '';
   currentUser = null;
   document.getElementById('portal').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
+
+  if (currentToken) {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+    opts.headers['Authorization'] = 'Bearer ' + currentToken;
+    if (currentTenant) opts.headers['X-Tenant'] = currentTenant;
+    fetch(API + '/api/auth/logout', opts).catch(() => {});
+  }
 }
 
 // ── PORTAL ──
@@ -1286,6 +1295,9 @@ async function api(method, path, body) {
 
   // Auto-refresh token expirado
   if (res.status === 401) {
+    if (path.startsWith('/api/auth/')) {
+      return data;
+    }
     try {
       const r = await fetch(API + '/api/auth/refresh', {
         method: 'POST',
@@ -1300,6 +1312,7 @@ async function api(method, path, body) {
       }
     } catch(_) {}
     doLogout();
+    throw new Error('Sessão expirada.');
   }
 
   return data;
