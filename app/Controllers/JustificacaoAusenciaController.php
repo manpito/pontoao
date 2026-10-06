@@ -86,7 +86,7 @@ class JustificacaoAusenciaController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $criadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
+        $criadoPor = (int)($request->getAttribute('auth_user_id') ?? 0);
         $perfil = (string)($request->getAttribute('auth_user')->perfil ?? '');
         $autoAprovado = in_array($perfil, ['rh_manager', 'super_admin_tenant'], true);
         $estado = $autoAprovado ? 'aprovado' : 'pendente';
@@ -165,7 +165,7 @@ class JustificacaoAusenciaController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        $aprovadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
+        $aprovadoPor = (int)($request->getAttribute('auth_user_id') ?? 0);
 
         $stmt = $db->prepare("
             UPDATE justificacoes_ausencia
