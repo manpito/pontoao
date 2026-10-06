@@ -3640,7 +3640,7 @@ async function api(method, path, body) {
       return data;
     }
     try {
-      const r  = await fetch('/api/auth/refresh', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+      const r  = await fetch('/api/auth/refresh', { method:'POST', credentials:'include', headers:{'Content-Type':'application/json', 'X-Tenant': TENANT}, body: JSON.stringify({}) });
       const rd = await r.json();
       if (rd.access_token) { TOKEN = rd.access_token; return api(method,path,body); }
     } catch(_) {}

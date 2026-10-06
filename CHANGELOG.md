@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Actualização
+- Corrigida a renovação automática da sessão no browser: o pedido de renovação passa a identificar o cliente, deixando de terminar a sessão ao fim de uma hora.
+- A sessão passa a ser guardada por cliente, e terminar sessão passa a invalidar a renovação no servidor.
 - Corrigida a renovação automática da sessão no servidor: passa a responder com um erro tratado quando o cliente não é identificado, e o token renovado mantém a identificação do funcionário.
 - Corrigido um erro em que, ao expirar a sessão, a aplicação ficava num ciclo de pedidos e impedia voltar a entrar. A sessão expirada passa a levar directamente ao ecrã de login.
 - O formulário de Justificar Ausência passa a ter pesquisa por número e nome na lista de funcionários, com contador de seleccionados.

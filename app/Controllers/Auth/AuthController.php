@@ -24,6 +24,11 @@ class AuthController
         $this->auth = new AuthService();
     }
 
+    private function refreshCookieName(string $sub): string
+    {
+        return 'refresh_token_' . preg_replace('/[^A-Za-z0-9_-]/', '', $sub);
+    }
+
     /**
      * POST /api/auth/login
      */
@@ -115,9 +120,9 @@ class AuthController
         ]);
 
         $isSecure  = ($_ENV['APP_ENV'] ?? 'production') !== 'development';
-        $cookieVal = 'refresh_token=' . $refreshToken
+        $cookieVal = $this->refreshCookieName($sub) . '=' . $refreshToken
             . '; HttpOnly'
-            . '; Path=/api/auth/refresh'
+            . '; Path=/api/auth'
             . '; Max-Age=' . $this->auth->getRefreshTtl()
             . ($isSecure ? '; Secure' : '')
             . '; SameSite=Strict';
@@ -146,17 +151,28 @@ class AuthController
     {
         $sub   = TenantResolver::resolve();
         $body  = $request->getParsedBody();
-        $token = $_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '');
 
-        if ($token) {
+        $token = null;
+        if (!empty($sub)) {
+            $token = $_COOKIE[$this->refreshCookieName($sub)] ?? ($body['refresh_token'] ?? '');
+        }
+
+        if ($token && !empty($sub)) {
             Database::tenant($sub)->prepare(
                 "UPDATE `utilizador_tokens` SET `revogado` = 1 WHERE `token_hash` = :hash"
             )->execute([':hash' => $this->auth->hashRefreshToken($token)]);
         }
 
-        $clearCookie = 'refresh_token=; HttpOnly; Path=/api/auth/refresh; Max-Age=0; SameSite=Strict';
-        return $this->json(200, ['mensagem' => 'Sessão terminada.'])
-            ->withHeader('Set-Cookie', $clearCookie);
+        $clearCookieOld = 'refresh_token=; HttpOnly; Path=/api/auth/refresh; Max-Age=0; SameSite=Strict';
+        $response = $this->json(200, ['mensagem' => 'Sessão terminada.'])
+            ->withHeader('Set-Cookie', $clearCookieOld);
+
+        if (!empty($sub)) {
+            $clearCookieNew = $this->refreshCookieName($sub) . '=; HttpOnly; Path=/api/auth; Max-Age=0; SameSite=Strict';
+            $response = $response->withAddedHeader('Set-Cookie', $clearCookieNew);
+        }
+
+        return $response;
     }
 
     /**
@@ -166,11 +182,12 @@ class AuthController
     {
         $sub   = TenantResolver::resolve() ?? ($_SERVER['HTTP_X_TENANT'] ?? null);
         $body  = $request->getParsedBody();
-        $token = $_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '');
 
         if (empty($sub)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Tenant não identificado.']);
         }
+
+        $token = $_COOKIE[$this->refreshCookieName($sub)] ?? ($_COOKIE['refresh_token'] ?? ($body['refresh_token'] ?? '')); // remover depois de 30 dias
 
         if (empty($token)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'refresh_token em falta.']);
