@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- As justificações de ausência registadas pelo gestor de RH passam a ficar aprovadas automaticamente, sem necessidade de aprovação posterior. As registadas por supervisores continuam a aguardar aprovação.
 - Corrigida a renovação automática da sessão no browser: o pedido de renovação passa a identificar o cliente, deixando de terminar a sessão ao fim de uma hora.
 - A sessão passa a ser guardada por cliente, e terminar sessão passa a invalidar a renovação no servidor.
 - Corrigida a renovação automática da sessão no servidor: passa a responder com um erro tratado quando o cliente não é identificado, e o token renovado mantém a identificação do funcionário.

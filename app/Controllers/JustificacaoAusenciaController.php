@@ -87,13 +87,18 @@ class JustificacaoAusenciaController
         }
 
         $criadoPor = (int)($request->getAttribute('auth_user')->id ?? 0);
+        $perfil = (string)($request->getAttribute('auth_user')->perfil ?? '');
+        $autoAprovado = in_array($perfil, ['rh_manager', 'super_admin_tenant'], true);
+        $estado = $autoAprovado ? 'aprovado' : 'pendente';
+        $aprovadoPor = $autoAprovado ? $criadoPor : null;
+        $autoFlag = $autoAprovado ? 1 : 0;
 
         $stmtValidarFunc = $db->prepare("SELECT id FROM funcionarios WHERE id = :id AND estado = 'activo'");
 
         $stmt = $db->prepare("
             INSERT INTO justificacoes_ausencia
-            (funcionario_id, data_inicio, data_fim, tipo, motivo, nota, documento_url, estado, criado_por)
-            VALUES (:fid, :dini, :dfim, :tipo, :motivo, :nota, :doc, 'pendente', :criado_por)
+            (funcionario_id, data_inicio, data_fim, tipo, motivo, nota, documento_url, estado, criado_por, aprovado_por, aprovado_em)
+            VALUES (:fid, :dini, :dfim, :tipo, :motivo, :nota, :doc, :estado, :criado_por, :aprovado_por, CASE WHEN :auto = 1 THEN NOW() ELSE NULL END)
         ");
 
         $sucessoCount = 0;
@@ -115,7 +120,10 @@ class JustificacaoAusenciaController
                 ':motivo' => $tipo === 'falta_justificada' ? $motivo : null,
                 ':nota' => $nota,
                 ':doc' => $documentoUrl,
-                ':criado_por' => $criadoPor
+                ':estado' => $estado,
+                ':criado_por' => $criadoPor,
+                ':aprovado_por' => $aprovadoPor,
+                ':auto' => $autoFlag
             ]);
 
             $sucessoCount++;
@@ -130,11 +138,15 @@ class JustificacaoAusenciaController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(422);
         }
 
-        $msg = "Justificação submetida com sucesso para $sucessoCount funcionário(s).";
+        $msg = $autoAprovado
+            ? "Justificação registada e aprovada para $sucessoCount funcionário(s)."
+            : "Justificação submetida com sucesso para $sucessoCount funcionário(s).";
+
         $response->getBody()->write(json_encode([
             'erro' => false,
             'mensagem' => $msg,
             'sucesso_count' => $sucessoCount,
+            'estado' => $estado,
             'erros' => $erros
         ]));
         return $response->withHeader('Content-Type', 'application/json');
