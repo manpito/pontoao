@@ -151,7 +151,7 @@ class ExportacaoController
 
         // 2.6b — Buscar justificações de ausência aprovadas do período (serviço externo)
         $stmtJA = $db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo
+            SELECT id, funcionario_id, data_inicio, data_fim, tipo, motivo
             FROM justificacoes_ausencia
             WHERE funcionario_id IN ({$inStr})
               AND estado = 'aprovado'
@@ -184,12 +184,6 @@ class ExportacaoController
         foreach ($todasPHE as $phe) {
             $fId = (int)$phe['funcionario_id'];
             $horasExtraAprovadasMap[$fId][$phe['data']] = (int)$phe['minutos'];
-        }
-
-        $stmtFaltas = $db->query("SELECT funcionario_id, data, estado FROM marcacoes_em_falta WHERE estado != 'pendente'");
-        $faltasMap = [];
-        while ($row = $stmtFaltas->fetch(PDO::FETCH_ASSOC)) {
-            $faltasMap[$row['funcionario_id']][$row['data']] = $row['estado'];
         }
 
         $estadoDiaService = new \App\Services\EstadoDiaService();
@@ -260,9 +254,10 @@ class ExportacaoController
                 if (isset($feriasMap[$fId])) {
                     foreach ($feriasMap[$fId] as $fp) {
                         if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim']) {
-                            $feriasDoDia[] = $fp;
                             if ($isUtil) {
+                                $feriasDoDia[] = $fp;
                                 $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F50', 1.0);
+                                break;
                             }
                         }
                     }

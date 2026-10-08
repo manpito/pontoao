@@ -176,7 +176,7 @@ class RelatorioController
 
         // Justificações de ausência aprovadas no período (serviço externo / falta justificada)
         $stmtJA = $db->prepare("
-            SELECT tipo, data_inicio, data_fim, motivo
+            SELECT id, tipo, data_inicio, data_fim, motivo
             FROM justificacoes_ausencia
             WHERE funcionario_id = :fid
               AND estado = 'aprovado'
@@ -187,10 +187,10 @@ class RelatorioController
 
         // Férias aprovadas no período
         $stmtFerias = $db->prepare("
-            SELECT data_inicio, data_fim
+            SELECT id, data_inicio, data_fim
             FROM ferias_pedidos
             WHERE funcionario_id = :fid
-              AND estado = 'aprovado_rh'
+              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
         ");
         $stmtFerias->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
@@ -393,13 +393,13 @@ class RelatorioController
             );
 
             $hasServicoExterno = $estadoDoDia['estado'] === 'servico_externo';
-            $isJustificado = in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada']);
+            $isJustificado = in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada']);
             $hasFerias = $estadoDoDia['estado'] === 'ferias';
 
             // Find motivo se justificado (from DB logic)
             if ($isJustificado && $estadoDoDia['origem'] === 'justificacao') {
                 foreach ($justificacoesDoDia as $ja) {
-                    if ($ja['id'] === $estadoDoDia['justificacao_id']) {
+                    if (isset($ja['id']) && (int)$ja['id'] === (int)$estadoDoDia['justificacao_id']) {
                         $motivoFaltaJustificada = $ja['motivo'];
                         break;
                     }
@@ -632,7 +632,7 @@ class RelatorioController
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
         $stmtJA = $db->prepare("
-            SELECT data_inicio, data_fim, tipo, estado, motivo
+            SELECT id, data_inicio, data_fim, tipo, estado, motivo
             FROM justificacoes_ausencia
             WHERE funcionario_id = :fid
               AND data_inicio <= :fim AND data_fim >= :ini
@@ -640,6 +640,16 @@ class RelatorioController
         ");
         $stmtJA->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtV = $db->prepare("
+            SELECT id, data_inicio, data_fim
+            FROM ferias_pedidos
+            WHERE funcionario_id = :fid
+              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND data_inicio <= :fim AND data_fim >= :ini
+        ");
+        $stmtV->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $feriasPedidos = $stmtV->fetchAll(PDO::FETCH_ASSOC);
 
         // Agrupar marcações por dia
         $marcPorDia = [];
@@ -752,17 +762,12 @@ class RelatorioController
             }
 
             $feriasDoDia = [];
-            foreach ($ferias as $fp) {
+            foreach ($feriasPedidos as $fp) {
                 if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim']) {
                     $feriasDoDia[] = $fp;
                 }
             }
             $justificacoesDoDia = [];
-            foreach ($justificacoes as $j) {
-                if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim']) {
-                    $justificacoesDoDia[] = $j;
-                }
-            }
             if (isset($justificacoesAusencia)) {
                 foreach ($justificacoesAusencia as $ja) {
                     if ($dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
@@ -772,37 +777,49 @@ class RelatorioController
             }
 
             $turnoAtual = $escalaService->calcularTurnoEm($funcId, $dataStr);
+            $marcacoesDia = $marcPorDia[$dataStr] ?? [];
 
-            $estadoDoDia = $estadoDiaService->determinar(
-                $funcId, $dataStr, $feriasDoDia, $justificacoesDoDia, $marcacoesDia, $turnoAtual, $tiposComportamentoMap
-            );
-
-            if (in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada', 'ferias'])) {
-                // Determine reason text
-                if ($estadoDoDia['estado'] === 'ferias') {
-                    $diaInfo['estado'] = 'ferias';
-                } else {
-                    $motivo = $estadoDoDia['tipo'] ?? 'justificado';
-                    foreach ($justificacoesDoDia as $ja) {
-                        if (isset($ja['id']) && $ja['id'] == $estadoDoDia['justificacao_id']) {
-                            $motivo = $ja['motivo'] ?? $ja['tipo'];
-                        }
+            // Verificar justificação legada (fallback antes do EstadoDiaService, pois a legada não vai para o serviço)
+            if ($diaInfo['estado'] === 'ausente') {
+                foreach ($justificacoes as $j) {
+                    if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim']) {
+                        $diaInfo['estado'] = 'justificado (' . $j['tipo'] . ')';
+                        break;
                     }
-                    $diaInfo['estado'] = 'justificado (' . $motivo . ')';
                 }
-            } elseif ($estadoDoDia['estado'] === 'servico_externo') {
-                $diaInfo['estado'] = 'presente';
-                $totalPresente++;
-            } elseif ($estadoDoDia['estado'] === 'falta_injustificada') {
-                $diaInfo['estado'] = 'ausente';
-                $totalAusente++;
-            } elseif ($estadoDoDia['estado'] === 'folga_ciclo') {
-                $diaInfo['estado'] = 'folga';
-            } elseif (count($marcacoesDia) == 0 && !isset($feriados[$dataStr]) && $diaSemana < 6) {
-                // Falta injustificada fallback (legacy support)
-                if (!in_array($estadoDoDia['estado'], ['sem_horario', 'folga_ciclo', 'folga_justificada', 'ferias', 'servico_externo', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
+            }
+
+            // Apenas tentamos sobrescrever estados de 'ausente' ou 'fim_semana'. Nunca 'presente' (que ja vem de marcacoes reais) ou 'feriado'
+            if (in_array($diaInfo['estado'], ['ausente', 'fim_semana'])) {
+                $estadoDoDia = $estadoDiaService->determinar(
+                    $funcId, $dataStr, $feriasDoDia, $justificacoesDoDia, $marcacoesDia, $turnoAtual, $tiposComportamentoMap
+                );
+
+                if (in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada', 'ferias'])) {
+                    // Determine reason text
+                    if ($estadoDoDia['estado'] === 'ferias') {
+                        $diaInfo['estado'] = 'ferias';
+                    } else {
+                        $motivo = $estadoDoDia['tipo'] ?? 'justificado';
+                        foreach ($justificacoesDoDia as $ja) {
+                            if (isset($ja['id']) && (int)$ja['id'] === (int)$estadoDoDia['justificacao_id']) {
+                                $motivo = $ja['motivo'] ?? $ja['tipo'];
+                            }
+                        }
+                        $diaInfo['estado'] = 'justificado (' . $motivo . ')';
+                    }
+                } elseif ($estadoDoDia['estado'] === 'servico_externo') {
+                    $diaInfo['estado'] = 'presente';
+                    $totalPresente++;
+                } elseif ($estadoDoDia['estado'] === 'falta_injustificada') {
                     $diaInfo['estado'] = 'ausente';
                     $totalAusente++;
+                } elseif ($estadoDoDia['estado'] === 'folga_ciclo') {
+                    $diaInfo['estado'] = 'folga';
+                } elseif ($estadoDoDia['estado'] === 'sem_horario') {
+                    // Sem_horario não conta como ausência nem presença
+                    $diaInfo['estado'] = $diaSemana >= 6 ? 'fim_semana' : 'ausente';
+                    if ($diaInfo['estado'] === 'ausente') $totalAusente++;
                 }
             }
 
@@ -944,7 +961,7 @@ class RelatorioController
         $justificacoes = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
         $stmtJA = $db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo, estado, motivo
+            SELECT id, funcionario_id, data_inicio, data_fim, tipo, estado, motivo
             FROM justificacoes_ausencia
             WHERE funcionario_id IN ({$inStr})
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
@@ -952,6 +969,16 @@ class RelatorioController
         ");
         $stmtJA->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
         $justificacoesAusencia = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtV = $db->prepare("
+            SELECT id, funcionario_id, data_inicio, data_fim
+            FROM ferias_pedidos
+            WHERE funcionario_id IN ({$inStr})
+              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND data_inicio <= :dataFim AND data_fim >= :dataInicio
+        ");
+        $stmtV->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
+        $feriasPedidos = $stmtV->fetchAll(PDO::FETCH_ASSOC);
 
         // 4b. Buscar marcações em falta no período
         $stmtMF = $db->prepare("
@@ -970,6 +997,7 @@ class RelatorioController
             $marcFunc = array_filter($todasMarcacoes, fn($m) => $m['funcionario_id'] == $func['id']);
             $justFunc = array_filter($justificacoes, fn($j) => $j['funcionario_id'] == $func['id']);
             $justAusFunc = array_filter($justificacoesAusencia ?? [], fn($ja) => $ja['funcionario_id'] == $func['id']);
+            $feriasFunc = array_filter($feriasPedidos ?? [], fn($fp) => $fp['funcionario_id'] == $func['id']);
             $mfFunc   = array_filter($marcacoesFalta, fn($mf) => $mf['funcionario_id'] == $func['id']);
 
             // Agrupar marcações por dia
@@ -1038,10 +1066,11 @@ class RelatorioController
                 }
 
                 $feriasDoDia = [];
-                // Compatibilidade com $justFunc, que em assiduidade pode trazer férias
-                foreach ($justFunc as $j) {
-                    if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim'] && mb_strtolower($j['tipo']) === 'férias') {
-                        $feriasDoDia[] = $j;
+                if (isset($feriasFunc)) {
+                    foreach ($feriasFunc as $fp) {
+                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim']) {
+                            $feriasDoDia[] = $fp;
+                        }
                     }
                 }
 
@@ -1060,6 +1089,16 @@ class RelatorioController
                 $estadoDoDia = $estadoDiaService->determinar(
                     $func['id'], $dataStr, $feriasDoDia, $justificacoesDoDia, $marcacoesDia, $turnoAtual, $tiposComportamentoMap
                 );
+
+                $justificadoLegado = false;
+                $justificacaoLegadaTipo = null;
+                foreach ($justFunc as $j) {
+                    if ($dataStr >= $j['data_inicio'] && $dataStr <= $j['data_fim']) {
+                        $justificadoLegado = true;
+                        $justificacaoLegadaTipo = $j['tipo'];
+                        break;
+                    }
+                }
 
                 if (isset($feriados[$dataStr])) {
                     $diaInfo['tipo']    = 'feriado';
@@ -1085,6 +1124,10 @@ class RelatorioController
                 } elseif ($estadoDoDia['estado'] === 'folga_ciclo' || $diaSemana >= 6) {
                     $diaInfo['tipo'] = 'fim_semana'; // Manter compatibilidade com frontend assiduidade
                     $totalFimSem++;
+                } elseif ($justificadoLegado) {
+                    $diaInfo['tipo'] = 'justificado';
+                    $diaInfo['justificacao'] = $justificacaoLegadaTipo;
+                    $totalJustif++;
                 } else {
                      $diaInfo['tipo'] = 'ausente'; // Fallback
                      $totalAusente++;

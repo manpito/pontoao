@@ -82,7 +82,7 @@ class RelatorioPeriodoService
 
             // Justificações de ausência
             $stmtJA = $this->pdo->prepare("
-                SELECT funcionario_id, data_inicio, data_fim, tipo, estado
+                SELECT id, funcionario_id, data_inicio, data_fim, tipo, motivo, estado
                 FROM justificacoes_ausencia
                 WHERE funcionario_id IN ({$inStr})
                   AND data_inicio <= :dataFim AND data_fim >= :dataInicio
@@ -97,11 +97,11 @@ class RelatorioPeriodoService
 
             // Férias aprovadas
             $stmtFerias = $this->pdo->prepare("
-                SELECT funcionario_id, data_inicio, data_fim
+                SELECT id, funcionario_id, data_inicio, data_fim
                 FROM ferias_pedidos
                 WHERE funcionario_id IN ({$inStr})
                   AND data_inicio <= :dataFim AND data_fim >= :dataInicio
-                  AND estado = 'aprovado_rh'
+                  AND estado IN ('aprovado_rh', 'aprovado_supervisor')
             ");
             $stmtFerias->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
             $todasFerias = $stmtFerias->fetchAll(PDO::FETCH_ASSOC);

@@ -70,10 +70,12 @@ class CalculoHorasService
             if ($estado === 'servico_externo') {
                 $minutosEsperados = (int) round($estadoDia['horas_efectivas'] * 60);
 
-                $resultado['tipo_presenca'] = 'servico_externo';
-                $resultado['minutos_totais'] = $minutosEsperados;
-                $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
-                return $resultado;
+                if ($minutosEsperados > 0) {
+                    $resultado['tipo_presenca'] = 'servico_externo';
+                    $resultado['minutos_totais'] = $minutosEsperados;
+                    $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
+                    return $resultado;
+                }
             }
 
             if ($estado === 'folga_justificada') {
@@ -87,6 +89,12 @@ class CalculoHorasService
 
             if ($estado === 'falta_injustificada' && count($marcacoes) === 0) {
                 $resultado['is_falta_injustificada'] = true;
+                return $resultado;
+            }
+
+            if (in_array($estado, ['folga_ciclo', 'sem_horario']) && count($marcacoes) === 0) {
+                $resultado['tipo_presenca'] = 'ausente';
+                $resultado['horas_trabalhadas'] = 0.0;
                 return $resultado;
             }
         } else {

@@ -83,10 +83,16 @@ class EstadoDiaService
             $estado = '';
 
             if ($comportamento === 'trabalho') {
-                $estado = 'servico_externo';
-                $horasEfectivas = $turno && $turno['tipo'] !== 'folga' && !empty($turno['horas_efectivas'])
-                                    ? (float) $turno['horas_efectivas']
-                                    : 8.0;
+                if (!empty($marcacoes)) {
+                    $estado = 'trabalhado';
+                } elseif ($turno !== null && $turno['tipo'] !== 'folga') {
+                    $estado = 'servico_externo';
+                    $horasEfectivas = !empty($turno['horas_efectivas']) ? (float) $turno['horas_efectivas'] : 0.0;
+                } elseif ($turno !== null && $turno['tipo'] === 'folga') {
+                    $estado = 'folga_ciclo';
+                } else {
+                    $estado = 'sem_horario';
+                }
             } elseif ($comportamento === 'folga') {
                 $estado = 'folga_justificada';
             } elseif ($comportamento === 'falta_justificada_remunerada') {
@@ -98,7 +104,7 @@ class EstadoDiaService
             return [
                 'estado' => $estado,
                 'origem' => 'justificacao',
-                'justificacao_id' => $justificacao['id'] ?? null,
+                'justificacao_id' => isset($justificacao['id']) ? (int)$justificacao['id'] : null,
                 'tipo' => $tipoJust,
                 'horas_efectivas' => $horasEfectivas,
             ];
@@ -111,7 +117,7 @@ class EstadoDiaService
                 'origem' => 'marcacoes',
                 'justificacao_id' => null,
                 'tipo' => null,
-                'horas_efectivas' => 0.0, // Horas efectivas são calculadas detalhadamente pelo CalculoHorasService
+                'horas_efectivas' => 0.0,
             ];
         }
 
