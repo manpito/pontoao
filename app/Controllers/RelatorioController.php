@@ -263,6 +263,7 @@ class RelatorioController
         while ($atual <= $fim) {
             $dataStr   = date('Y-m-d', $atual);
             $diaSemana = (int) date('N', $atual);
+            $motivoFaltaJustificada = null;
 
             $mDia = $marcPorDia[$dataStr] ?? [];
             $marcacoesFormatadas = [];
@@ -393,7 +394,10 @@ class RelatorioController
             );
 
             $hasServicoExterno = $estadoDoDia['estado'] === 'servico_externo';
-            $isJustificado = in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada']);
+            $isJustificado = in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada']);
+            if ($estadoDoDia['estado'] === 'folga_justificada' && empty($mDia)) {
+                $isJustificado = true;
+            }
             $hasFerias = $estadoDoDia['estado'] === 'ferias';
 
             // Find motivo se justificado (from DB logic)
@@ -671,6 +675,7 @@ class RelatorioController
             $dataStr   = date('Y-m-d', $atual);
             $diaSemana = (int) date('N', $atual);
             $nomesDias = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
+            $motivoFaltaJustificada = null;
 
             if ($dataStr < $func['data_admissao']) {
                 $atual = strtotime('+1 day', $atual);
@@ -798,6 +803,9 @@ class RelatorioController
                 // Se inicial é fim_semana, SÓ muda se serviço indicar falta_injustificada
                 if ($diaInfo['estado'] === 'fim_semana' && $estadoDoDia['estado'] !== 'falta_injustificada') {
                     // Mantém como fim_semana
+                } elseif ($estadoDoDia['estado'] === 'ferias' && $turnoAtual !== null && ($turnoAtual['tipo_original'] ?? $turnoAtual['tipo']) === 'folga') {
+                    // Mantém estado base que para 'sem escala/folga' foi mapeado. No individual, se $diaInfo['estado'] estava como 'ausente' num dia que na realidade é de folga, ajusta para folga
+                    $diaInfo['estado'] = $diaSemana >= 6 ? 'fim_semana' : 'folga';
                 } else {
                     if (in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada', 'ferias'])) {
                         // Determine reason text
@@ -1128,6 +1136,12 @@ class RelatorioController
 
                     if ($diaInfo['tipo'] === 'fim_semana' && $estadoDoDia['estado'] !== 'falta_injustificada') {
                         // Mantém como fim_semana
+                    } elseif ($estadoDoDia['estado'] === 'ferias' && $turnoAtual !== null && ($turnoAtual['tipo_original'] ?? $turnoAtual['tipo']) === 'folga') {
+                        $diaInfo['tipo'] = $diaSemana >= 6 ? 'fim_semana' : 'ausente';
+                        if ($justificadoLegado) {
+                            $diaInfo['tipo'] = 'justificado';
+                            $diaInfo['justificacao'] = $justificacaoLegadaTipo;
+                        }
                     } else {
                         if (in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada', 'ferias'])) {
                             $diaInfo['tipo'] = 'justificado';
@@ -1737,12 +1751,13 @@ class RelatorioController
 
                 $presencaText = !empty($marcacoesDia) ? 'presente' : 'ausente';
                 $tipoEsperado = $turnoEsperado ? $turnoEsperado['tipo'] : 'folga';
+                $tipoEsperadoOriginal = $turnoEsperado ? ($turnoEsperado['tipo_original'] ?? $turnoEsperado['tipo']) : 'folga';
 
                 // Aplicar logica EstadoDiaService APENAS a dias em que estado inicial é ausente
                 if ($presencaText === 'ausente') {
                     $estadoDia = $estadoDiaService->determinar($func['id'], $dataStr, $vDia, $jaDia, $marcacoesDia, $turnoEsperado, $tiposComportamentoMap);
 
-                    if ($tipoEsperado === 'folga' && $estadoDia['estado'] !== 'falta_injustificada') {
+                    if ($tipoEsperadoOriginal === 'folga' && $estadoDia['estado'] !== 'falta_injustificada') {
                         // Mantém como ausente/folga, nao sobrescreve dia de folga do ciclo
                     } else {
                         if (in_array($estadoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada', 'ferias'])) {
@@ -1752,11 +1767,7 @@ class RelatorioController
                         } elseif ($estadoDia['estado'] === 'folga_ciclo') {
                             $tipoEsperado = 'folga';
                         } elseif ($estadoDia['estado'] === 'sem_horario') {
-                            if ($estadoDia['origem'] === 'justificacao' && isset($tiposComportamentoMap[$estadoDia['tipo']]) && $tiposComportamentoMap[$estadoDia['tipo']] === 'trabalho') {
-                                $presencaText = 'presente';
-                            } else {
-                                $tipoEsperado = 'folga'; // Sem horario legacy counting -> não deve contar como ausente se for ausente
-                            }
+                            $tipoEsperado = 'folga'; // Sem horario legacy counting -> não deve contar como ausente se for ausente (mesmo com trabalho)
                         }
                     }
                 }

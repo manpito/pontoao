@@ -68,19 +68,23 @@ class CalculoHorasService
             }
 
             if ($estado === 'servico_externo' || ($estado === 'trabalhado' && isset($estadoDia['tipo']) && $estadoDia['tipo'] === 'servico_externo')) {
-                $minutosEsperados = 0;
-                if ($turno && $turno['tipo'] !== 'folga' && !empty($turno['horas_efectivas'])) {
-                    $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
-                } else {
-                    $minutosEsperados = 8 * 60; // fallback legado
-                }
+                if (!$turno || $turno['tipo'] !== 'folga') {
+                    $minutosEsperados = 0;
+                    if ($turno) {
+                        if (!empty($turno['horas_efectivas'])) {
+                            $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+                        }
+                    } else {
+                        $minutosEsperados = 8 * 60; // fallback legado só entra se !$turno
+                    }
 
-                if ($minutosEsperados > 0) {
-                    $resultado['tipo_presenca'] = 'servico_externo';
-                    $resultado['minutos_totais'] = $minutosEsperados;
-                    $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
-                    // Retorna full hours ignorando picagens e atrasos para o código literal 'servico_externo'
-                    return $resultado;
+                    if ($minutosEsperados > 0) {
+                        $resultado['tipo_presenca'] = 'servico_externo';
+                        $resultado['minutos_totais'] = $minutosEsperados;
+                        $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
+                        // Retorna full hours ignorando picagens e atrasos para o código literal 'servico_externo'
+                        return $resultado;
+                    }
                 }
             }
 
