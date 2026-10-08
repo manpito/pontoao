@@ -1137,7 +1137,7 @@ class RelatorioController
                     if ($diaInfo['tipo'] === 'fim_semana' && $estadoDoDia['estado'] !== 'falta_injustificada') {
                         // Mantém como fim_semana
                     } elseif ($estadoDoDia['estado'] === 'ferias' && $turnoAtual !== null && ($turnoAtual['tipo_original'] ?? $turnoAtual['tipo']) === 'folga') {
-                        $diaInfo['tipo'] = $diaSemana >= 6 ? 'fim_semana' : 'ausente';
+                        $diaInfo['tipo'] = 'fim_semana';
                         if ($justificadoLegado) {
                             $diaInfo['tipo'] = 'justificado';
                             $diaInfo['justificacao'] = $justificacaoLegadaTipo;
