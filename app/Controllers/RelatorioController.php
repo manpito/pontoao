@@ -394,8 +394,8 @@ class RelatorioController
             );
 
             $hasServicoExterno = $estadoDoDia['estado'] === 'servico_externo';
-            $isJustificado = in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada']);
-            if ($estadoDoDia['estado'] === 'folga_justificada' && empty($mDia)) {
+            $isJustificado = false;
+            if (empty($mDia) && in_array($estadoDoDia['estado'], ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga_justificada'])) {
                 $isJustificado = true;
             }
             $hasFerias = $estadoDoDia['estado'] === 'ferias';

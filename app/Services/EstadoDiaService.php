@@ -89,11 +89,31 @@ class EstadoDiaService
                     $estado = 'servico_externo';
                     $horasEfectivas = !empty($turno['horas_efectivas']) ? (float) $turno['horas_efectivas'] : 0.0;
                 } elseif ($turno !== null && $turno['tipo'] === 'folga') {
-                    $estado = 'folga_ciclo';
+                    return [
+                        'estado' => 'folga_ciclo',
+                        'origem' => 'ciclo',
+                        'justificacao_id' => null,
+                        'tipo' => null,
+                        'horas_efectivas' => 0.0,
+                    ];
                 } else {
-                    $estado = 'sem_horario';
+                    if ($tipoJust === 'servico_externo') {
+                        $estado = 'servico_externo';
+                        $horasEfectivas = 8.0;
+                    } else {
+                        $estado = 'sem_horario';
+                    }
                 }
             } elseif ($comportamento === 'folga') {
+                if (empty($marcacoes) && $turno !== null && $turno['tipo'] === 'folga') {
+                    return [
+                        'estado' => 'folga_ciclo',
+                        'origem' => 'ciclo',
+                        'justificacao_id' => null,
+                        'tipo' => null,
+                        'horas_efectivas' => 0.0,
+                    ];
+                }
                 $estado = 'folga_justificada';
             } elseif (in_array($comportamento, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                 if (empty($marcacoes) && $turno !== null && $turno['tipo'] === 'folga') {

@@ -62,9 +62,9 @@ class CalculoHorasService
             if (in_array($estado, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                 if (count($marcacoes) === 0) {
                     $resultado['tipo_presenca'] = 'ausente';
+                    $resultado['horas_trabalhadas'] = 0.0;
+                    return $resultado;
                 }
-                $resultado['horas_trabalhadas'] = 0.0;
-                return $resultado;
             }
 
             if ($estado === 'servico_externo' || ($estado === 'trabalhado' && isset($estadoDia['tipo']) && $estadoDia['tipo'] === 'servico_externo')) {
