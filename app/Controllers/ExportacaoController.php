@@ -139,7 +139,7 @@ class ExportacaoController
             SELECT fp.funcionario_id, fp.data_inicio, fp.data_fim
             FROM ferias_pedidos fp
             WHERE fp.funcionario_id IN ({$inStr})
-              AND fp.estado = 'aprovado_rh'
+              AND fp.estado IN ('aprovado_rh', 'aprovado_supervisor')
               AND fp.data_inicio <= :fim AND fp.data_fim >= :ini
         ");
         $stmtFP->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
