@@ -190,7 +190,7 @@ class RelatorioController
             SELECT id, data_inicio, data_fim
             FROM ferias_pedidos
             WHERE funcionario_id = :fid
-              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND estado = 'aprovado_rh'
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
         ");
         $stmtFerias->execute([':fid' => $funcId, ':dataInicio' => $dataInicio, ':dataFim' => $dataFim]);
@@ -645,7 +645,7 @@ class RelatorioController
             SELECT id, data_inicio, data_fim
             FROM ferias_pedidos
             WHERE funcionario_id = :fid
-              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND estado = 'aprovado_rh'
               AND data_inicio <= :fim AND data_fim >= :ini
         ");
         $stmtV->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
@@ -817,7 +817,7 @@ class RelatorioController
                 } elseif ($estadoDoDia['estado'] === 'folga_ciclo') {
                     $diaInfo['estado'] = 'folga';
                 } elseif ($estadoDoDia['estado'] === 'sem_horario') {
-                    // Sem_horario não conta como ausência nem presença
+                    // mantém o comportamento legado: dia útil sem escala e sem picagens conta como ausente
                     $diaInfo['estado'] = $diaSemana >= 6 ? 'fim_semana' : 'ausente';
                     if ($diaInfo['estado'] === 'ausente') $totalAusente++;
                 }
@@ -974,7 +974,7 @@ class RelatorioController
             SELECT id, funcionario_id, data_inicio, data_fim
             FROM ferias_pedidos
             WHERE funcionario_id IN ({$inStr})
-              AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND estado = 'aprovado_rh'
               AND data_inicio <= :dataFim AND data_fim >= :dataInicio
         ");
         $stmtV->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
@@ -1662,7 +1662,7 @@ class RelatorioController
         $stmtJ->execute([':ini' => $inicio, ':fim' => $fim]);
         $todasJA = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inStr) AND estado IN ('aprovado_rh', 'aprovado_supervisor') AND data_inicio <= :fim AND data_fim >= :ini");
+        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inStr) AND estado = 'aprovado_rh' AND data_inicio <= :fim AND data_fim >= :ini");
         $stmtV->execute([':ini' => $inicio, ':fim' => $fim]);
         $todasV = $stmtV->fetchAll(PDO::FETCH_ASSOC);
 

@@ -139,7 +139,7 @@ class ExportacaoController
             SELECT fp.funcionario_id, fp.data_inicio, fp.data_fim
             FROM ferias_pedidos fp
             WHERE fp.funcionario_id IN ({$inStr})
-              AND fp.estado IN ('aprovado_rh', 'aprovado_supervisor')
+              AND fp.estado = 'aprovado_rh'
               AND fp.data_inicio <= :fim AND fp.data_fim >= :ini
         ");
         $stmtFP->execute([':ini' => $dataInicio, ':fim' => $dataFim]);
@@ -151,7 +151,7 @@ class ExportacaoController
 
         // 2.6b — Buscar justificações de ausência aprovadas do período (serviço externo)
         $stmtJA = $db->prepare("
-            SELECT id, funcionario_id, data_inicio, data_fim, tipo, motivo
+            SELECT id, funcionario_id, data_inicio, data_fim, tipo
             FROM justificacoes_ausencia
             WHERE funcionario_id IN ({$inStr})
               AND estado = 'aprovado'

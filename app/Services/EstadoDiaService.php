@@ -95,8 +95,17 @@ class EstadoDiaService
                 }
             } elseif ($comportamento === 'folga') {
                 $estado = 'folga_justificada';
-            } elseif ($comportamento === 'falta_justificada_remunerada') {
-                $estado = 'falta_justificada_remunerada';
+            } elseif (in_array($comportamento, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
+                if (empty($marcacoes) && $turno !== null && $turno['tipo'] === 'folga') {
+                    return [
+                        'estado' => 'folga_ciclo',
+                        'origem' => 'ciclo',
+                        'justificacao_id' => null,
+                        'tipo' => null,
+                        'horas_efectivas' => 0.0,
+                    ];
+                }
+                $estado = $comportamento;
             } else {
                 $estado = 'falta_justificada_nao_remunerada';
             }

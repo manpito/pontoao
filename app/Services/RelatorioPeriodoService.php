@@ -101,7 +101,7 @@ class RelatorioPeriodoService
                 FROM ferias_pedidos
                 WHERE funcionario_id IN ({$inStr})
                   AND data_inicio <= :dataFim AND data_fim >= :dataInicio
-                  AND estado IN ('aprovado_rh', 'aprovado_supervisor')
+                  AND estado = 'aprovado_rh'
             ");
             $stmtFerias->execute([':dataFim' => $dataFim, ':dataInicio' => $dataInicio]);
             $todasFerias = $stmtFerias->fetchAll(PDO::FETCH_ASSOC);
