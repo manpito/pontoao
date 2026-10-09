@@ -19,12 +19,13 @@ class CalculoHorasService
         string $tipoDia, // 'util', 'sabado', 'domingo', 'feriado'
         string $regimeEscala, // 'normal', 'turnos'
         string $dataStr,
-        bool $hasServicoExterno = false,
-        bool $hasFaltaJustificada = false,
-        bool $hasFerias = false,
+        bool $hasServicoExterno = false, // Deprecated: Mantido para retrocompatibilidade
+        bool $hasFaltaJustificada = false, // Deprecated: Mantido para retrocompatibilidade
+        bool $hasFerias = false, // Deprecated: Mantido para retrocompatibilidade
         bool $contarEntradaAntecipada = true,
         bool $contarSaidaTardia = false,
-        int $minutosExtraAprovados = 0
+        int $minutosExtraAprovados = 0,
+        ?array $estadoDia = null // Novo parametro: Estado retornado pelo EstadoDiaService
     ): array {
         // Inicializar o resultado
         $resultado = [
@@ -43,43 +44,112 @@ class CalculoHorasService
             'is_incoerente'                => false,
         ];
 
-        // Se houver férias aprovadas para este dia, nunca conta como falta e não conta horas trabalhadas
-        if ($hasFerias) {
-            // Conta como "dia de férias" apenas se for um dia em que o funcionário originalmente
-            // estaria agendado para trabalhar (não folga) e não for um feriado.
-            // A EscalaService fornece 'tipo_original' antes de a excepção de férias transformar o dia em 'folga'.
-            $isTrabalhoAgendado = ($turno && ($turno['tipo_original'] ?? $turno['tipo']) !== 'folga');
-            if ($isTrabalhoAgendado && $tipoDia !== 'feriado') {
-                $resultado['tipo_presenca'] = 'ferias';
-            } else {
-                $resultado['tipo_presenca'] = 'ausente';
-            }
-            $resultado['horas_trabalhadas'] = 0.0;
-            return $resultado;
-        }
+        // Processar estado centralizado, se providenciado
+        if ($estadoDia) {
+            $estado = $estadoDia['estado'];
 
-        // Se houver serviço externo justificado, tratar como dia de trabalho completo
-        if ($hasServicoExterno && (!$turno || $turno['tipo'] !== 'folga')) {
-            $minutosEsperados = 0;
-            if ($turno) {
-                if ($turno['tipo'] !== 'folga' && !empty($turno['horas_efectivas'])) {
-                    $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+            if ($estado === 'ferias') {
+                $isTrabalhoAgendado = ($turno && ($turno['tipo_original'] ?? $turno['tipo']) !== 'folga');
+                if ($isTrabalhoAgendado && $tipoDia !== 'feriado') {
+                    $resultado['tipo_presenca'] = 'ferias';
                 } else {
-                    $minutosEsperados = 0;
+                    $resultado['tipo_presenca'] = 'ausente';
                 }
-            } else {
-                $minutosEsperados = 8 * 60; // fallback para 8 horas
+                $resultado['horas_trabalhadas'] = 0.0;
+                return $resultado;
             }
 
-            $resultado['tipo_presenca'] = 'servico_externo';
-            $resultado['minutos_totais'] = $minutosEsperados;
-            $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
-            // Sem horas extras, atrasos ou saídas antecipadas
-            return $resultado;
+            if (in_array($estado, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
+                if (count($marcacoes) === 0) {
+                    $resultado['tipo_presenca'] = 'ausente';
+                    $resultado['horas_trabalhadas'] = 0.0;
+                    return $resultado;
+                }
+            }
+
+            if ($estado === 'servico_externo' || ($estado === 'trabalhado' && isset($estadoDia['tipo']) && $estadoDia['tipo'] === 'servico_externo')) {
+                if (!$turno || $turno['tipo'] !== 'folga') {
+                    $minutosEsperados = 0;
+                    if ($turno) {
+                        if (!empty($turno['horas_efectivas'])) {
+                            $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+                        }
+                    } else {
+                        $minutosEsperados = 8 * 60; // fallback legado só entra se !$turno
+                    }
+
+                    if ($minutosEsperados > 0) {
+                        $resultado['tipo_presenca'] = 'servico_externo';
+                        $resultado['minutos_totais'] = $minutosEsperados;
+                        $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
+                        // Retorna full hours ignorando picagens e atrasos para o código literal 'servico_externo'
+                        return $resultado;
+                    }
+                }
+            }
+
+            if ($estado === 'folga_justificada') {
+                // Preserva o cálculo de picagens se houver (horas extra), mas o dia em si é folga.
+                if (count($marcacoes) === 0) {
+                    $resultado['tipo_presenca'] = 'ausente'; // mantem consistencia com sem picagens
+                    $resultado['horas_trabalhadas'] = 0.0;
+                    return $resultado;
+                }
+            }
+
+            if ($estado === 'falta_injustificada' && count($marcacoes) === 0) {
+                $resultado['is_falta_injustificada'] = true;
+                return $resultado;
+            }
+
+            if (in_array($estado, ['folga_ciclo', 'sem_horario']) && count($marcacoes) === 0) {
+                $resultado['tipo_presenca'] = 'ausente';
+                $resultado['horas_trabalhadas'] = 0.0;
+                return $resultado;
+            }
+        } else {
+            // Retrocompatibilidade para quem não enviar $estadoDia (código legado)
+            if ($hasFerias) {
+                $isTrabalhoAgendado = ($turno && ($turno['tipo_original'] ?? $turno['tipo']) !== 'folga');
+                if ($isTrabalhoAgendado && $tipoDia !== 'feriado') {
+                    $resultado['tipo_presenca'] = 'ferias';
+                } else {
+                    $resultado['tipo_presenca'] = 'ausente';
+                }
+                $resultado['horas_trabalhadas'] = 0.0;
+                return $resultado;
+            }
+
+            if ($hasFaltaJustificada) {
+                if (count($marcacoes) === 0) {
+                    $resultado['tipo_presenca'] = 'ausente';
+                }
+                $resultado['horas_trabalhadas'] = 0.0;
+                return $resultado;
+            }
+
+            if ($hasServicoExterno && (!$turno || $turno['tipo'] !== 'folga')) {
+                $minutosEsperados = 0;
+                if ($turno) {
+                    if ($turno['tipo'] !== 'folga' && !empty($turno['horas_efectivas'])) {
+                        $minutosEsperados = (int) round((float)$turno['horas_efectivas'] * 60);
+                    } else {
+                        $minutosEsperados = 0;
+                    }
+                } else {
+                    $minutosEsperados = 8 * 60;
+                }
+
+                $resultado['tipo_presenca'] = 'servico_externo';
+                $resultado['minutos_totais'] = $minutosEsperados;
+                $resultado['horas_trabalhadas'] = round($minutosEsperados / 60, 2);
+                return $resultado;
+            }
         }
 
         if (count($marcacoes) === 0) {
-            if (!$hasServicoExterno && !$hasFaltaJustificada && $turno && $turno['tipo'] !== 'folga') {
+            // Se estadoDia foi enviado, a falta injustificada já foi apanhada acima se marcacoes == 0
+            if (!$estadoDia && !$hasServicoExterno && !$hasFaltaJustificada && $turno && $turno['tipo'] !== 'folga') {
                 $resultado['is_falta_injustificada'] = true;
             }
             return $resultado;

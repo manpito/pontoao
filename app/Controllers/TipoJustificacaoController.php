@@ -53,7 +53,7 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'O campo nome é obrigatório.']);
         }
 
-        $comportamentosValidos = ['trabalho', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada'];
+        $comportamentosValidos = ['trabalho', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga'];
         if (empty($body['comportamento']) || !in_array($body['comportamento'], $comportamentosValidos, true)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Comportamento inválido.']);
         }
@@ -102,7 +102,7 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'O campo nome é obrigatório.']);
         }
 
-        $comportamentosValidos = ['trabalho', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada'];
+        $comportamentosValidos = ['trabalho', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga'];
         if (empty($body['comportamento']) || !in_array($body['comportamento'], $comportamentosValidos, true)) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Comportamento inválido.']);
         }

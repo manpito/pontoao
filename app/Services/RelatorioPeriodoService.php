@@ -22,6 +22,10 @@ class RelatorioPeriodoService
      */
     public function gerar(string $dataInicio, string $dataFim): array
     {
+        // 0. Instanciar serviços auxiliares
+        $estadoDiaService = new EstadoDiaService();
+        $tiposJustificacaoMap = TipoJustificacaoService::getComportamentoMap($this->pdo);
+
         // 1. Obter funcionários activos e os seus horários normais
         $stmtF = $this->pdo->query("
             SELECT f.id, f.nome_completo, f.numero_funcionario,
@@ -78,7 +82,7 @@ class RelatorioPeriodoService
 
             // Justificações de ausência
             $stmtJA = $this->pdo->prepare("
-                SELECT funcionario_id, data_inicio, data_fim, tipo, estado
+                SELECT id, funcionario_id, data_inicio, data_fim, tipo, motivo, estado
                 FROM justificacoes_ausencia
                 WHERE funcionario_id IN ({$inStr})
                   AND data_inicio <= :dataFim AND data_fim >= :dataInicio
@@ -93,7 +97,7 @@ class RelatorioPeriodoService
 
             // Férias aprovadas
             $stmtFerias = $this->pdo->prepare("
-                SELECT funcionario_id, data_inicio, data_fim
+                SELECT id, funcionario_id, data_inicio, data_fim
                 FROM ferias_pedidos
                 WHERE funcionario_id IN ({$inStr})
                   AND data_inicio <= :dataFim AND data_fim >= :dataInicio
@@ -150,28 +154,25 @@ class RelatorioPeriodoService
                 $dia = date('Y-m-d', $atual);
                 $marcacoesDia = $marcacoesPorDia[$dia] ?? [];
 
-                $hasServicoExterno = false;
-                $hasFaltaJustificada = false;
-                $hasFerias = false;
+                $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
 
+                $justificacoesDoDia = [];
                 foreach ($justificacoesFunc as $ja) {
                     if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
-                        if ($ja['tipo'] === 'servico_externo') {
-                            $hasServicoExterno = true;
-                        } elseif ($ja['tipo'] === 'falta_justificada') {
-                            $hasFaltaJustificada = true;
-                        }
+                        $justificacoesDoDia[] = $ja;
                     }
                 }
 
+                $feriasDoDia = [];
                 foreach ($feriasFunc as $fp) {
                     if ($dia >= $fp['data_inicio'] && $dia <= $fp['data_fim']) {
-                        $hasFerias = true;
-                        break;
+                        $feriasDoDia[] = $fp;
                     }
                 }
 
-                $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
+                $estadoDoDia = $estadoDiaService->determinar(
+                    $funcId, $dia, $feriasDoDia, $justificacoesDoDia, $marcacoesDia, $turno, $tiposJustificacaoMap
+                );
 
                 $diaSemana = (int) date('N', $atual);
                 $isFeriado = $feriadoService->isFeriado($dia);
@@ -188,8 +189,8 @@ class RelatorioPeriodoService
 
                 $resultadoDia = $calculoService->calcularDia(
                     $marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia,
-                    $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada,
-                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte
+                    false, false, false, $contarEntradaAntecipada,
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia
                 );
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {

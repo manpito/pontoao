@@ -151,7 +151,7 @@ class ExportacaoController
 
         // 2.6b — Buscar justificações de ausência aprovadas do período (serviço externo)
         $stmtJA = $db->prepare("
-            SELECT funcionario_id, data_inicio, data_fim, tipo
+            SELECT id, funcionario_id, data_inicio, data_fim, tipo
             FROM justificacoes_ausencia
             WHERE funcionario_id IN ({$inStr})
               AND estado = 'aprovado'
@@ -185,6 +185,9 @@ class ExportacaoController
             $fId = (int)$phe['funcionario_id'];
             $horasExtraAprovadasMap[$fId][$phe['data']] = (int)$phe['minutos'];
         }
+
+        $estadoDiaService = new \App\Services\EstadoDiaService();
+        $tiposJustificacaoMap = \App\Services\TipoJustificacaoService::getComportamentoMap($db);
 
         $linhas = [];
 
@@ -247,27 +250,32 @@ class ExportacaoController
                 $diaSemana = (int) date('N', $atual);
                 $isUtil = ($diaSemana < 6 && !isset($feriados[$dataStr]));
 
-                $hasServicoExterno = false;
-                foreach ($todasJA as $ja) {
-                    if ($ja['funcionario_id'] == $fId && $ja['tipo'] === 'servico_externo' && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                        $hasServicoExterno = true;
-                        break;
-                    }
-                }
-
-                // Férias (ferias_pedidos)
+                $feriasDoDia = [];
                 if (isset($feriasMap[$fId])) {
                     foreach ($feriasMap[$fId] as $fp) {
-                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim'] && $isUtil) {
-                            $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F50', 1.0);
-                            break;
+                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim']) {
+                            if ($isUtil) {
+                                $feriasDoDia[] = $fp;
+                                $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F50', 1.0);
+                                break;
+                            }
                         }
                     }
                 }
 
-                // Atrasos e Horas Extra
+                $justificacoesDoDia = [];
+                foreach ($todasJA as $ja) {
+                    if ($ja['funcionario_id'] == $fId && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                        $justificacoesDoDia[] = $ja;
+                    }
+                }
+
                 $mDia = $marcPorDia[$dataStr] ?? [];
                 $turno = $escalaService->calcularTurnoEm($fId, $dataStr);
+
+                $estadoDoDia = $estadoDiaService->determinar(
+                    $fId, $dataStr, $feriasDoDia, $justificacoesDoDia, $mDia, $turno, $tiposJustificacaoMap
+                );
 
                 $tipoDia = 'util';
                 if (isset($feriados[$dataStr])) {
@@ -282,26 +290,11 @@ class ExportacaoController
 
                 $calculoService = new \App\Services\CalculoHorasService();
 
-                $hasFerias = false;
-                if (isset($feriasMap[$fId])) {
-                    foreach ($feriasMap[$fId] as $fp) {
-                        if ($dataStr >= $fp['data_inicio'] && $dataStr <= $fp['data_fim'] && $isUtil) {
-                            $hasFerias = true;
-                            break;
-                        }
-                    }
-                }
-
-                $hasFaltaJustificada = false;
-                if (isset($faltasMap[$fId][$dataStr]) && in_array($faltasMap[$fId][$dataStr], ['justificada_trabalho', 'justificada_motivo'])) {
-                    $hasFaltaJustificada = true;
-                }
-
                 $minutosExtraAprovadosParaCorte = $horasExtraAprovadasMap[$fId][$dataStr] ?? 0;
                 $resultadoDia = $calculoService->calcularDia(
                     $mDia, $turno, $tipoDia, $regimeEscala, $dataStr,
-                    $hasServicoExterno, $hasFaltaJustificada, $hasFerias, $contarEntradaAntecipada,
-                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte
+                    false, false, false, $contarEntradaAntecipada,
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia
                 );
 
                 // Faltas (priorizar presença real)
@@ -312,6 +305,7 @@ class ExportacaoController
                         'injustificada_meio_dia' => ['F08', 0.5],
                         'justificada_trabalho'   => ['F10', 1.0],
                         'justificada_motivo'     => ['F10', 1.0],
+                        'justificada_outras'     => ['F10', 1.0],
                     ];
                     if (isset($map[$estado])) {
                         $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, $map[$estado][0], (float)$map[$estado][1]);
@@ -319,7 +313,10 @@ class ExportacaoController
                     }
                 }
 
-                if (!empty($resultadoDia['is_falta_injustificada']) && !$faltaEmitida) {
+                // folga e trabalho justificado (servico_externo) não geram F03
+                $estadoGeraF03 = !in_array($estadoDoDia['estado'] ?? '', ['folga_justificada', 'folga_ciclo', 'servico_externo', 'trabalhado', 'ferias']);
+
+                if (!empty($resultadoDia['is_falta_injustificada']) && !$faltaEmitida && $estadoGeraF03) {
                     $linhas[] = $this->formatarLinhaPrimavera('F', $codFunc, $dataStr, 'F03', 1.0);
                 }
 
