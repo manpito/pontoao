@@ -43,14 +43,19 @@ class AjusteDiaController
         return (bool) $stmt->fetchColumn();
     }
 
-    private function auditoria(PDO $db, $user, string $accao, string $entidade, ?int $entidadeId, ?array $antes, ?array $depois): void
+    private function utilizadorId(ServerRequestInterface $request): int
+    {
+        return (int)($request->getAttribute('auth_user_id') ?? 0);
+    }
+
+    private function auditoria(PDO $db, int $userId, string $accao, string $entidade, ?int $entidadeId, ?array $antes, ?array $depois): void
     {
         $stmt = $db->prepare("
             INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_antes, dados_depois, ip, user_agent)
             VALUES (:uid, :accao, :entidade, :entidade_id, :antes, :depois, :ip, :ua)
         ");
         $stmt->execute([
-            ':uid'         => $user->id ?? null,
+            ':uid'         => $userId ?: null,
             ':accao'       => $accao,
             ':entidade'    => $entidade,
             ':entidade_id' => $entidadeId,
@@ -72,7 +77,12 @@ class AjusteDiaController
         }
 
         $funcId = (int) $args['id'];
-        $ano = $request->getQueryParams()['ano'] ?? date('Y');
+        $anoRaw = $request->getQueryParams()['ano'] ?? date('Y');
+        $ano = (int)$anoRaw;
+
+        if ($ano < 2000 || $ano > 2100) {
+            return $this->json(400, ['erro' => true, 'mensagem' => 'Ano inválido.']);
+        }
 
         $dataInicio = "{$ano}-01-01";
         $dataFim = "{$ano}-12-31";
@@ -88,10 +98,19 @@ class AjusteDiaController
         $ajusteSvc = new \App\Services\AjusteDiaService($db);
         $ajustesFunc = $ajusteSvc->carregarPorFuncionarios([$funcId], $dataInicio, $dataFim)[$funcId] ?? [];
 
-        // Férias e justificações normais
-        $stmtF = $db->prepare("SELECT id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id = :fid AND estado = 'aprovado_rh' AND data_inicio <= :fim AND data_fim >= :ini");
+        // Férias
+        $stmtF = $db->prepare("SELECT id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id = :fid AND estado IN ('aprovado_rh', 'aprovado_supervisor') AND data_inicio <= :fim AND data_fim >= :ini");
         $stmtF->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
         $todasFerias = $stmtF->fetchAll(PDO::FETCH_ASSOC);
+
+        // Justificações Legadas e Normais
+        $stmtJ = $db->prepare("SELECT data_inicio, data_fim, tipo FROM justificacoes WHERE funcionario_id = :fid AND data_inicio <= :fim AND data_fim >= :ini AND estado = 'aprovada'");
+        $stmtJ->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $justificacoesLegadas = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
+
+        $stmtJA = $db->prepare("SELECT id, data_inicio, data_fim, tipo, motivo FROM justificacoes_ausencia WHERE funcionario_id = :fid AND data_inicio <= :fim AND data_fim >= :ini AND estado = 'aprovado'");
+        $stmtJA->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $justificacoesNovas = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
         // Marcações (usado para tem_picagens e calculos se houver justificação sem ajuste)
         $stmtM = $db->prepare("SELECT id, tipo, data_hora, origem FROM marcacoes WHERE funcionario_id = :fid AND data_hora BETWEEN :ini AND :fim");
@@ -139,8 +158,21 @@ class AjusteDiaController
                     'id' => null,
                     'ajuste_id' => $ajusteDia['id'],
                     'tipo' => $ajusteDia['tipo'],
-                    'estado' => 'aprovado'
+                    'estado' => 'aprovado',
+                    'data_inicio' => $dia,
+                    'data_fim' => $dia
                 ];
+            } else {
+                foreach ($justificacoesNovas as $ja) {
+                    if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
+                        $justificacoesDoDia[] = $ja;
+                    }
+                }
+                foreach ($justificacoesLegadas as $j) {
+                    if ($dia >= $j['data_inicio'] && $dia <= $j['data_fim']) {
+                        $justificacoesDoDia[] = $j;
+                    }
+                }
             }
 
             $mDia = $marcPorDia[$dia] ?? [];
@@ -173,18 +205,33 @@ class AjusteDiaController
     }
 
     private function parseDatas($datas) {
-        // Accepts list of YYYY-MM-DD or object {inicio, fim}
+        $list = [];
         if (is_array($datas) && isset($datas['inicio']) && isset($datas['fim'])) {
-            $ini = strtotime($datas['inicio']);
-            $fim = strtotime($datas['fim']);
-            $list = [];
+            $iniStr = $datas['inicio'];
+            $fimStr = $datas['fim'];
+            if ($iniStr > $fimStr) return [];
+            $ini = strtotime($iniStr);
+            $fim = strtotime($fimStr);
+            if (!$ini || !$fim) return [];
+
+            $diffDays = round(($fim - $ini) / 86400);
+            if ($diffDays > 366) return [];
+
             while ($ini <= $fim) {
                 $list[] = date('Y-m-d', $ini);
                 $ini = strtotime('+1 day', $ini);
             }
-            return $list;
+        } elseif (is_array($datas)) {
+             foreach ($datas as $d) {
+                 if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$d)) {
+                     $list[] = $d;
+                 }
+             }
         }
-        return is_array($datas) ? $datas : [];
+        if (empty($list)) return [];
+        $list = array_unique($list);
+        sort($list);
+        return $list;
     }
 
     /**
@@ -196,13 +243,13 @@ class AjusteDiaController
         if (!$this->hasAjusteTable($db)) return $this->json(503, ['erro' => true, 'codigo' => 'funcionalidade_indisponivel']);
 
         $body = $request->getParsedBody() ?? [];
-        $funcId = $body['funcionario_id'] ?? null;
+        $funcId = isset($body['funcionario_id']) ? (int)$body['funcionario_id'] : null;
         $datas = $this->parseDatas($body['datas'] ?? []);
-        $tipoId = $body['tipo_justificacao_id'] ?? null;
+        $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
         $nota = $body['nota'] ?? null;
         $substituir = !empty($body['substituir']);
 
-        $user = $request->getAttribute('auth_user');
+        $userId = $this->utilizadorId($request);
 
         if (!$funcId || empty($datas) || !$tipoId) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Parâmetros inválidos.']);
@@ -221,43 +268,30 @@ class AjusteDiaController
 
         $db->beginTransaction();
         try {
-            $resultado = ['criados' => 0, 'saltados_ferias' => 0, 'saltados_conflito' => 0, 'periodo_fechado' => 0];
+            $plano = $this->calcularPlanoLote($db, [$funcId], $datas, $substituir);
+            $resultado = [
+                'criados' => count($plano['a_criar']),
+                'saltados_ferias' => $plano['saltados_ferias'],
+                'saltados_conflito' => $plano['saltados_conflito'],
+                'periodo_fechado' => $plano['periodo_fechado']
+            ];
 
-            foreach ($datas as $dia) {
-                if ($this->isPeriodoFechado($db, $dia)) {
-                    $resultado['periodo_fechado']++;
-                    continue;
+            if ($resultado['criados'] > 0) {
+                // Substituir os velhos
+                if (!empty($plano['update_ids'])) {
+                     $inUpd = implode(',', $plano['update_ids']);
+                     $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por novo ajuste' WHERE id IN ($inUpd)")->execute([$userId]);
                 }
 
-                // Ferias?
-                $stmtFerias = $db->prepare("SELECT id FROM ferias_pedidos WHERE funcionario_id = ? AND estado = 'aprovado_rh' AND data_inicio <= ? AND data_fim >= ?");
-                $stmtFerias->execute([$funcId, $dia, $dia]);
-                if ($stmtFerias->fetchColumn()) {
-                    $resultado['saltados_ferias']++;
-                    continue;
+                // Inserir os novos
+                $datasParaAjustar = [];
+                foreach ($plano['a_criar'] as $pair) {
+                    $db->prepare("INSERT INTO ajustes_dia (funcionario_id, data, tipo_justificacao_id, nota, criado_por) VALUES (?, ?, ?, ?, ?)")
+                       ->execute([$funcId, $pair['data'], $tipoId, $nota, $userId]);
+                    $datasParaAjustar[] = $pair['data'];
                 }
 
-                // Conflito
-                $stmtCheck = $db->prepare("SELECT id FROM ajustes_dia WHERE funcionario_id = ? AND data = ? AND activo = 1");
-                $stmtCheck->execute([$funcId, $dia]);
-                $existente = $stmtCheck->fetchColumn();
-
-                if ($existente) {
-                    if (!$substituir) {
-                        $resultado['saltados_conflito']++;
-                        continue;
-                    } else {
-                        $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por novo ajuste' WHERE id = ?")
-                           ->execute([$user->id, $existente]);
-                        $this->auditoria($db, $user, 'ajuste_dia.anulado', 'ajustes_dia', (int)$existente, null, null);
-                    }
-                }
-
-                $db->prepare("INSERT INTO ajustes_dia (funcionario_id, data, tipo_justificacao_id, nota, criado_por) VALUES (?, ?, ?, ?, ?)")
-                   ->execute([$funcId, $dia, $tipoId, $nota, $user->id]);
-                $idCriado = $db->lastInsertId();
-                $this->auditoria($db, $user, 'ajuste_dia.criado', 'ajustes_dia', (int)$idCriado, null, ['data' => $dia, 'tipo_id' => $tipoId]);
-                $resultado['criados']++;
+                $this->auditoria($db, $userId, 'ajuste_dia.criado', 'ajustes_dia', null, null, ['funcionario_id' => $funcId, 'datas' => $datasParaAjustar, 'tipo_id' => $tipoId]);
             }
             $db->commit();
             return $this->json(200, ['mensagem' => 'Concluído', 'detalhes' => $resultado]);
@@ -316,6 +350,98 @@ class AjusteDiaController
         return array_keys($idsTotais);
     }
 
+    private function calcularPlanoLote(PDO $db, array $fIds, array $datas, bool $substituir): array
+    {
+        $plano = [
+            'a_criar' => [], // array of ['fid' => x, 'data' => y]
+            'update_ids' => [], // array of adjustment ids to annul
+            'saltados_ferias' => 0,
+            'saltados_conflito' => 0,
+            'periodo_fechado' => 0,
+            'ja_ajustados' => 0,
+            'com_picagens' => 0
+        ];
+
+        if (empty($fIds) || empty($datas)) return $plano;
+
+        $inIds = implode(',', array_map('intval', $fIds));
+        $dataIni = $datas[0];
+        $dataFim = end($datas);
+
+        // Pre-fetch periodos_mensais fechados overlapping batch dates
+        $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini AND data_inicio <= :fim");
+        $stmtP->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
+
+        // Pre-fetch férias
+        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado IN ('aprovado_rh', 'aprovado_supervisor') AND data_inicio <= :fim AND data_fim >= :ini");
+        $stmtV->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
+
+        // Pre-fetch ajustes existentes
+        $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini AND :fim AND activo = 1");
+        $stmtA->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $ajustesExistentesMap = [];
+        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) {
+            $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = (int)$a['id'];
+        }
+
+        // Pre-fetch picagens (informativo)
+        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini AND :fim");
+        $stmtM->execute([':ini' => $dataIni . ' 00:00:00', ':fim' => $dataFim . ' 23:59:59']);
+        $picagensMap = [];
+        foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $picagensMap[$m['funcionario_id']][substr($m['data_hora'], 0, 10)] = true;
+        }
+
+        foreach ($fIds as $fid) {
+            foreach ($datas as $dia) {
+                // Periodo fechado?
+                $isFechado = false;
+                foreach ($periodosFechados as $pf) {
+                    if ($dia >= $pf['data_inicio'] && $dia <= $pf['data_fim']) {
+                        $isFechado = true; break;
+                    }
+                }
+                if ($isFechado) {
+                    $plano['periodo_fechado']++;
+                    continue;
+                }
+
+                // Férias?
+                $isFerias = false;
+                foreach ($ferias as $fp) {
+                    if ($fp['funcionario_id'] == $fid && $dia >= $fp['data_inicio'] && $dia <= $fp['data_fim']) {
+                        $isFerias = true; break;
+                    }
+                }
+                if ($isFerias) {
+                    $plano['saltados_ferias']++;
+                    continue;
+                }
+
+                $idExistente = $ajustesExistentesMap[$fid][$dia] ?? null;
+                if ($idExistente) {
+                    $plano['ja_ajustados']++;
+                    if ($substituir) {
+                        $plano['update_ids'][] = $idExistente;
+                        $plano['a_criar'][] = ['fid' => $fid, 'data' => $dia];
+                    } else {
+                        $plano['saltados_conflito']++;
+                    }
+                } else {
+                    $plano['a_criar'][] = ['fid' => $fid, 'data' => $dia];
+                }
+
+                if (isset($picagensMap[$fid][$dia])) {
+                    $plano['com_picagens']++;
+                }
+            }
+        }
+
+        return $plano;
+    }
+
     /**
      * POST /api/ajustes/lote/previsao
      */
@@ -327,7 +453,8 @@ class AjusteDiaController
         $body = $request->getParsedBody() ?? [];
         $selecao = $body['selecao'] ?? [];
         $datas = $this->parseDatas($body['datas'] ?? []);
-        $tipoId = $body['tipo_justificacao_id'] ?? null;
+        $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
+        $substituir = !empty($body['substituir']);
 
         if (empty($datas) || !$tipoId) return $this->json(400, ['erro' => true, 'mensagem' => 'Datas e tipo são obrigatórios.']);
         if (count($datas) > 366) return $this->json(400, ['erro' => true, 'mensagem' => 'Máximo de 366 dias excedido.']);
@@ -343,65 +470,28 @@ class AjusteDiaController
         $totalMax = count($fIds) * $numDias;
         if ($totalMax > 20000) return $this->json(422, ['erro' => true, 'mensagem' => 'Limite de 20.000 linhas excedido. Reduza o alcance.']);
 
+        $plano = $this->calcularPlanoLote($db, $fIds, $datas, $substituir);
+
+        // Count sem_escala (informativo)
         $inIds = implode(',', array_map('intval', $fIds));
-
-        // Férias
-        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado = 'aprovado_rh' AND data_inicio <= :fim AND data_fim >= :ini");
-        $stmtV->execute([':ini' => $datas[0], ':fim' => end($datas)]);
-        $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
-
-        // Ajustes existentes
-        $stmtA = $db->prepare("SELECT funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini AND :fim AND activo = 1");
-        $stmtA->execute([':ini' => $datas[0], ':fim' => end($datas)]);
-        $ajustesExistentesMap = [];
-        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = true;
-
-        // Picagens (informativo)
-        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini AND :fim");
-        $stmtM->execute([':ini' => $datas[0] . ' 00:00:00', ':fim' => end($datas) . ' 23:59:59']);
-        $picagensMap = [];
-        foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) $picagensMap[$m['funcionario_id']][substr($m['data_hora'], 0, 10)] = true;
-
-        $jaAjustados = 0;
-        $emFerias = 0;
-        $comPicagens = 0;
-        $periodoFechado = 0;
-        $aCriar = 0;
-
-        foreach ($fIds as $fid) {
-            foreach ($datas as $dia) {
-                if ($this->isPeriodoFechado($db, $dia)) {
-                    $periodoFechado++;
-                    continue;
-                }
-                $isFerias = false;
-                foreach ($ferias as $fp) {
-                    if ($fp['funcionario_id'] == $fid && $dia >= $fp['data_inicio'] && $dia <= $fp['data_fim']) {
-                        $isFerias = true; break;
-                    }
-                }
-                if ($isFerias) { $emFerias++; continue; }
-
-                if (isset($ajustesExistentesMap[$fid][$dia])) {
-                    $jaAjustados++;
-                } else {
-                    $aCriar++;
-                }
-
-                if (isset($picagensMap[$fid][$dia])) {
-                    $comPicagens++;
-                }
-            }
-        }
+        $stmtE = $db->prepare("
+            SELECT COUNT(f.id)
+            FROM funcionarios f
+            WHERE f.id IN ($inIds)
+              AND NOT EXISTS (SELECT 1 FROM funcionario_escala fe WHERE fe.funcionario_id = f.id AND fe.data_inicio <= :dt AND (fe.data_fim IS NULL OR fe.data_fim >= :dt))
+              AND NOT EXISTS (SELECT 1 FROM funcionario_horario fh WHERE fh.funcionario_id = f.id AND fh.data_inicio <= :dt AND (fh.data_fim IS NULL OR fh.data_fim >= :dt))
+        ");
+        $stmtE->execute([':dt' => $dataBase]);
+        $semEscala = (int)$stmtE->fetchColumn();
 
         return $this->json(200, [
             'total_funcionarios' => count($fIds),
-            'total_dias_a_criar' => $aCriar,
-            'ja_ajustados' => $jaAjustados,
-            'em_ferias' => $emFerias,
-            'com_picagens' => $comPicagens,
-            'periodo_fechado' => $periodoFechado,
-            'sem_escala' => 0
+            'total_dias_a_criar' => count($plano['a_criar']),
+            'ja_ajustados' => $plano['ja_ajustados'],
+            'em_ferias' => $plano['saltados_ferias'],
+            'com_picagens' => $plano['com_picagens'],
+            'periodo_fechado' => $plano['periodo_fechado'],
+            'sem_escala' => $semEscala
         ]);
     }
 
@@ -417,12 +507,12 @@ class AjusteDiaController
         $selecao = $body['selecao'] ?? [];
         $datasRaw = $body['datas'] ?? [];
         $datas = $this->parseDatas($datasRaw);
-        $tipoId = $body['tipo_justificacao_id'] ?? null;
+        $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
         $nota = $body['nota'] ?? null;
         $substituir = !empty($body['substituir']);
         $totalPrevisto = isset($body['total_previsto']) ? (int)$body['total_previsto'] : null;
 
-        $user = $request->getAttribute('auth_user');
+        $userId = $this->utilizadorId($request);
 
         if (empty($datas) || !$tipoId || $totalPrevisto === null) return $this->json(400, ['erro' => true, 'mensagem' => 'Parâmetros em falta.']);
         if (count($datas) > 366) return $this->json(400, ['erro' => true, 'mensagem' => 'Máximo de 366 dias excedido.']);
@@ -446,44 +536,8 @@ class AjusteDiaController
                  return $this->json(422, ['erro' => true, 'mensagem' => 'Limite de 20.000 linhas excedido.']);
             }
 
-            $inIds = implode(',', array_map('intval', $fIds));
-            $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado = 'aprovado_rh' AND data_inicio <= :fim AND data_fim >= :ini");
-            $stmtV->execute([':ini' => $datas[0], ':fim' => end($datas)]);
-            $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
-
-            $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini AND :fim AND activo = 1");
-            $stmtA->execute([':ini' => $datas[0], ':fim' => end($datas)]);
-            $ajustesExistentesMap = [];
-            foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = $a['id'];
-
-            $insertData = [];
-            $updateIds = [];
-            $aCriarCount = 0;
-
-            foreach ($fIds as $fid) {
-                foreach ($datas as $dia) {
-                    if ($this->isPeriodoFechado($db, $dia)) continue;
-                    $isFerias = false;
-                    foreach ($ferias as $fp) {
-                        if ($fp['funcionario_id'] == $fid && $dia >= $fp['data_inicio'] && $dia <= $fp['data_fim']) {
-                            $isFerias = true; break;
-                        }
-                    }
-                    if ($isFerias) continue;
-
-                    $idExistente = $ajustesExistentesMap[$fid][$dia] ?? null;
-                    if ($idExistente) {
-                        if ($substituir) {
-                            $updateIds[] = (int)$idExistente;
-                            $insertData[] = [$fid, $dia];
-                            $aCriarCount++;
-                        }
-                    } else {
-                        $insertData[] = [$fid, $dia];
-                        $aCriarCount++;
-                    }
-                }
-            }
+            $plano = $this->calcularPlanoLote($db, $fIds, $datas, $substituir);
+            $aCriarCount = count($plano['a_criar']);
 
             if ($aCriarCount !== $totalPrevisto) {
                 $db->rollBack();
@@ -498,7 +552,7 @@ class AjusteDiaController
             // Criar registo de lote
             $stmtLote = $db->prepare("INSERT INTO ajustes_lotes (criado_por, tipo_justificacao_id, criterio, datas, nota, total_funcionarios, total_dias) VALUES (?, ?, ?, ?, ?, ?, ?)");
             $stmtLote->execute([
-                $user->id,
+                $userId,
                 $tipoId,
                 json_encode($selecao, JSON_UNESCAPED_UNICODE),
                 json_encode($datasRaw, JSON_UNESCAPED_UNICODE),
@@ -509,17 +563,17 @@ class AjusteDiaController
             $loteId = $db->lastInsertId();
 
             // Substituir (anular antigos)
-            if (!empty($updateIds)) {
-                $inUpd = implode(',', $updateIds);
-                $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por lote {$loteId}' WHERE id IN ($inUpd)")->execute([$user->id]);
+            if (!empty($plano['update_ids'])) {
+                $inUpd = implode(',', $plano['update_ids']);
+                $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por lote {$loteId}' WHERE id IN ($inUpd)")->execute([$userId]);
             }
 
             // Inserção em bloco
             $vals = [];
             $bindParams = [];
-            foreach ($insertData as $d) {
+            foreach ($plano['a_criar'] as $d) {
                 $vals[] = "(?, ?, ?, ?, ?, ?)";
-                $bindParams = array_merge($bindParams, [$d[0], $d[1], $tipoId, $nota, $loteId, $user->id]);
+                $bindParams = array_merge($bindParams, [$d['fid'], $d['data'], $tipoId, $nota, $loteId, $userId]);
             }
             // Batches de 1000
             $batchSize = 1000;
@@ -532,7 +586,7 @@ class AjusteDiaController
                 $stmtIns->execute($paramChunks[$idx]);
             }
 
-            $this->auditoria($db, $user, 'ajuste_lote.criado', 'ajustes_lotes', (int)$loteId, null, [
+            $this->auditoria($db, $userId, 'ajuste_lote.criado', 'ajustes_lotes', (int)$loteId, null, [
                 'criterio' => $selecao,
                 'total_dias' => $aCriarCount
             ]);
@@ -556,7 +610,7 @@ class AjusteDiaController
         $id = (int)$args['id'];
         $body = $request->getParsedBody() ?? [];
         $motivo = $body['motivo_anulacao'] ?? null;
-        $user = $request->getAttribute('auth_user');
+        $userId = $this->utilizadorId($request);
 
         $stmt = $db->prepare("SELECT * FROM ajustes_dia WHERE id = ?");
         $stmt->execute([$id]);
@@ -570,9 +624,9 @@ class AjusteDiaController
         }
 
         $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = ? WHERE id = ?")
-           ->execute([$user->id, $motivo, $id]);
+           ->execute([$userId, $motivo, $id]);
 
-        $this->auditoria($db, $user, 'ajuste_dia.anulado', 'ajustes_dia', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'motivo' => $motivo]);
+        $this->auditoria($db, $userId, 'ajuste_dia.anulado', 'ajustes_dia', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'motivo' => $motivo]);
 
         return $this->json(200, ['mensagem' => 'Anulado.']);
     }
@@ -588,7 +642,7 @@ class AjusteDiaController
         $id = (int)$args['id'];
         $body = $request->getParsedBody() ?? [];
         $motivo = $body['motivo_anulacao'] ?? null;
-        $user = $request->getAttribute('auth_user');
+        $userId = $this->utilizadorId($request);
 
         $stmt = $db->prepare("SELECT * FROM ajustes_lotes WHERE id = ?");
         $stmt->execute([$id]);
@@ -602,20 +656,32 @@ class AjusteDiaController
             // Verifica periodo fechado em alguma das datas activas
             $stmtD = $db->prepare("SELECT DISTINCT data FROM ajustes_dia WHERE lote_id = ? AND estado = 'activo'");
             $stmtD->execute([$id]);
-            foreach ($stmtD->fetchAll(PDO::FETCH_COLUMN) as $dia) {
-                 if ($this->isPeriodoFechado($db, $dia)) {
-                      $db->rollBack();
-                      return $this->json(400, ['erro' => true, 'mensagem' => "Existem dias no lote que pertencem a um período fechado ($dia)."]);
-                 }
+            $dias = $stmtD->fetchAll(PDO::FETCH_COLUMN);
+
+            if (!empty($dias)) {
+                $minDia = min($dias);
+                $maxDia = max($dias);
+                $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini AND data_inicio <= :fim");
+                $stmtP->execute([':ini' => $minDia, ':fim' => $maxDia]);
+                $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($dias as $dia) {
+                    foreach ($periodosFechados as $pf) {
+                        if ($dia >= $pf['data_inicio'] && $dia <= $pf['data_fim']) {
+                            $db->rollBack();
+                            return $this->json(400, ['erro' => true, 'mensagem' => "Existem dias no lote que pertencem a um período fechado ($dia)."]);
+                        }
+                    }
+                }
             }
 
             $db->prepare("UPDATE ajustes_lotes SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = ? WHERE id = ?")
-               ->execute([$user->id, $motivo, $id]);
+               ->execute([$userId, $motivo, $id]);
 
             $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = ? WHERE lote_id = ? AND estado = 'activo'")
-               ->execute([$user->id, $motivo, $id]);
+               ->execute([$userId, $motivo, $id]);
 
-            $this->auditoria($db, $user, 'ajuste_lote.anulado', 'ajustes_lotes', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'criterio' => json_decode($lote['criterio'])]);
+            $this->auditoria($db, $userId, 'ajuste_lote.anulado', 'ajustes_lotes', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'criterio' => json_decode($lote['criterio'])]);
 
             $db->commit();
             return $this->json(200, ['mensagem' => 'Lote anulado.']);
@@ -633,14 +699,25 @@ class AjusteDiaController
          $db = $this->db();
          if (!$this->hasAjusteTable($db)) return $this->json(503, ['erro' => true, 'codigo' => 'funcionalidade_indisponivel']);
 
-         $stmt = $db->query("
+         $params = $request->getQueryParams();
+         $pagina = isset($params['pagina']) ? max(1, (int)$params['pagina']) : 1;
+         $limite = isset($params['limite']) ? min(100, max(1, (int)$params['limite'])) : 50;
+         $offset = ($pagina - 1) * $limite;
+
+         $stmtCount = $db->query("SELECT COUNT(*) FROM ajustes_lotes");
+         $total = (int)$stmtCount->fetchColumn();
+
+         $stmt = $db->prepare("
             SELECT a.*, u.nome AS criado_por_nome, t.nome AS tipo_justificacao_nome
             FROM ajustes_lotes a
             JOIN utilizadores u ON a.criado_por = u.id
             JOIN tipos_justificacao t ON a.tipo_justificacao_id = t.id
             ORDER BY a.criado_em DESC
-            LIMIT 50
+            LIMIT :offset, :limite
          ");
+         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+         $stmt->bindValue(':limite', $limite, PDO::PARAM_INT);
+         $stmt->execute();
 
          $lotes = $stmt->fetchAll(PDO::FETCH_ASSOC);
          foreach ($lotes as &$lote) {
@@ -648,6 +725,14 @@ class AjusteDiaController
              $lote['datas'] = json_decode($lote['datas']);
          }
 
-         return $this->json(200, ['dados' => $lotes]);
+         return $this->json(200, [
+             'dados' => $lotes,
+             'paginacao' => [
+                 'total' => $total,
+                 'pagina' => $pagina,
+                 'limite' => $limite,
+                 'total_paginas' => ceil($total / $limite)
+             ]
+         ]);
     }
 }

@@ -357,16 +357,6 @@ CREATE TABLE IF NOT EXISTS pedidos_horas_extra (
 );
 
 
-CREATE TABLE IF NOT EXISTS `tipos_justificacao` (
-  `id` INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  `codigo` VARCHAR(50) NOT NULL UNIQUE,
-  `nome` VARCHAR(100) NOT NULL,
-  `comportamento` ENUM('trabalho', 'falta_justificada_remunerada', 'falta_justificada_nao_remunerada', 'folga') NOT NULL,
-  `cor` CHAR(7) NULL,
-  `activo` BOOLEAN NOT NULL DEFAULT TRUE,
-  `criado_em` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) CHARACTER SET utf8mb4;
-
 CREATE TABLE IF NOT EXISTS `ajustes_lotes` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `criado_por` INT UNSIGNED NOT NULL,

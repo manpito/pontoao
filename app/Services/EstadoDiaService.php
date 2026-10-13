@@ -39,12 +39,9 @@ class EstadoDiaService
             ];
         }
 
-        // 2. Justificações / Ajustes (estado='aprovado' que cubra a data)
+        // 2. Justificações (estado='aprovado' que cubra a data)
         if (!empty($justificacoes)) {
-            // Se houver mais de uma justificação (ou ajustes), ordenar por prioridade de comportamento.
-            // Regra: se houver UM ajuste activo para o dia, ele vence (já foi passado no array $justificacoes pelo caller, filtrando os restantes)
-
-            // Prioridade: trabalho (4) > folga (3) > falta_justificada_remunerada (2) > falta_justificada_nao_remunerada (1)
+            // Se houver mais de uma justificação, ordenar por prioridade de comportamento
             // Prioridade: trabalho (4) > folga (3) > falta_justificada_remunerada (2) > falta_justificada_nao_remunerada (1)
             $prioridades = [
                 'trabalho' => 4,
@@ -55,7 +52,6 @@ class EstadoDiaService
 
             usort($justificacoes, function ($a, $b) use ($tiposJustificacaoMap, $prioridades) {
                 // Compatibility for cases where $j['tipo'] is passed instead of proper justification
-
                 $isAjusteA = !empty($a['ajuste_id']);
                 $isAjusteB = !empty($b['ajuste_id']);
                 if ($isAjusteA !== $isAjusteB) {
@@ -98,17 +94,6 @@ class EstadoDiaService
             if ($comportamento === 'trabalho') {
                 if (!empty($marcacoes)) {
                     $estado = 'trabalhado';
-                    // Dias com picagens nao mudam de comportamento nem com ajuste, mas mantemos o ajuste_id se for ajuste
-                    if (!$isAjuste) {
-                        return [
-                            'estado' => 'trabalhado',
-                            'origem' => 'marcacoes',
-                            'justificacao_id' => null,
-                            'ajuste_id' => null,
-                            'tipo' => null,
-                            'horas_efectivas' => 0.0,
-                        ];
-                    }
                 } elseif ($turno !== null && $turno['tipo'] !== 'folga') {
                     $estado = 'servico_externo';
                     $horasEfectivas = !empty($turno['horas_efectivas']) ? (float) $turno['horas_efectivas'] : 0.0;
@@ -127,10 +112,8 @@ class EstadoDiaService
                         $horasEfectivas = 8.0;
                     } else {
                         $estado = 'sem_horario';
-                        $origem = 'ciclo';
                         if ($isAjuste) {
-                            $origem = 'ajuste';
-                            $estado = 'sem_horario';
+                            $origem = 'ciclo'; // Apenas no caso de ajuste, 'sem_horario' mantem ciclo? A instrucao diz: excepto folga_ciclo e sem_horario que mantêm origem='ciclo'.
                         }
                     }
                 }
@@ -145,21 +128,7 @@ class EstadoDiaService
                         'horas_efectivas' => 0.0,
                     ];
                 }
-                if (!empty($marcacoes) && !$isAjuste) {
-                     return [
-                        'estado' => 'trabalhado',
-                        'origem' => 'marcacoes',
-                        'justificacao_id' => null,
-                        'ajuste_id' => null,
-                        'tipo' => null,
-                        'horas_efectivas' => 0.0,
-                    ];
-                }
-                if (!empty($marcacoes)) {
-                     $estado = 'trabalhado';
-                } else {
-                     $estado = 'folga_justificada';
-                }
+                $estado = 'folga_justificada';
             } elseif (in_array($comportamento, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                 if (empty($marcacoes) && $turno !== null && $turno['tipo'] === 'folga') {
                     return [
@@ -171,28 +140,14 @@ class EstadoDiaService
                         'horas_efectivas' => 0.0,
                     ];
                 }
-                if (!empty($marcacoes) && !$isAjuste) {
-                     return [
-                        'estado' => 'trabalhado',
-                        'origem' => 'marcacoes',
-                        'justificacao_id' => null,
-                        'ajuste_id' => null,
-                        'tipo' => null,
-                        'horas_efectivas' => 0.0,
-                    ];
-                }
-                if (!empty($marcacoes)) {
-                     $estado = 'trabalhado';
-                } else {
-                     $estado = $comportamento;
-                }
+                $estado = $comportamento;
             } else {
                 $estado = 'falta_justificada_nao_remunerada';
             }
 
             return [
                 'estado' => $estado,
-                'origem' => $estado === 'trabalhado' && $isAjuste ? 'marcacoes' : $origem,
+                'origem' => $origem,
                 'justificacao_id' => isset($justificacao['id']) && !$isAjuste ? (int)$justificacao['id'] : null,
                 'ajuste_id' => $ajusteId,
                 'tipo' => $tipoJust,

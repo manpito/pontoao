@@ -1,7 +1,19 @@
 SET NAMES utf8mb4;
 SET time_zone = '+01:00';
 
-ALTER TABLE `tipos_justificacao` ADD COLUMN `cor` CHAR(7) NULL;
+SET @sql = (SELECT IF(
+    (SELECT COUNT(*)
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'tipos_justificacao'
+       AND COLUMN_NAME = 'cor'
+    ) = 0,
+    'ALTER TABLE `tipos_justificacao` ADD COLUMN `cor` CHAR(7) NULL',
+    'DO 0'
+));
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS `ajustes_lotes` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,

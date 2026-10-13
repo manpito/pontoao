@@ -85,12 +85,10 @@ class EstadoDiaServiceTest extends TestCase
             ['id' => null, 'ajuste_id' => 88, 'tipo' => 'ext', 'estado' => 'aprovado']
         ];
 
-        // Como o tipo 'ext' mapeia para 'trabalho', e nao temos marcacoes nem turno, a lógica nativa era devolver 'sem_horario' (origem='ciclo') ou 'servico_externo' dependendo do nome do tipo justificação.
-        // O $tipoJustificado 'ext' no fallback cai na condição 'sem_horario'. O que importa é que estado 'sem_horario' retorna com 'ajuste'.
         $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, [], null, $this->map);
 
         $this->assertEquals('sem_horario', $res['estado']);
-        $this->assertEquals('ajuste', $res['origem']);
+        $this->assertEquals('ciclo', $res['origem']);
         $this->assertEquals(88, $res['ajuste_id']);
         $this->assertEquals('ext', $res['tipo']);
     }
@@ -104,8 +102,8 @@ class EstadoDiaServiceTest extends TestCase
 
         $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
 
-        $this->assertEquals('trabalhado', $res['estado']);
-        $this->assertEquals('marcacoes', $res['origem']);
+        $this->assertEquals('falta_justificada_remunerada', $res['estado']);
+        $this->assertEquals('ajuste', $res['origem']);
         $this->assertEquals(50, $res['ajuste_id']); // Identifica que houve um ajuste no dia
         $this->assertEquals('fj', $res['tipo']); // Nome/código mantido
     }

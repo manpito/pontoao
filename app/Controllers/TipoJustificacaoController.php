@@ -152,14 +152,6 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'Comportamento inválido.']);
         }
 
-        $cor = null;
-        if (!empty($body['cor'])) {
-            if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
-                return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
-            }
-            $cor = $body['cor'];
-        }
-
         $hasCor = true;
         try {
             $db->query("SELECT cor FROM tipos_justificacao LIMIT 1");
@@ -167,28 +159,28 @@ class TipoJustificacaoController
             $hasCor = false;
         }
 
-        if ($hasCor) {
-            $db->prepare("
-                UPDATE tipos_justificacao
-                SET nome = :nome, comportamento = :comportamento, cor = :cor
-                WHERE id = :id
-            ")->execute([
-                ':nome'          => $body['nome'],
-                ':comportamento' => $body['comportamento'],
-                ':cor'           => $cor,
-                ':id'            => $id,
-            ]);
-        } else {
-            $db->prepare("
-                UPDATE tipos_justificacao
-                SET nome = :nome, comportamento = :comportamento
-                WHERE id = :id
-            ")->execute([
-                ':nome'          => $body['nome'],
-                ':comportamento' => $body['comportamento'],
-                ':id'            => $id,
-            ]);
+        $sql = "UPDATE tipos_justificacao SET nome = :nome, comportamento = :comportamento";
+        $params = [
+            ':nome'          => $body['nome'],
+            ':comportamento' => $body['comportamento'],
+            ':id'            => $id,
+        ];
+
+        if ($hasCor && array_key_exists('cor', $body)) {
+            $cor = null;
+            if ($body['cor'] !== null && $body['cor'] !== "") {
+                if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
+                    return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
+                }
+                $cor = $body['cor'];
+            }
+            $sql .= ", cor = :cor";
+            $params[':cor'] = $cor;
         }
+
+        $sql .= " WHERE id = :id";
+
+        $db->prepare($sql)->execute($params);
 
         return $this->json(200, ['mensagem' => 'Tipo de justificação actualizado com sucesso.']);
     }

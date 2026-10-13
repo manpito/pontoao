@@ -414,11 +414,18 @@ class RelatorioController
             $hasFerias = $estadoDoDia['estado'] === 'ferias';
 
             // Find motivo se justificado (from DB logic)
-            if ($isJustificado && $estadoDoDia['origem'] === 'justificacao') {
+            if ($isJustificado && in_array($estadoDoDia['origem'], ['justificacao', 'ajuste'])) {
                 foreach ($justificacoesDoDia as $ja) {
-                    if (isset($ja['id']) && (int)$ja['id'] === (int)$estadoDoDia['justificacao_id']) {
-                        $motivoFaltaJustificada = $ja['motivo'];
-                        break;
+                    if ($estadoDoDia['origem'] === 'ajuste') {
+                         if (!empty($ja['ajuste_id']) && (int)$ja['ajuste_id'] === (int)$estadoDoDia['ajuste_id']) {
+                             $motivoFaltaJustificada = $ja['motivo'];
+                             break;
+                         }
+                    } else {
+                         if (isset($ja['id']) && (int)$ja['id'] === (int)$estadoDoDia['justificacao_id']) {
+                             $motivoFaltaJustificada = $ja['motivo'];
+                             break;
+                         }
                     }
                 }
             }
@@ -464,8 +471,8 @@ class RelatorioController
                     'estado_dia'                     => $estadoDoDia['estado'],
                     'origem_estado'                  => $estadoDoDia['origem'],
                     'justificacao_id'                => $estadoDoDia['origem'] === 'justificacao' ? $estadoDoDia['justificacao_id'] : null,
-                    'justificacao_tipo'              => $estadoDoDia['origem'] === 'justificacao' ? $estadoDoDia['tipo'] : null,
-                    'justificacao_nome'              => $estadoDoDia['origem'] === 'justificacao' ? ($motivoFaltaJustificada ?? $estadoDoDia['tipo']) : null,
+                    'justificacao_tipo'              => in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) ? $estadoDoDia['tipo'] : null,
+                    'justificacao_nome'              => in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) ? ($motivoFaltaJustificada ?? $estadoDoDia['tipo']) : null,
                     'ajuste_id'                      => $ajusteDia ? (int)$ajusteDia['id'] : null,
                     'ajuste_motivo_nome'             => $ajusteDia ? $ajusteDia['tipo_nome'] : null,
                     'ajuste_motivo_cor'              => $ajusteDia ? $ajusteDia['tipo_cor'] : null
@@ -867,7 +874,7 @@ class RelatorioController
                     } elseif ($estadoDoDia['estado'] === 'folga_ciclo') {
                         $diaInfo['estado'] = 'folga';
                     } elseif ($estadoDoDia['estado'] === 'sem_horario') {
-                        if ($estadoDoDia['origem'] === 'justificacao' && isset($tiposComportamentoMap[$estadoDoDia['tipo']]) && $tiposComportamentoMap[$estadoDoDia['tipo']] === 'trabalho') {
+                            if (in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) && isset($tiposComportamentoMap[$estadoDoDia['tipo']]) && $tiposComportamentoMap[$estadoDoDia['tipo']] === 'trabalho') {
                             $diaInfo['estado'] = 'presente';
                             $totalPresente++;
                         } else {
@@ -1223,7 +1230,7 @@ class RelatorioController
                         } elseif ($estadoDoDia['estado'] === 'folga_ciclo') {
                             $diaInfo['tipo'] = 'fim_semana'; // Mantem designação legado para frontend
                         } elseif ($estadoDoDia['estado'] === 'sem_horario') {
-                            if ($estadoDoDia['origem'] === 'justificacao' && isset($tiposComportamentoMap[$estadoDoDia['tipo']]) && $tiposComportamentoMap[$estadoDoDia['tipo']] === 'trabalho') {
+                            if (in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) && isset($tiposComportamentoMap[$estadoDoDia['tipo']]) && $tiposComportamentoMap[$estadoDoDia['tipo']] === 'trabalho') {
                                 $diaInfo['tipo'] = 'presente';
                                 $diaInfo['servico_externo'] = true;
                             } else {
