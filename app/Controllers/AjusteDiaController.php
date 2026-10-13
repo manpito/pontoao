@@ -204,31 +204,58 @@ class AjusteDiaController
         return $this->json(200, ['ano' => $ano, 'dias' => $resultado]);
     }
 
-    private function parseDatas($datas) {
+    private function parseDatas($datas): array {
         $list = [];
         if (is_array($datas) && isset($datas['inicio']) && isset($datas['fim'])) {
             $iniStr = $datas['inicio'];
             $fimStr = $datas['fim'];
-            if ($iniStr > $fimStr) return [];
-            $ini = strtotime($iniStr);
-            $fim = strtotime($fimStr);
-            if (!$ini || !$fim) return [];
 
-            $diffDays = round(($fim - $ini) / 86400);
-            if ($diffDays > 366) return [];
+            $dIni = \DateTimeImmutable::createFromFormat('Y-m-d', $iniStr);
+            $dFim = \DateTimeImmutable::createFromFormat('Y-m-d', $fimStr);
 
-            while ($ini <= $fim) {
-                $list[] = date('Y-m-d', $ini);
-                $ini = strtotime('+1 day', $ini);
+            $iniParts = explode('-', (string)$iniStr);
+            $fimParts = explode('-', (string)$fimStr);
+
+            if (!$dIni || $dIni->format('Y-m-d') !== $iniStr || count($iniParts) !== 3 || !checkdate((int)$iniParts[1], (int)$iniParts[2], (int)$iniParts[0]) ||
+                !$dFim || $dFim->format('Y-m-d') !== $fimStr || count($fimParts) !== 3 || !checkdate((int)$fimParts[1], (int)$fimParts[2], (int)$fimParts[0])) {
+                throw new \InvalidArgumentException("Datas de início ou fim inválidas (deve ser YYYY-MM-DD real).");
+            }
+            if ($dIni > $dFim) {
+                throw new \InvalidArgumentException("A data de início não pode ser superior à data de fim.");
+            }
+
+            $diffDays = $dIni->diff($dFim)->days;
+            if ($diffDays > 366) {
+                throw new \InvalidArgumentException("O intervalo excede o limite máximo de 366 dias.");
+            }
+
+            $curr = $dIni;
+            while ($curr <= $dFim) {
+                $list[] = $curr->format('Y-m-d');
+                $curr = $curr->modify('+1 day');
             }
         } elseif (is_array($datas)) {
              foreach ($datas as $d) {
-                 if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)$d)) {
-                     $list[] = $d;
+                 if (!is_string($d)) {
+                     throw new \InvalidArgumentException("A lista contém um formato não string.");
                  }
+                 $dObj = \DateTimeImmutable::createFromFormat('Y-m-d', $d);
+                 $dParts = explode('-', $d);
+                 if (!$dObj || $dObj->format('Y-m-d') !== $d || count($dParts) !== 3 || !checkdate((int)$dParts[1], (int)$dParts[2], (int)$dParts[0])) {
+                     throw new \InvalidArgumentException("A data fornecida '{$d}' é inválida.");
+                 }
+                 $list[] = $dObj->format('Y-m-d');
              }
+             if (empty($list)) {
+                  throw new \InvalidArgumentException("Nenhuma data fornecida.");
+             }
+             if (count($list) > 366) {
+                  throw new \InvalidArgumentException("A lista de datas excede o limite máximo de 366 dias.");
+             }
+        } else {
+             throw new \InvalidArgumentException("Formato de datas inválido.");
         }
-        if (empty($list)) return [];
+
         $list = array_unique($list);
         sort($list);
         return $list;
@@ -243,8 +270,13 @@ class AjusteDiaController
         if (!$this->hasAjusteTable($db)) return $this->json(503, ['erro' => true, 'codigo' => 'funcionalidade_indisponivel']);
 
         $body = $request->getParsedBody() ?? [];
+        try {
+            $datas = $this->parseDatas($body['datas'] ?? []);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(400, ['erro' => true, 'mensagem' => $e->getMessage()]);
+        }
+
         $funcId = isset($body['funcionario_id']) ? (int)$body['funcionario_id'] : null;
-        $datas = $this->parseDatas($body['datas'] ?? []);
         $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
         $nota = $body['nota'] ?? null;
         $substituir = !empty($body['substituir']);
@@ -254,7 +286,6 @@ class AjusteDiaController
         if (!$funcId || empty($datas) || !$tipoId) {
             return $this->json(400, ['erro' => true, 'mensagem' => 'Parâmetros inválidos.']);
         }
-        if (count($datas) > 366) return $this->json(400, ['erro' => true, 'mensagem' => 'Máximo de 366 dias excedido.']);
 
         // Valida funcionario activo
         $stmtF = $db->prepare("SELECT id FROM funcionarios WHERE id = :id AND estado = 'activo'");
@@ -309,15 +340,35 @@ class AjusteDiaController
         $turmas = $selecao['turmas'] ?? [];
 
         $idsTotais = [];
-        foreach ($fIds as $fid) $idsTotais[(int)$fid] = true;
 
+        $fIds = array_values(array_unique(array_filter(array_map('intval', $fIds), fn($v) => $v > 0)));
+        if (!empty($fIds)) {
+            $inFids = implode(',', $fIds);
+            $stmt = $db->query("SELECT id FROM funcionarios WHERE estado = 'activo' AND id IN ($inFids)");
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $fid) $idsTotais[(int)$fid] = true;
+        }
+
+        $deps = array_values(array_unique(array_filter(array_map('intval', $deps), fn($v) => $v > 0)));
         if (!empty($deps)) {
-            $inDeps = implode(',', array_map('intval', $deps));
+            $inDeps = implode(',', $deps);
             $stmt = $db->query("SELECT id FROM funcionarios WHERE estado = 'activo' AND departamento_id IN ($inDeps)");
             foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $fid) $idsTotais[(int)$fid] = true;
         }
 
-        if (!empty($escalas) || !empty($turmas)) {
+        $escalas = array_values(array_unique(array_filter(array_map('intval', $escalas), fn($v) => $v > 0)));
+        // Turmas are objects like {escala_id, posicao_inicial}, we must filter carefully
+        $turmasClean = [];
+        foreach ($turmas as $t) {
+             if (isset($t['escala_id']) && isset($t['posicao_inicial'])) {
+                 $eid = (int)$t['escala_id'];
+                 $pid = (int)$t['posicao_inicial'];
+                 if ($eid > 0 && $pid >= 0) {
+                     $turmasClean[] = ['escala_id' => $eid, 'posicao_inicial' => $pid];
+                 }
+             }
+        }
+
+        if (!empty($escalas) || !empty($turmasClean)) {
             $fEscalas = [];
             // Usamos a atribuição vigente em dataBase (o inicio do lote)
             $stmt = $db->prepare("SELECT funcionario_id, escala_id, posicao_inicial FROM funcionario_escala WHERE data_inicio <= :dt1 AND (data_fim IS NULL OR data_fim >= :dt2)");
@@ -334,11 +385,11 @@ class AjusteDiaController
             foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $fid) {
                 if (isset($fEscalas[$fid])) {
                     $es = $fEscalas[$fid];
-                    if (in_array($es['escala_id'], array_map('intval', $escalas))) {
+                    if (in_array($es['escala_id'], $escalas, true)) {
                         $idsTotais[(int)$fid] = true;
                     } else {
-                        foreach ($turmas as $t) {
-                            if ((int)$t['escala_id'] === $es['escala_id'] && (int)$t['posicao_inicial'] === $es['posicao_inicial']) {
+                        foreach ($turmasClean as $t) {
+                            if ($t['escala_id'] === $es['escala_id'] && $t['posicao_inicial'] === $es['posicao_inicial']) {
                                 $idsTotais[(int)$fid] = true;
                             }
                         }
@@ -452,12 +503,15 @@ class AjusteDiaController
 
         $body = $request->getParsedBody() ?? [];
         $selecao = $body['selecao'] ?? [];
-        $datas = $this->parseDatas($body['datas'] ?? []);
+        try {
+            $datas = $this->parseDatas($body['datas'] ?? []);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(400, ['erro' => true, 'mensagem' => $e->getMessage()]);
+        }
         $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
         $substituir = !empty($body['substituir']);
 
         if (empty($datas) || !$tipoId) return $this->json(400, ['erro' => true, 'mensagem' => 'Datas e tipo são obrigatórios.']);
-        if (count($datas) > 366) return $this->json(400, ['erro' => true, 'mensagem' => 'Máximo de 366 dias excedido.']);
 
         $dataBase = $datas[0];
         $fIds = $this->resolveFuncionariosLote($db, $selecao, $dataBase);
@@ -506,7 +560,11 @@ class AjusteDiaController
         $body = $request->getParsedBody() ?? [];
         $selecao = $body['selecao'] ?? [];
         $datasRaw = $body['datas'] ?? [];
-        $datas = $this->parseDatas($datasRaw);
+        try {
+            $datas = $this->parseDatas($datasRaw);
+        } catch (\InvalidArgumentException $e) {
+            return $this->json(400, ['erro' => true, 'mensagem' => $e->getMessage()]);
+        }
         $tipoId = isset($body['tipo_justificacao_id']) ? (int)$body['tipo_justificacao_id'] : null;
         $nota = $body['nota'] ?? null;
         $substituir = !empty($body['substituir']);
@@ -515,7 +573,6 @@ class AjusteDiaController
         $userId = $this->utilizadorId($request);
 
         if (empty($datas) || !$tipoId || $totalPrevisto === null) return $this->json(400, ['erro' => true, 'mensagem' => 'Parâmetros em falta.']);
-        if (count($datas) > 366) return $this->json(400, ['erro' => true, 'mensagem' => 'Máximo de 366 dias excedido.']);
 
         $stmtT = $db->prepare("SELECT id FROM tipos_justificacao WHERE id = :id AND activo = 1");
         $stmtT->execute([':id' => $tipoId]);

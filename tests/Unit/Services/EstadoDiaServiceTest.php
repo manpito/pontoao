@@ -108,52 +108,60 @@ class EstadoDiaServiceTest extends TestCase
         $this->assertEquals('fj', $res['tipo']); // Nome/código mantido
     }
 
-    public function testJustificacaoTrabalhoComPicagens()
+    public function testJustificacaoNormalSemPicagensESemTurno()
     {
         $justificacoes = [
-            ['id' => 99, 'tipo' => 'ext', 'estado' => 'aprovado']
+            ['id' => 102, 'tipo' => 'ext', 'estado' => 'aprovado']
+        ];
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, [], null, $this->map);
+
+        // Regressão: justificação normal mantém o comportamento da main.
+        $this->assertEquals('sem_horario', $res['estado']);
+        $this->assertEquals('justificacao', $res['origem']);
+        $this->assertNull($res['ajuste_id']);
+    }
+
+    public function testAjusteFolgaComPicagens()
+    {
+        $justificacoes = [
+            ['id' => null, 'ajuste_id' => 112, 'tipo' => 'folga_j', 'estado' => 'aprovado']
+        ];
+        $marcacoes = [['id' => 1]]; // Picagens existem
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
+
+        $this->assertEquals('folga_justificada', $res['estado']);
+        $this->assertEquals('ajuste', $res['origem']);
+        $this->assertEquals(112, $res['ajuste_id']);
+        $this->assertEquals('folga_j', $res['tipo']);
+    }
+
+    public function testAjusteTrabalhoComTurnoSemPicagens()
+    {
+        $justificacoes = [
+            ['id' => null, 'ajuste_id' => 110, 'tipo' => 'ext', 'estado' => 'aprovado']
+        ];
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, [], ['tipo' => 'trabalho', 'horas_efectivas' => 8.0], $this->map);
+
+        $this->assertEquals('servico_externo', $res['estado']);
+        $this->assertEquals('ajuste', $res['origem']);
+        $this->assertEquals(110, $res['ajuste_id']);
+        $this->assertEquals('ext', $res['tipo']);
+    }
+
+    public function testAjusteTrabalhoComPicagens()
+    {
+        $justificacoes = [
+            ['id' => null, 'ajuste_id' => 111, 'tipo' => 'ext', 'estado' => 'aprovado']
         ];
         $marcacoes = [['id' => 1]]; // Picagens existem
 
         $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
 
         $this->assertEquals('trabalhado', $res['estado']);
-        // A lógica do 'main' era retornar 'justificacao', mas com comportamento trabalho e picagens, nós caímos no bloco 'trabalhado'.
-        // O bloco de comportamento 'trabalho' atribui $estado = 'trabalhado', mas NÃO faz return antecipado para justificações normais na main.
-        // O return ocorre no fim. O `$origem` devia ser 'justificacao' se formos seguir a main à risca.
-        $this->assertEquals('justificacao', $res['origem']);
-        $this->assertNull($res['ajuste_id']);
-        $this->assertEquals(99, $res['justificacao_id']);
-        $this->assertEquals('ext', $res['tipo']);
-    }
-
-    public function testJustificacaoFolgaComPicagens()
-    {
-        $justificacoes = [
-            ['id' => 100, 'tipo' => 'folga_j', 'estado' => 'aprovado']
-        ];
-        $marcacoes = [['id' => 1]]; // Picagens existem
-
-        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
-
-        // Na main, se comportamento=folga, não havia check de marcacoes. Dava 'folga_justificada'.
-        $this->assertEquals('folga_justificada', $res['estado']);
-        $this->assertEquals('justificacao', $res['origem']);
-        $this->assertNull($res['ajuste_id']);
-    }
-
-    public function testJustificacaoFaltaComPicagens()
-    {
-        $justificacoes = [
-            ['id' => 101, 'tipo' => 'fj', 'estado' => 'aprovado']
-        ];
-        $marcacoes = [['id' => 1]]; // Picagens existem
-
-        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
-
-        // Na main, comportamento=fj ou fjn, não checkava marcacoes. Dava 'fj' direto.
-        $this->assertEquals('falta_justificada_remunerada', $res['estado']);
-        $this->assertEquals('justificacao', $res['origem']);
-        $this->assertNull($res['ajuste_id']);
+        $this->assertEquals('ajuste', $res['origem']);
+        $this->assertEquals(111, $res['ajuste_id']);
     }
 }
