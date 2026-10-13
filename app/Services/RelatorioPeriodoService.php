@@ -25,6 +25,7 @@ class RelatorioPeriodoService
         // 0. Instanciar serviços auxiliares
         $estadoDiaService = new EstadoDiaService();
         $tiposJustificacaoMap = TipoJustificacaoService::getComportamentoMap($this->pdo);
+        $ajusteDiaService = new AjusteDiaService($this->pdo);
 
         // 1. Obter funcionários activos e os seus horários normais
         $stmtF = $this->pdo->query("
@@ -125,6 +126,8 @@ class RelatorioPeriodoService
             }
         }
 
+        $ajustesPorFunc = $ajusteDiaService->carregarPorFuncionarios($ids, $dataInicio, $dataFim);
+
         $resultado = [];
 
         foreach ($funcionarios as $func) {
@@ -157,9 +160,23 @@ class RelatorioPeriodoService
                 $turno = $this->escalaService->calcularTurnoEm($funcId, $dia);
 
                 $justificacoesDoDia = [];
-                foreach ($justificacoesFunc as $ja) {
-                    if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
-                        $justificacoesDoDia[] = $ja;
+                // Se houver ajuste no dia, ele sobrepõe todas as justificações normais.
+                $ajusteDia = $ajustesPorFunc[$funcId][$dia] ?? null;
+                if ($ajusteDia) {
+                    $justificacoesDoDia[] = [
+                        'id' => null,
+                        'ajuste_id' => $ajusteDia['id'],
+                        'tipo' => $ajusteDia['tipo'],
+                        'motivo' => 'Ajuste RH',
+                        'estado' => 'aprovado',
+                        'data_inicio' => $dia,
+                        'data_fim' => $dia
+                    ];
+                } else {
+                    foreach ($justificacoesFunc as $ja) {
+                        if ($dia >= $ja['data_inicio'] && $dia <= $ja['data_fim']) {
+                            $justificacoesDoDia[] = $ja;
+                        }
                     }
                 }
 

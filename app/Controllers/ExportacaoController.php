@@ -162,6 +162,8 @@ class ExportacaoController
 
         // 2.7 — Processar e gerar linhas
         $escalaService = new \App\Services\EscalaService($db);
+        $ajusteDiaService = new \App\Services\AjusteDiaService($db);
+        $ajustesPorFunc = $ajusteDiaService->carregarPorFuncionarios($ids, $dataInicio, $dataFim);
 
         $stmtCfg = $db->query("SELECT valor FROM configuracoes WHERE chave = 'horas_extra_entrada_antecipada'");
         $rowCfg = $stmtCfg->fetch(PDO::FETCH_ASSOC);
@@ -264,9 +266,22 @@ class ExportacaoController
                 }
 
                 $justificacoesDoDia = [];
-                foreach ($todasJA as $ja) {
-                    if ($ja['funcionario_id'] == $fId && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
-                        $justificacoesDoDia[] = $ja;
+                $ajusteDia = $ajustesPorFunc[$fId][$dataStr] ?? null;
+                if ($ajusteDia) {
+                    $justificacoesDoDia[] = [
+                        'id' => null,
+                        'ajuste_id' => $ajusteDia['id'],
+                        'tipo' => $ajusteDia['tipo'],
+                        'motivo' => 'Ajuste RH',
+                        'estado' => 'aprovado',
+                        'data_inicio' => $dataStr,
+                        'data_fim' => $dataStr
+                    ];
+                } else {
+                    foreach ($todasJA as $ja) {
+                        if ($ja['funcionario_id'] == $fId && $dataStr >= $ja['data_inicio'] && $dataStr <= $ja['data_fim']) {
+                            $justificacoesDoDia[] = $ja;
+                        }
                     }
                 }
 

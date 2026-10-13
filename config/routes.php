@@ -381,6 +381,28 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->delete("/escala-excepcoes/{id}",                 [\App\Controllers\EscalaExcecoesController::class, "destroy"])
           ->add(AuthMiddleware::role(["super_admin_tenant", "rh_manager", "supervisor"]));
 
+    // --- Ajustes do Mês ---
+    $group->get('/ajustes/funcionario/{id}',        [\App\Controllers\AjusteDiaController::class, 'getPorFuncionarioAno'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/ajustes',                        [\App\Controllers\AjusteDiaController::class, 'criarIndividual'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/ajustes/lote/previsao',          [\App\Controllers\AjusteDiaController::class, 'previsaoLote'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/ajustes/lote',                   [\App\Controllers\AjusteDiaController::class, 'criarLote'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/ajustes/{id}/anular',            [\App\Controllers\AjusteDiaController::class, 'anularIndividual'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->post('/ajustes/lote/{id}/anular',       [\App\Controllers\AjusteDiaController::class, 'anularLote'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->get('/ajustes/lotes',                   [\App\Controllers\AjusteDiaController::class, 'listarLotes'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
     // --- Exportação ---
     $group->get('/exportacao/primavera',        [\App\Controllers\ExportacaoController::class, 'primavera'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));

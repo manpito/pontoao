@@ -39,9 +39,12 @@ class EstadoDiaService
             ];
         }
 
-        // 2. Justificações (estado='aprovado' que cubra a data)
+        // 2. Justificações / Ajustes (estado='aprovado' que cubra a data)
         if (!empty($justificacoes)) {
-            // Se houver mais de uma justificação, ordenar por prioridade de comportamento
+            // Se houver mais de uma justificação (ou ajustes), ordenar por prioridade de comportamento.
+            // Regra: se houver UM ajuste activo para o dia, ele vence (já foi passado no array $justificacoes pelo caller, filtrando os restantes)
+
+            // Prioridade: trabalho (4) > folga (3) > falta_justificada_remunerada (2) > falta_justificada_nao_remunerada (1)
             // Prioridade: trabalho (4) > folga (3) > falta_justificada_remunerada (2) > falta_justificada_nao_remunerada (1)
             $prioridades = [
                 'trabalho' => 4,
@@ -52,6 +55,13 @@ class EstadoDiaService
 
             usort($justificacoes, function ($a, $b) use ($tiposJustificacaoMap, $prioridades) {
                 // Compatibility for cases where $j['tipo'] is passed instead of proper justification
+
+                $isAjusteA = !empty($a['ajuste_id']);
+                $isAjusteB = !empty($b['ajuste_id']);
+                if ($isAjusteA !== $isAjusteB) {
+                    return $isAjusteA ? -1 : 1; // Ajuste ganha sempre
+                }
+
                 $tipoA = $a['tipo'] ?? 'desconhecido';
                 $tipoB = $b['tipo'] ?? 'desconhecido';
 
@@ -72,6 +82,8 @@ class EstadoDiaService
 
             $justificacao = $justificacoes[0];
             $tipoJust = $justificacao['tipo'] ?? 'desconhecido';
+            $isAjuste = !empty($justificacao['ajuste_id']);
+            $ajusteId = $isAjuste ? (int)$justificacao['ajuste_id'] : null;
             $comportamento = $tiposJustificacaoMap[$tipoJust] ?? null;
 
             if ($comportamento === null) {
@@ -81,10 +93,22 @@ class EstadoDiaService
 
             $horasEfectivas = 0.0;
             $estado = '';
+            $origem = $isAjuste ? 'ajuste' : 'justificacao';
 
             if ($comportamento === 'trabalho') {
                 if (!empty($marcacoes)) {
                     $estado = 'trabalhado';
+                    // Dias com picagens nao mudam de comportamento nem com ajuste, mas mantemos o ajuste_id se for ajuste
+                    if (!$isAjuste) {
+                        return [
+                            'estado' => 'trabalhado',
+                            'origem' => 'marcacoes',
+                            'justificacao_id' => null,
+                            'ajuste_id' => null,
+                            'tipo' => null,
+                            'horas_efectivas' => 0.0,
+                        ];
+                    }
                 } elseif ($turno !== null && $turno['tipo'] !== 'folga') {
                     $estado = 'servico_externo';
                     $horasEfectivas = !empty($turno['horas_efectivas']) ? (float) $turno['horas_efectivas'] : 0.0;
@@ -93,7 +117,8 @@ class EstadoDiaService
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
-                        'tipo' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
                         'horas_efectivas' => 0.0,
                     ];
                 } else {
@@ -102,6 +127,11 @@ class EstadoDiaService
                         $horasEfectivas = 8.0;
                     } else {
                         $estado = 'sem_horario';
+                        $origem = 'ciclo';
+                        if ($isAjuste) {
+                            $origem = 'ajuste';
+                            $estado = 'sem_horario';
+                        }
                     }
                 }
             } elseif ($comportamento === 'folga') {
@@ -110,30 +140,61 @@ class EstadoDiaService
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
+                        'horas_efectivas' => 0.0,
+                    ];
+                }
+                if (!empty($marcacoes) && !$isAjuste) {
+                     return [
+                        'estado' => 'trabalhado',
+                        'origem' => 'marcacoes',
+                        'justificacao_id' => null,
+                        'ajuste_id' => null,
                         'tipo' => null,
                         'horas_efectivas' => 0.0,
                     ];
                 }
-                $estado = 'folga_justificada';
+                if (!empty($marcacoes)) {
+                     $estado = 'trabalhado';
+                } else {
+                     $estado = 'folga_justificada';
+                }
             } elseif (in_array($comportamento, ['falta_justificada_remunerada', 'falta_justificada_nao_remunerada'])) {
                 if (empty($marcacoes) && $turno !== null && $turno['tipo'] === 'folga') {
                     return [
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
+                        'horas_efectivas' => 0.0,
+                    ];
+                }
+                if (!empty($marcacoes) && !$isAjuste) {
+                     return [
+                        'estado' => 'trabalhado',
+                        'origem' => 'marcacoes',
+                        'justificacao_id' => null,
+                        'ajuste_id' => null,
                         'tipo' => null,
                         'horas_efectivas' => 0.0,
                     ];
                 }
-                $estado = $comportamento;
+                if (!empty($marcacoes)) {
+                     $estado = 'trabalhado';
+                } else {
+                     $estado = $comportamento;
+                }
             } else {
                 $estado = 'falta_justificada_nao_remunerada';
             }
 
             return [
                 'estado' => $estado,
-                'origem' => 'justificacao',
-                'justificacao_id' => isset($justificacao['id']) ? (int)$justificacao['id'] : null,
+                'origem' => $estado === 'trabalhado' && $isAjuste ? 'marcacoes' : $origem,
+                'justificacao_id' => isset($justificacao['id']) && !$isAjuste ? (int)$justificacao['id'] : null,
+                'ajuste_id' => $ajusteId,
                 'tipo' => $tipoJust,
                 'horas_efectivas' => $horasEfectivas,
             ];
@@ -145,6 +206,7 @@ class EstadoDiaService
                 'estado' => 'trabalhado',
                 'origem' => 'marcacoes',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -156,6 +218,7 @@ class EstadoDiaService
                 'estado' => 'sem_horario',
                 'origem' => 'ciclo',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -166,6 +229,7 @@ class EstadoDiaService
                 'estado' => 'folga_ciclo',
                 'origem' => 'ciclo',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -176,6 +240,7 @@ class EstadoDiaService
             'estado' => 'falta_injustificada',
             'origem' => 'ciclo',
             'justificacao_id' => null,
+            'ajuste_id' => null,
             'tipo' => null,
             'horas_efectivas' => 0.0,
         ];
