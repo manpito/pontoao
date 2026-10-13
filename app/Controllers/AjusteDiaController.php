@@ -99,22 +99,22 @@ class AjusteDiaController
         $ajustesFunc = $ajusteSvc->carregarPorFuncionarios([$funcId], $dataInicio, $dataFim)[$funcId] ?? [];
 
         // Férias
-        $stmtF = $db->prepare("SELECT id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id = :fid AND estado IN ('aprovado_rh', 'aprovado_supervisor') AND data_inicio <= :fim AND data_fim >= :ini");
-        $stmtF->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $stmtF = $db->prepare("SELECT id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id = :fid AND estado = 'aprovado_rh' AND data_inicio <= :fim1 AND data_fim >= :ini1");
+        $stmtF->execute([':fid' => $funcId, ':ini1' => $dataInicio, ':fim1' => $dataFim]);
         $todasFerias = $stmtF->fetchAll(PDO::FETCH_ASSOC);
 
         // Justificações Legadas e Normais
-        $stmtJ = $db->prepare("SELECT data_inicio, data_fim, tipo FROM justificacoes WHERE funcionario_id = :fid AND data_inicio <= :fim AND data_fim >= :ini AND estado = 'aprovada'");
-        $stmtJ->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $stmtJ = $db->prepare("SELECT data_inicio, data_fim, tipo FROM justificacoes WHERE funcionario_id = :fid AND data_inicio <= :fim2 AND data_fim >= :ini2 AND estado = 'aprovada'");
+        $stmtJ->execute([':fid' => $funcId, ':ini2' => $dataInicio, ':fim2' => $dataFim]);
         $justificacoesLegadas = $stmtJ->fetchAll(PDO::FETCH_ASSOC);
 
-        $stmtJA = $db->prepare("SELECT id, data_inicio, data_fim, tipo, motivo FROM justificacoes_ausencia WHERE funcionario_id = :fid AND data_inicio <= :fim AND data_fim >= :ini AND estado = 'aprovado'");
-        $stmtJA->execute([':fid' => $funcId, ':ini' => $dataInicio, ':fim' => $dataFim]);
+        $stmtJA = $db->prepare("SELECT id, data_inicio, data_fim, tipo, motivo FROM justificacoes_ausencia WHERE funcionario_id = :fid AND data_inicio <= :fim3 AND data_fim >= :ini3 AND estado = 'aprovado'");
+        $stmtJA->execute([':fid' => $funcId, ':ini3' => $dataInicio, ':fim3' => $dataFim]);
         $justificacoesNovas = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
         // Marcações (usado para tem_picagens e calculos se houver justificação sem ajuste)
-        $stmtM = $db->prepare("SELECT id, tipo, data_hora, origem FROM marcacoes WHERE funcionario_id = :fid AND data_hora BETWEEN :ini AND :fim");
-        $stmtM->execute([':fid' => $funcId, ':ini' => $dataInicio . ' 00:00:00', ':fim' => $dataFim . ' 23:59:59']);
+        $stmtM = $db->prepare("SELECT id, tipo, data_hora, origem FROM marcacoes WHERE funcionario_id = :fid AND data_hora BETWEEN :ini4 AND :fim4");
+        $stmtM->execute([':fid' => $funcId, ':ini4' => $dataInicio . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
         $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
         $marcPorDia = [];
@@ -320,8 +320,8 @@ class AjusteDiaController
         if (!empty($escalas) || !empty($turmas)) {
             $fEscalas = [];
             // Usamos a atribuição vigente em dataBase (o inicio do lote)
-            $stmt = $db->prepare("SELECT funcionario_id, escala_id, posicao_inicial FROM funcionario_escala WHERE data_inicio <= :dt AND (data_fim IS NULL OR data_fim >= :dt)");
-            $stmt->execute([':dt' => $dataBase]);
+            $stmt = $db->prepare("SELECT funcionario_id, escala_id, posicao_inicial FROM funcionario_escala WHERE data_inicio <= :dt1 AND (data_fim IS NULL OR data_fim >= :dt2)");
+            $stmt->execute([':dt1' => $dataBase, ':dt2' => $dataBase]);
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $fe) {
                 $fEscalas[$fe['funcionario_id']] = [
                     'escala_id' => (int)$fe['escala_id'],
@@ -369,26 +369,26 @@ class AjusteDiaController
         $dataFim = end($datas);
 
         // Pre-fetch periodos_mensais fechados overlapping batch dates
-        $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini AND data_inicio <= :fim");
-        $stmtP->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini1 AND data_inicio <= :fim1");
+        $stmtP->execute([':ini1' => $dataIni, ':fim1' => $dataFim]);
         $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
 
         // Pre-fetch férias
-        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado IN ('aprovado_rh', 'aprovado_supervisor') AND data_inicio <= :fim AND data_fim >= :ini");
-        $stmtV->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado = 'aprovado_rh' AND data_inicio <= :fim2 AND data_fim >= :ini2");
+        $stmtV->execute([':ini2' => $dataIni, ':fim2' => $dataFim]);
         $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
 
         // Pre-fetch ajustes existentes
-        $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini AND :fim AND activo = 1");
-        $stmtA->execute([':ini' => $dataIni, ':fim' => $dataFim]);
+        $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini3 AND :fim3 AND activo = 1");
+        $stmtA->execute([':ini3' => $dataIni, ':fim3' => $dataFim]);
         $ajustesExistentesMap = [];
         foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) {
             $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = (int)$a['id'];
         }
 
         // Pre-fetch picagens (informativo)
-        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini AND :fim");
-        $stmtM->execute([':ini' => $dataIni . ' 00:00:00', ':fim' => $dataFim . ' 23:59:59']);
+        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini4 AND :fim4");
+        $stmtM->execute([':ini4' => $dataIni . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
         $picagensMap = [];
         foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) {
             $picagensMap[$m['funcionario_id']][substr($m['data_hora'], 0, 10)] = true;
@@ -478,10 +478,10 @@ class AjusteDiaController
             SELECT COUNT(f.id)
             FROM funcionarios f
             WHERE f.id IN ($inIds)
-              AND NOT EXISTS (SELECT 1 FROM funcionario_escala fe WHERE fe.funcionario_id = f.id AND fe.data_inicio <= :dt AND (fe.data_fim IS NULL OR fe.data_fim >= :dt))
-              AND NOT EXISTS (SELECT 1 FROM funcionario_horario fh WHERE fh.funcionario_id = f.id AND fh.data_inicio <= :dt AND (fh.data_fim IS NULL OR fh.data_fim >= :dt))
+              AND NOT EXISTS (SELECT 1 FROM funcionario_escala fe WHERE fe.funcionario_id = f.id AND fe.data_inicio <= :dt1 AND (fe.data_fim IS NULL OR fe.data_fim >= :dt2))
+              AND NOT EXISTS (SELECT 1 FROM funcionario_horario fh WHERE fh.funcionario_id = f.id AND fh.data_inicio <= :dt3 AND (fh.data_fim IS NULL OR fh.data_fim >= :dt4))
         ");
-        $stmtE->execute([':dt' => $dataBase]);
+        $stmtE->execute([':dt1' => $dataBase, ':dt2' => $dataBase, ':dt3' => $dataBase, ':dt4' => $dataBase]);
         $semEscala = (int)$stmtE->fetchColumn();
 
         return $this->json(200, [
@@ -661,8 +661,8 @@ class AjusteDiaController
             if (!empty($dias)) {
                 $minDia = min($dias);
                 $maxDia = max($dias);
-                $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini AND data_inicio <= :fim");
-                $stmtP->execute([':ini' => $minDia, ':fim' => $maxDia]);
+                $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini1 AND data_inicio <= :fim1");
+                $stmtP->execute([':ini1' => $minDia, ':fim1' => $maxDia]);
                 $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
 
                 foreach ($dias as $dia) {
