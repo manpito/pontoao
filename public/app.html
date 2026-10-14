@@ -162,6 +162,17 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .page.active { display: block; }
 
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.aj-grid { border-collapse: separate; border-spacing: 2px; font-size: 11px; }
+.aj-grid th { color: var(--muted2); font-weight: 400; padding: 2px 4px; text-align: center; }
+.aj-grid th.aj-mes { text-align: left; min-width: 36px; }
+.aj-cell { width: 26px; height: 24px; border-radius: 4px; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--text); background: var(--s2); border: 1px solid var(--border); }
+.aj-cell.aj-vazio { background: transparent; border-color: transparent; }
+.aj-cell.aj-ferias { background: var(--blue); }
+.aj-cell.aj-feriado { background: var(--s3); color: var(--muted2); }
+.aj-cell.aj-ajuste { border-color: var(--text); font-weight: 700; }
+.aj-cell.aj-picagens::after { content: '•'; display: block; line-height: 6px; font-size: 9px; }
+.aj-legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted2); margin-top: 14px; }
+.aj-legenda span.aj-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; border: 1px solid var(--border); }
 .page-title { font-size: 22px; font-weight: 700; }
 .page-sub { font-size: 13px; color: var(--muted2); margin-top: 2px; }
 
@@ -357,6 +368,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <button class="nav-item" onclick="nav('cargos')" id="nav-cargos"><span class="ni">◈</span> Cargos</button>
     <button class="nav-item" onclick="nav('horarios')" id="nav-horarios"><span class="ni">◷</span> Horários</button>
     <button class="nav-item" onclick="nav('tipos-justificacao')" id="nav-tipos-justificacao"><span class="ni">◈</span> Motivos de Justificação</button>
+    <button class="nav-item" onclick="nav('ajustes-mes')" id="nav-ajustes-mes"><span class="ni">◈</span> Ajustes do Mês</button>
 
     <hr class="sb-divider">
     <div class="sb-section">Relatórios e Dados</div>
@@ -677,6 +689,36 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       <div id="tiposJustificacaoTable"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
+
+    <!-- AJUSTES DO MÊS -->
+    <div class="page" id="page-ajustes-mes">
+      <div class="page-header">
+        <div><div class="page-title">Ajustes do Mês</div><div class="page-sub">Ajustes manuais por funcionário e dia</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+          <div style="min-width:200px">
+            <label style="font-size:12px;color:var(--muted2)">Departamento</label>
+            <select id="ajDepFiltro" onchange="ajFiltrarFuncionarios()" style="width:100%"><option value="">Todos os departamentos</option></select>
+          </div>
+          <div style="min-width:220px">
+            <label style="font-size:12px;color:var(--muted2)">Pesquisar</label>
+            <input type="text" id="ajSearch" placeholder="Nome ou número" oninput="ajFiltrarFuncionarios()" style="width:100%">
+          </div>
+          <div style="min-width:280px;flex:1">
+            <label style="font-size:12px;color:var(--muted2)">Funcionário</label>
+            <select id="ajFuncionario" onchange="ajCarregarAno()" style="width:100%"></select>
+          </div>
+          <div style="width:110px">
+            <label style="font-size:12px;color:var(--muted2)">Ano</label>
+            <input type="number" id="ajAno" min="2000" max="2100" onchange="ajCarregarAno()" style="width:100%">
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body" id="ajGridContainer" style="overflow-x:auto"><div class="empty">Seleccione um funcionário.</div></div>
+      </div>
+    </div>
 
     <!-- RELATÓRIO DE PERÍODO -->
     <div class="page" id="page-relatorio-periodo">
@@ -1842,6 +1884,7 @@ function applyPermissions() {
   hide('nav-relatorio-periodo', p === 'supervisor');
   hide('nav-cargos', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-tipos-justificacao', p === 'supervisor');
+  hide('nav-ajustes-mes', !['super_admin_tenant', 'rh_manager'].includes(p));
 
   // Action buttons
   hide('btnNovoAno', ['rh_colaborador', 'supervisor'].includes(p));
@@ -1857,7 +1900,7 @@ function applyPermissions() {
   if (p === 'supervisor') {
       sections.forEach((s, i) => { if (i >= 2) s.style.display = 'none'; });
       dividers.forEach((d, i) => { if (i >= 1) d.style.display = 'none'; });
-      ['nav-departamentos', 'nav-horarios', 'nav-relatorios', 'nav-exportacao', 'nav-importacao', 'nav-turnos', 'nav-escalas', 'nav-periodos', 'nav-configs', 'nav-cargos', 'nav-tipos-justificacao'].forEach(id => hide(id, true));
+      ['nav-departamentos', 'nav-horarios', 'nav-relatorios', 'nav-exportacao', 'nav-importacao', 'nav-turnos', 'nav-escalas', 'nav-periodos', 'nav-configs', 'nav-cargos', 'nav-tipos-justificacao', 'nav-ajustes-mes'].forEach(id => hide(id, true));
   }
 
   if (p === 'rh_colaborador') {
@@ -1887,7 +1930,8 @@ function nav(page) {
     configs: loadConfigs, cargos: loadCargos, turnos: carregarTurnos, escalas: () => { carregarEscalas(); carregarExcecoes(); },
     calendario: carregarAnosLaborais,
     exportacao: loadExportacao,
-    'tipos-justificacao': loadTiposJustificacao
+    'tipos-justificacao': loadTiposJustificacao,
+    'ajustes-mes': initAjustesMes
   };
   loaders[page]?.();
 }
@@ -4536,6 +4580,105 @@ async function eliminarExcecao(id) {
   } catch(e) { toast(e.message, "err"); }
 }
 
+
+// ── AJUSTES DO MÊS ──
+let _ajFuncionarios = [];
+let _ajDadosAno = null;
+
+async function initAjustesMes() {
+  const anoEl = document.getElementById('ajAno');
+  if (!anoEl.value) anoEl.value = new Date().getFullYear();
+  try {
+    const resF = await api('GET', '/api/funcionarios?estado=activo');
+    _ajFuncionarios = resF.dados || [];
+    document.getElementById('ajDepFiltro').innerHTML = '<option value="">Todos os departamentos</option>' +
+      [...new Map(_ajFuncionarios.filter(f => f.departamento_id).map(f => [f.departamento_id, { id: f.departamento_id, nome: f.departamento }])).values()]
+      .map(d => `<option value="${d.id}">${esc(d.nome)}</option>`).join('');
+    ajFiltrarFuncionarios();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function ajFiltrarFuncionarios() {
+  const search = document.getElementById('ajSearch').value.trim().toLowerCase();
+  const dep = document.getElementById('ajDepFiltro').value;
+  const sel = document.getElementById('ajFuncionario');
+  const actual = sel.value;
+  const filtered = _ajFuncionarios.filter(f =>
+    (!dep || String(f.departamento_id) === dep) &&
+    (!search || f.nome_completo.toLowerCase().includes(search) || String(f.numero_funcionario).includes(search))
+  );
+  sel.innerHTML = '<option value="">— Seleccione —</option>' + filtered.map(f =>
+    `<option value="${f.id}">${esc(f.numero_funcionario)} · ${esc(f.nome_completo)}</option>`).join('');
+  if (actual && filtered.some(f => String(f.id) === String(actual))) sel.value = actual;
+  else if (actual) {
+    document.getElementById('ajGridContainer').innerHTML = '<div class="empty">Seleccione um funcionário.</div>';
+    _ajDadosAno = null;
+  }
+}
+
+async function ajCarregarAno() {
+  const fid = document.getElementById('ajFuncionario').value;
+  const ano = parseInt(document.getElementById('ajAno').value, 10);
+  const cont = document.getElementById('ajGridContainer');
+  if (!fid) { cont.innerHTML = '<div class="empty">Seleccione um funcionário.</div>'; return; }
+  if (!ano || ano < 2000 || ano > 2100) { toast('Ano inválido.', 'err'); return; }
+  cont.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', `/api/ajustes/funcionario/${fid}?ano=${ano}`);
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao carregar ajustes.');
+    _ajDadosAno = res;
+    ajRenderGrelha();
+  } catch (e) {
+    cont.innerHTML = '<div class="empty">Não foi possível carregar os dados.</div>';
+    toast(e.message, 'err');
+  }
+}
+
+function ajRenderGrelha() {
+  const cont = document.getElementById('ajGridContainer');
+  const dados = _ajDadosAno;
+  if (!dados || !dados.dias) { cont.innerHTML = '<div class="empty">Sem dados.</div>'; return; }
+  const porData = {};
+  dados.dias.forEach(d => { porData[d.data] = d; });
+  const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  let h = '<table class="aj-grid"><thead><tr><th class="aj-mes"></th>';
+  for (let d = 1; d <= 31; d++) h += `<th>${d}</th>`;
+  h += '</tr></thead><tbody>';
+  for (let m = 0; m < 12; m++) {
+    h += `<tr><th class="aj-mes">${meses[m]}</th>`;
+    const diasNoMes = new Date(dados.ano, m + 1, 0).getDate();
+    for (let d = 1; d <= 31; d++) {
+      if (d > diasNoMes) { h += '<td><div class="aj-cell aj-vazio"></div></td>'; continue; }
+      const iso = `${dados.ano}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const info = porData[iso];
+      let cls = 'aj-cell', style = '', titulo = iso, txt = '';
+      if (info) {
+        if (info.ferias) cls += ' aj-ferias';
+        else if (info.feriado) cls += ' aj-feriado';
+        if (info.ajuste) {
+          cls += ' aj-ajuste';
+          if (info.ajuste.cor) style = `background:${esc(info.ajuste.cor)};`;
+          titulo += ' · Ajuste: ' + (info.ajuste.nome || '');
+          if (info.ajuste.nota) titulo += ' (' + info.ajuste.nota + ')';
+          txt = esc((info.ajuste.nome || '?').charAt(0).toUpperCase());
+        }
+        if (info.tem_picagens) { cls += ' aj-picagens'; titulo += ' · Tem picagens'; }
+        if (info.ferias) titulo += ' · Férias';
+        if (info.feriado) titulo += ' · Feriado';
+        titulo += ' · Estado: ' + (info.estado_dia || '');
+      }
+      h += `<td><div class="${cls}" style="${style}" title="${esc(titulo)}">${txt}</div></td>`;
+    }
+    h += '</tr>';
+  }
+  h += '</tbody></table>';
+  h += '<div class="aj-legenda">' +
+    '<div><span class="aj-sw" style="background:var(--blue)"></span>Férias</div>' +
+    '<div><span class="aj-sw" style="background:var(--s3)"></span>Feriado</div>' +
+    '<div><span class="aj-sw" style="background:var(--s2);border-color:var(--text)"></span>Dia com ajuste (cor do motivo)</div>' +
+    '<div>• Dia com picagens</div></div>';
+  cont.innerHTML = h;
+}
 
 // ── EXPORTAÇÁO ──
 let _expFuncionarios = [];
