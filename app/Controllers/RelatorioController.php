@@ -472,7 +472,7 @@ class RelatorioController
                     'origem_estado'                  => $estadoDoDia['origem'],
                     'justificacao_id'                => $estadoDoDia['origem'] === 'justificacao' ? $estadoDoDia['justificacao_id'] : null,
                     'justificacao_tipo'              => in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) ? $estadoDoDia['tipo'] : null,
-                    'justificacao_nome'              => in_array($estadoDoDia['origem'], ['justificacao', 'ajuste']) ? ($motivoFaltaJustificada ?? $estadoDoDia['tipo']) : null,
+                    'justificacao_nome'              => $estadoDoDia['origem'] === 'ajuste' ? ($ajusteDia['tipo_nome'] ?? $motivoFaltaJustificada ?? $estadoDoDia['tipo']) : ($estadoDoDia['origem'] === 'justificacao' ? ($motivoFaltaJustificada ?? $estadoDoDia['tipo']) : null),
                     'ajuste_id'                      => $ajusteDia ? (int)$ajusteDia['id'] : null,
                     'ajuste_motivo_nome'             => $ajusteDia ? $ajusteDia['tipo_nome'] : null,
                     'ajuste_motivo_cor'              => $ajusteDia ? $ajusteDia['tipo_cor'] : null
