@@ -52,6 +52,12 @@ class EstadoDiaService
 
             usort($justificacoes, function ($a, $b) use ($tiposJustificacaoMap, $prioridades) {
                 // Compatibility for cases where $j['tipo'] is passed instead of proper justification
+                $isAjusteA = !empty($a['ajuste_id']);
+                $isAjusteB = !empty($b['ajuste_id']);
+                if ($isAjusteA !== $isAjusteB) {
+                    return $isAjusteA ? -1 : 1; // Ajuste ganha sempre
+                }
+
                 $tipoA = $a['tipo'] ?? 'desconhecido';
                 $tipoB = $b['tipo'] ?? 'desconhecido';
 
@@ -72,6 +78,8 @@ class EstadoDiaService
 
             $justificacao = $justificacoes[0];
             $tipoJust = $justificacao['tipo'] ?? 'desconhecido';
+            $isAjuste = !empty($justificacao['ajuste_id']);
+            $ajusteId = $isAjuste ? (int)$justificacao['ajuste_id'] : null;
             $comportamento = $tiposJustificacaoMap[$tipoJust] ?? null;
 
             if ($comportamento === null) {
@@ -81,6 +89,7 @@ class EstadoDiaService
 
             $horasEfectivas = 0.0;
             $estado = '';
+            $origem = $isAjuste ? 'ajuste' : 'justificacao';
 
             if ($comportamento === 'trabalho') {
                 if (!empty($marcacoes)) {
@@ -93,7 +102,8 @@ class EstadoDiaService
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
-                        'tipo' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
                         'horas_efectivas' => 0.0,
                     ];
                 } else {
@@ -102,6 +112,9 @@ class EstadoDiaService
                         $horasEfectivas = 8.0;
                     } else {
                         $estado = 'sem_horario';
+                        if ($isAjuste) {
+                            $origem = 'ciclo'; // Apenas no caso de ajuste, 'sem_horario' mantem ciclo? A instrucao diz: excepto folga_ciclo e sem_horario que mantêm origem='ciclo'.
+                        }
                     }
                 }
             } elseif ($comportamento === 'folga') {
@@ -110,7 +123,8 @@ class EstadoDiaService
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
-                        'tipo' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
                         'horas_efectivas' => 0.0,
                     ];
                 }
@@ -121,7 +135,8 @@ class EstadoDiaService
                         'estado' => 'folga_ciclo',
                         'origem' => 'ciclo',
                         'justificacao_id' => null,
-                        'tipo' => null,
+                        'ajuste_id' => $ajusteId,
+                        'tipo' => $isAjuste ? $tipoJust : null,
                         'horas_efectivas' => 0.0,
                     ];
                 }
@@ -132,8 +147,9 @@ class EstadoDiaService
 
             return [
                 'estado' => $estado,
-                'origem' => 'justificacao',
-                'justificacao_id' => isset($justificacao['id']) ? (int)$justificacao['id'] : null,
+                'origem' => $origem,
+                'justificacao_id' => isset($justificacao['id']) && !$isAjuste ? (int)$justificacao['id'] : null,
+                'ajuste_id' => $ajusteId,
                 'tipo' => $tipoJust,
                 'horas_efectivas' => $horasEfectivas,
             ];
@@ -145,6 +161,7 @@ class EstadoDiaService
                 'estado' => 'trabalhado',
                 'origem' => 'marcacoes',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -156,6 +173,7 @@ class EstadoDiaService
                 'estado' => 'sem_horario',
                 'origem' => 'ciclo',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -166,6 +184,7 @@ class EstadoDiaService
                 'estado' => 'folga_ciclo',
                 'origem' => 'ciclo',
                 'justificacao_id' => null,
+                'ajuste_id' => null,
                 'tipo' => null,
                 'horas_efectivas' => 0.0,
             ];
@@ -176,6 +195,7 @@ class EstadoDiaService
             'estado' => 'falta_injustificada',
             'origem' => 'ciclo',
             'justificacao_id' => null,
+            'ajuste_id' => null,
             'tipo' => null,
             'horas_efectivas' => 0.0,
         ];

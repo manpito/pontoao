@@ -323,3 +323,5 @@ const labelFalta = tipoFalta === 'saida' ? 'Falta de saída' : 'Falta de entrada
 // depois no template:
 onclick="abrirModal(${m.id}, '${labelFalta}')"
 Nunca fazer: `onclick="abrirModal(${m.id}, '${condicao ? 'valor1' : 'valor2'}')"` — as aspas internas quebram o HTML.
+
+13. **Excepção à Regra 9:** Tabelas com FK para tabelas criadas depois da `001_tenant_schema.sql` (ex: dependências na `tipos_justificacao` que só nasce na `013`) ficam **só na migração própria**, porque a ordem de execução manda e forçaria a quebra da criação do tenant caso as chaves não fossem satisfeitas à priori.

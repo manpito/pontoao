@@ -19,6 +19,29 @@ class TipoJustificacaoController
         return Database::tenant($sub);
     }
 
+    private function utilizadorId(ServerRequestInterface $request): int
+    {
+        return (int)($request->getAttribute('auth_user_id') ?? 0);
+    }
+
+    private function auditoria(PDO $db, int $userId, string $accao, string $entidade, ?int $entidadeId, ?array $antes, ?array $depois): void
+    {
+        $stmt = $db->prepare("
+            INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_antes, dados_depois, ip, user_agent)
+            VALUES (:uid, :accao, :entidade, :entidade_id, :antes, :depois, :ip, :ua)
+        ");
+        $stmt->execute([
+            ':uid'         => $userId ?: null,
+            ':accao'       => $accao,
+            ':entidade'    => $entidade,
+            ':entidade_id' => $entidadeId,
+            ':antes'       => $antes ? json_encode($antes, JSON_UNESCAPED_UNICODE) : null,
+            ':depois'      => $depois ? json_encode($depois, JSON_UNESCAPED_UNICODE) : null,
+            ':ip'          => $_SERVER['REMOTE_ADDR'] ?? null,
+            ':ua'          => $_SERVER['HTTP_USER_AGENT'] ?? null
+        ]);
+    }
+
     /**
      * GET /api/tipos-justificacao
      */
@@ -27,15 +50,32 @@ class TipoJustificacaoController
         $queryParams = $request->getQueryParams();
         $apenasActivos = isset($queryParams['activo']) && $queryParams['activo'] == '1';
 
-        $sql = "SELECT id, codigo, nome, comportamento, activo FROM tipos_justificacao";
+        $db = $this->db();
+
+        $hasCor = true;
+        try {
+            $db->query("SELECT cor FROM tipos_justificacao LIMIT 1");
+        } catch (\PDOException $e) {
+            $hasCor = false;
+        }
+
+        $colCor = $hasCor ? ", cor" : "";
+        $sql = "SELECT id, codigo, nome, comportamento{$colCor}, activo FROM tipos_justificacao";
         if ($apenasActivos) {
             $sql .= " WHERE activo = 1";
         }
         $sql .= " ORDER BY nome ASC";
 
-        $stmt = $this->db()->query($sql);
+        $stmt = $db->query($sql);
 
-        return $this->json(200, ['dados' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        $dados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$hasCor) {
+            foreach ($dados as &$d) {
+                $d['cor'] = null;
+            }
+        }
+
+        return $this->json(200, ['dados' => $dados]);
     }
 
     /**
@@ -58,6 +98,14 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'Comportamento inválido.']);
         }
 
+        $cor = null;
+        if (!empty($body['cor'])) {
+            if (!is_string($body['cor']) || !preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
+                return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
+            }
+            $cor = $body['cor'];
+        }
+
         $db = $this->db();
 
         // Verificar unicidade do código
@@ -67,19 +115,46 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'Já existe um tipo de justificação com este código.']);
         }
 
-        $stmt = $db->prepare("
-            INSERT INTO tipos_justificacao (codigo, nome, comportamento, activo)
-            VALUES (:codigo, :nome, :comportamento, 1)
-        ");
-        $stmt->execute([
-            ':codigo'        => $body['codigo'],
-            ':nome'          => $body['nome'],
-            ':comportamento' => $body['comportamento'],
-        ]);
+        $hasCor = true;
+        try {
+            $db->query("SELECT cor FROM tipos_justificacao LIMIT 1");
+        } catch (\PDOException $e) {
+            $hasCor = false;
+        }
+
+        if ($hasCor) {
+            $stmt = $db->prepare("
+                INSERT INTO tipos_justificacao (codigo, nome, comportamento, cor, activo)
+                VALUES (:codigo, :nome, :comportamento, :cor, 1)
+            ");
+            $stmt->execute([
+                ':codigo'        => $body['codigo'],
+                ':nome'          => $body['nome'],
+                ':comportamento' => $body['comportamento'],
+                ':cor'           => $cor,
+            ]);
+        } else {
+            $stmt = $db->prepare("
+                INSERT INTO tipos_justificacao (codigo, nome, comportamento, activo)
+                VALUES (:codigo, :nome, :comportamento, 1)
+            ");
+            $stmt->execute([
+                ':codigo'        => $body['codigo'],
+                ':nome'          => $body['nome'],
+                ':comportamento' => $body['comportamento'],
+            ]);
+        }
+
+        $novoId = (int)$db->lastInsertId();
+
+        if ($hasCor && $cor !== null) {
+             $userId = $this->utilizadorId($request);
+             $this->auditoria($db, $userId, 'tipo_justificacao.cor_alterada', 'tipos_justificacao', $novoId, ['cor' => null], ['cor' => $cor]);
+        }
 
         return $this->json(201, [
             'mensagem' => 'Tipo de justificação criado com sucesso.',
-            'id'       => (int) $db->lastInsertId(),
+            'id'       => $novoId,
         ]);
     }
 
@@ -107,15 +182,51 @@ class TipoJustificacaoController
             return $this->json(400, ['erro' => true, 'mensagem' => 'Comportamento inválido.']);
         }
 
-        $db->prepare("
-            UPDATE tipos_justificacao
-            SET nome = :nome, comportamento = :comportamento
-            WHERE id = :id
-        ")->execute([
+        $hasCor = true;
+        $corAntiga = null;
+        try {
+            $stmtCor = $db->prepare("SELECT cor FROM tipos_justificacao WHERE id = ?");
+            $stmtCor->execute([$id]);
+            $corAntiga = $stmtCor->fetchColumn();
+        } catch (\PDOException $e) {
+            $hasCor = false;
+        }
+
+        $sql = "UPDATE tipos_justificacao SET nome = :nome, comportamento = :comportamento";
+        $params = [
             ':nome'          => $body['nome'],
             ':comportamento' => $body['comportamento'],
             ':id'            => $id,
-        ]);
+        ];
+
+        $corAlterada = false;
+        $novaCor = null;
+
+        if ($hasCor && array_key_exists('cor', $body)) {
+            $cor = null;
+            if ($body['cor'] !== null && $body['cor'] !== "") {
+                if (!is_string($body['cor']) || !preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
+                    return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
+                }
+                $cor = $body['cor'];
+            }
+            $sql .= ", cor = :cor";
+            $params[':cor'] = $cor;
+
+            if ($corAntiga !== $cor) {
+                 $corAlterada = true;
+                 $novaCor = $cor;
+            }
+        }
+
+        $sql .= " WHERE id = :id";
+
+        $db->prepare($sql)->execute($params);
+
+        if ($corAlterada) {
+             $userId = $this->utilizadorId($request);
+             $this->auditoria($db, $userId, 'tipo_justificacao.cor_alterada', 'tipos_justificacao', $id, ['cor' => $corAntiga], ['cor' => $novaCor]);
+        }
 
         return $this->json(200, ['mensagem' => 'Tipo de justificação actualizado com sucesso.']);
     }
