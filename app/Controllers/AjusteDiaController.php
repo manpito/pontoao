@@ -229,7 +229,7 @@ class AjusteDiaController
             }
 
             $diffDays = $dIni->diff($dFim)->days;
-            if ($diffDays > 366) {
+            if (($diffDays + 1) > 366) {
                 throw new \InvalidArgumentException("O intervalo excede o limite máximo de 366 dias.");
             }
 
