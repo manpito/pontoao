@@ -210,6 +210,10 @@ class AjusteDiaController
             $iniStr = $datas['inicio'];
             $fimStr = $datas['fim'];
 
+            if (!is_string($iniStr) || !is_string($fimStr)) {
+                throw new \InvalidArgumentException("Datas de início e fim devem ser strings.");
+            }
+
             $dIni = \DateTimeImmutable::createFromFormat('Y-m-d', $iniStr);
             $dFim = \DateTimeImmutable::createFromFormat('Y-m-d', $fimStr);
 
@@ -401,49 +405,17 @@ class AjusteDiaController
         return array_keys($idsTotais);
     }
 
-    private function calcularPlanoLote(PDO $db, array $fIds, array $datas, bool $substituir): array
+    public static function calcularPlanoLoteStatic(array $fIds, array $datas, bool $substituir, array $periodosFechados, array $ferias, array $ajustesExistentesMap, array $picagensMap): array
     {
         $plano = [
-            'a_criar' => [], // array of ['fid' => x, 'data' => y]
-            'update_ids' => [], // array of adjustment ids to annul
+            'a_criar' => [],
+            'update_ids' => [],
             'saltados_ferias' => 0,
             'saltados_conflito' => 0,
             'periodo_fechado' => 0,
             'ja_ajustados' => 0,
             'com_picagens' => 0
         ];
-
-        if (empty($fIds) || empty($datas)) return $plano;
-
-        $inIds = implode(',', array_map('intval', $fIds));
-        $dataIni = $datas[0];
-        $dataFim = end($datas);
-
-        // Pre-fetch periodos_mensais fechados overlapping batch dates
-        $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini1 AND data_inicio <= :fim1");
-        $stmtP->execute([':ini1' => $dataIni, ':fim1' => $dataFim]);
-        $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
-
-        // Pre-fetch férias
-        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado = 'aprovado_rh' AND data_inicio <= :fim2 AND data_fim >= :ini2");
-        $stmtV->execute([':ini2' => $dataIni, ':fim2' => $dataFim]);
-        $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
-
-        // Pre-fetch ajustes existentes
-        $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini3 AND :fim3 AND activo = 1");
-        $stmtA->execute([':ini3' => $dataIni, ':fim3' => $dataFim]);
-        $ajustesExistentesMap = [];
-        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) {
-            $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = (int)$a['id'];
-        }
-
-        // Pre-fetch picagens (informativo)
-        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini4 AND :fim4");
-        $stmtM->execute([':ini4' => $dataIni . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
-        $picagensMap = [];
-        foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) {
-            $picagensMap[$m['funcionario_id']][substr($m['data_hora'], 0, 10)] = true;
-        }
 
         foreach ($fIds as $fid) {
             foreach ($datas as $dia) {
@@ -493,6 +465,45 @@ class AjusteDiaController
         return $plano;
     }
 
+    private function calcularPlanoLote(PDO $db, array $fIds, array $datas, bool $substituir): array
+    {
+        if (empty($fIds) || empty($datas)) {
+            return self::calcularPlanoLoteStatic([], [], false, [], [], [], []);
+        }
+
+        $inIds = implode(',', array_map('intval', $fIds));
+        $dataIni = $datas[0];
+        $dataFim = end($datas);
+
+        // Pre-fetch periodos_mensais fechados overlapping batch dates
+        $stmtP = $db->prepare("SELECT data_inicio, data_fim FROM periodos_mensais WHERE estado = 'fechado' AND data_fim >= :ini1 AND data_inicio <= :fim1");
+        $stmtP->execute([':ini1' => $dataIni, ':fim1' => $dataFim]);
+        $periodosFechados = $stmtP->fetchAll(PDO::FETCH_ASSOC);
+
+        // Pre-fetch férias
+        $stmtV = $db->prepare("SELECT funcionario_id, data_inicio, data_fim FROM ferias_pedidos WHERE funcionario_id IN ($inIds) AND estado = 'aprovado_rh' AND data_inicio <= :fim2 AND data_fim >= :ini2");
+        $stmtV->execute([':ini2' => $dataIni, ':fim2' => $dataFim]);
+        $ferias = $stmtV->fetchAll(PDO::FETCH_ASSOC);
+
+        // Pre-fetch ajustes existentes
+        $stmtA = $db->prepare("SELECT id, funcionario_id, data FROM ajustes_dia WHERE funcionario_id IN ($inIds) AND data BETWEEN :ini3 AND :fim3 AND activo = 1");
+        $stmtA->execute([':ini3' => $dataIni, ':fim3' => $dataFim]);
+        $ajustesExistentesMap = [];
+        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) {
+            $ajustesExistentesMap[$a['funcionario_id']][$a['data']] = (int)$a['id'];
+        }
+
+        // Pre-fetch picagens (informativo)
+        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini4 AND :fim4");
+        $stmtM->execute([':ini4' => $dataIni . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
+        $picagensMap = [];
+        foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $picagensMap[$m['funcionario_id']][substr($m['data_hora'], 0, 10)] = true;
+        }
+
+        return self::calcularPlanoLoteStatic($fIds, $datas, $substituir, $periodosFechados, $ferias, $ajustesExistentesMap, $picagensMap);
+    }
+
     /**
      * POST /api/ajustes/lote/previsao
      */
@@ -516,8 +527,18 @@ class AjusteDiaController
         $dataBase = $datas[0];
         $fIds = $this->resolveFuncionariosLote($db, $selecao, $dataBase);
 
+        $ignorados = [];
+        if (!empty($selecao['funcionarios']) && is_array($selecao['funcionarios'])) {
+            $explicitFids = array_map('intval', $selecao['funcionarios']);
+            foreach ($explicitFids as $efid) {
+                if ($efid > 0 && !in_array($efid, $fIds, true)) {
+                    $ignorados[] = $efid;
+                }
+            }
+        }
+
         if (empty($fIds)) {
-            return $this->json(200, ['total_funcionarios' => 0, 'total_dias_a_criar' => 0, 'ja_ajustados' => 0, 'em_ferias' => 0, 'com_picagens' => 0, 'periodo_fechado' => 0, 'sem_escala' => 0]);
+            return $this->json(200, ['total_funcionarios' => 0, 'total_dias_a_criar' => 0, 'ja_ajustados' => 0, 'em_ferias' => 0, 'com_picagens' => 0, 'periodo_fechado' => 0, 'sem_escala' => 0, 'ignorados' => $ignorados]);
         }
 
         $numDias = count($datas);
@@ -545,7 +566,8 @@ class AjusteDiaController
             'em_ferias' => $plano['saltados_ferias'],
             'com_picagens' => $plano['com_picagens'],
             'periodo_fechado' => $plano['periodo_fechado'],
-            'sem_escala' => $semEscala
+            'sem_escala' => $semEscala,
+            'ignorados' => $ignorados
         ]);
     }
 

@@ -93,7 +93,7 @@ class EstadoDiaServiceTest extends TestCase
         $this->assertEquals('ext', $res['tipo']);
     }
 
-    public function testAjusteTrabalhadoComPicagens()
+    public function testAjusteFaltaJustificadaComPicagens()
     {
         $justificacoes = [
             ['id' => null, 'ajuste_id' => 50, 'tipo' => 'fj', 'estado' => 'aprovado']
@@ -163,5 +163,99 @@ class EstadoDiaServiceTest extends TestCase
         $this->assertEquals('trabalhado', $res['estado']);
         $this->assertEquals('ajuste', $res['origem']);
         $this->assertEquals(111, $res['ajuste_id']);
+    }
+
+    public function testJustificacaoTrabalhoComPicagens()
+    {
+        $justificacoes = [
+            ['id' => 99, 'tipo' => 'ext', 'estado' => 'aprovado']
+        ];
+        $marcacoes = [['id' => 1]]; // Picagens existem
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
+
+        $this->assertEquals('trabalhado', $res['estado']);
+        // Regressão: justificação normal mantém o comportamento da main.
+        $this->assertEquals('justificacao', $res['origem']);
+        $this->assertNull($res['ajuste_id']);
+        $this->assertEquals(99, $res['justificacao_id']);
+        $this->assertEquals('ext', $res['tipo']);
+    }
+
+    public function testJustificacaoFolgaComPicagens()
+    {
+        $justificacoes = [
+            ['id' => 100, 'tipo' => 'folga_j', 'estado' => 'aprovado']
+        ];
+        $marcacoes = [['id' => 1]]; // Picagens existem
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
+
+        // Regressão: justificação normal mantém o comportamento da main.
+        $this->assertEquals('folga_justificada', $res['estado']);
+        $this->assertEquals('justificacao', $res['origem']);
+        $this->assertNull($res['ajuste_id']);
+    }
+
+    public function testJustificacaoFaltaComPicagens()
+    {
+        $justificacoes = [
+            ['id' => 101, 'tipo' => 'fj', 'estado' => 'aprovado']
+        ];
+        $marcacoes = [['id' => 1]]; // Picagens existem
+
+        $res = $this->service->determinar(1, '2025-10-10', [], $justificacoes, $marcacoes, ['tipo' => 'trabalho'], $this->map);
+
+        // Regressão: justificação normal mantém o comportamento da main.
+        $this->assertEquals('falta_justificada_remunerada', $res['estado']);
+        $this->assertEquals('justificacao', $res['origem']);
+        $this->assertNull($res['ajuste_id']);
+    }
+
+    public function testBuildLotePlan()
+    {
+        // Testing static logic from AjusteDiaController without PDO
+        // FIds: 1, 2
+        // Datas: '2025-10-01', '2025-10-02'
+        // F1 is on vacation on 10-01
+        // F2 has an existing adjustment on 10-01
+        // Period is closed on 10-02
+        $fIds = [1, 2];
+        $datas = ['2025-10-01', '2025-10-02'];
+        $substituir = false;
+
+        $periodosFechados = [
+            ['data_inicio' => '2025-10-02', 'data_fim' => '2025-10-02']
+        ];
+
+        $ferias = [
+            ['funcionario_id' => 1, 'data_inicio' => '2025-09-01', 'data_fim' => '2025-10-01']
+        ];
+
+        $ajustesExistentesMap = [
+            2 => ['2025-10-01' => 999] // Existing adj ID 999
+        ];
+
+        $picagensMap = [
+            1 => ['2025-10-01' => true]
+        ];
+
+        $plano = \App\Controllers\AjusteDiaController::calcularPlanoLoteStatic($fIds, $datas, $substituir, $periodosFechados, $ferias, $ajustesExistentesMap, $picagensMap);
+
+        // Assertions
+        $this->assertEquals(2, $plano['periodo_fechado']); // 10-02 is closed for both F1 and F2
+        $this->assertEquals(1, $plano['saltados_ferias']); // F1 on 10-01
+        $this->assertEquals(1, $plano['saltados_conflito']); // F2 on 10-01
+        $this->assertEmpty($plano['a_criar']); // No creation possible
+
+        // Now with substituir = true
+        $planoSub = \App\Controllers\AjusteDiaController::calcularPlanoLoteStatic($fIds, $datas, true, $periodosFechados, $ferias, $ajustesExistentesMap, $picagensMap);
+
+        $this->assertEquals(1, $planoSub['ja_ajustados']);
+        $this->assertEquals(0, $planoSub['saltados_conflito']);
+        $this->assertCount(1, $planoSub['update_ids']);
+        $this->assertEquals(999, $planoSub['update_ids'][0]);
+        $this->assertCount(1, $planoSub['a_criar']); // F2 on 10-01 will be created
+        $this->assertEquals(['fid' => 2, 'data' => '2025-10-01'], $planoSub['a_criar'][0]);
     }
 }
