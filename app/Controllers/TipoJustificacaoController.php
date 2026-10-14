@@ -19,6 +19,29 @@ class TipoJustificacaoController
         return Database::tenant($sub);
     }
 
+    private function utilizadorId(ServerRequestInterface $request): int
+    {
+        return (int)($request->getAttribute('auth_user_id') ?? 0);
+    }
+
+    private function auditoria(PDO $db, int $userId, string $accao, string $entidade, ?int $entidadeId, ?array $antes, ?array $depois): void
+    {
+        $stmt = $db->prepare("
+            INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_antes, dados_depois, ip, user_agent)
+            VALUES (:uid, :accao, :entidade, :entidade_id, :antes, :depois, :ip, :ua)
+        ");
+        $stmt->execute([
+            ':uid'         => $userId ?: null,
+            ':accao'       => $accao,
+            ':entidade'    => $entidade,
+            ':entidade_id' => $entidadeId,
+            ':antes'       => $antes ? json_encode($antes, JSON_UNESCAPED_UNICODE) : null,
+            ':depois'      => $depois ? json_encode($depois, JSON_UNESCAPED_UNICODE) : null,
+            ':ip'          => $_SERVER['REMOTE_ADDR'] ?? null,
+            ':ua'          => $_SERVER['HTTP_USER_AGENT'] ?? null
+        ]);
+    }
+
     /**
      * GET /api/tipos-justificacao
      */
@@ -77,7 +100,7 @@ class TipoJustificacaoController
 
         $cor = null;
         if (!empty($body['cor'])) {
-            if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
+            if (!is_string($body['cor']) || !preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
                 return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
             }
             $cor = $body['cor'];
@@ -122,9 +145,16 @@ class TipoJustificacaoController
             ]);
         }
 
+        $novoId = (int)$db->lastInsertId();
+
+        if ($hasCor && $cor !== null) {
+             $userId = $this->utilizadorId($request);
+             $this->auditoria($db, $userId, 'tipo_justificacao.cor_alterada', 'tipos_justificacao', $novoId, ['cor' => null], ['cor' => $cor]);
+        }
+
         return $this->json(201, [
             'mensagem' => 'Tipo de justificação criado com sucesso.',
-            'id'       => (int) $db->lastInsertId(),
+            'id'       => $novoId,
         ]);
     }
 
@@ -153,8 +183,11 @@ class TipoJustificacaoController
         }
 
         $hasCor = true;
+        $corAntiga = null;
         try {
-            $db->query("SELECT cor FROM tipos_justificacao LIMIT 1");
+            $stmtCor = $db->prepare("SELECT cor FROM tipos_justificacao WHERE id = ?");
+            $stmtCor->execute([$id]);
+            $corAntiga = $stmtCor->fetchColumn();
         } catch (\PDOException $e) {
             $hasCor = false;
         }
@@ -166,21 +199,34 @@ class TipoJustificacaoController
             ':id'            => $id,
         ];
 
+        $corAlterada = false;
+        $novaCor = null;
+
         if ($hasCor && array_key_exists('cor', $body)) {
             $cor = null;
             if ($body['cor'] !== null && $body['cor'] !== "") {
-                if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
+                if (!is_string($body['cor']) || !preg_match('/^#[0-9A-Fa-f]{6}$/', $body['cor'])) {
                     return $this->json(400, ['erro' => true, 'mensagem' => 'O campo cor deve ter o formato #RRGGBB.']);
                 }
                 $cor = $body['cor'];
             }
             $sql .= ", cor = :cor";
             $params[':cor'] = $cor;
+
+            if ($corAntiga !== $cor) {
+                 $corAlterada = true;
+                 $novaCor = $cor;
+            }
         }
 
         $sql .= " WHERE id = :id";
 
         $db->prepare($sql)->execute($params);
+
+        if ($corAlterada) {
+             $userId = $this->utilizadorId($request);
+             $this->auditoria($db, $userId, 'tipo_justificacao.cor_alterada', 'tipos_justificacao', $id, ['cor' => $corAntiga], ['cor' => $novaCor]);
+        }
 
         return $this->json(200, ['mensagem' => 'Tipo de justificação actualizado com sucesso.']);
     }

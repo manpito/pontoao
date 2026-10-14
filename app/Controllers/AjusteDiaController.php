@@ -316,17 +316,28 @@ class AjusteDiaController
                 if (!empty($plano['update_ids'])) {
                      $inUpd = implode(',', $plano['update_ids']);
                      $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por novo ajuste' WHERE id IN ($inUpd)")->execute([$userId]);
+
+                     if (count($plano['update_ids']) > 100) {
+                         $anuladosLimitados = array_slice($plano['update_ids'], 0, 100);
+                         $this->auditoria($db, $userId, 'ajuste_dia.anulado', 'ajustes_dia', null, ['ids_anulados' => $anuladosLimitados, 'total_anulados' => count($plano['update_ids']), 'truncado' => true], ['motivo' => 'Substituído por novo ajuste']);
+                     } else {
+                         $this->auditoria($db, $userId, 'ajuste_dia.anulado', 'ajustes_dia', null, ['ids_anulados' => $plano['update_ids']], ['motivo' => 'Substituído por novo ajuste']);
+                     }
                 }
 
                 // Inserir os novos
-                $datasParaAjustar = [];
+                $idsCriados = [];
                 foreach ($plano['a_criar'] as $pair) {
                     $db->prepare("INSERT INTO ajustes_dia (funcionario_id, data, tipo_justificacao_id, nota, criado_por) VALUES (?, ?, ?, ?, ?)")
                        ->execute([$funcId, $pair['data'], $tipoId, $nota, $userId]);
-                    $datasParaAjustar[] = $pair['data'];
+                    $idsCriados[] = (int)$db->lastInsertId();
                 }
 
-                $this->auditoria($db, $userId, 'ajuste_dia.criado', 'ajustes_dia', null, null, ['funcionario_id' => $funcId, 'datas' => $datasParaAjustar, 'tipo_id' => $tipoId]);
+                if (count($idsCriados) === 1) {
+                    $this->auditoria($db, $userId, 'ajuste_dia.criado', 'ajustes_dia', $idsCriados[0], null, ['funcionario_id' => $funcId, 'data' => $plano['a_criar'][0]['data'], 'tipo_id' => $tipoId]);
+                } else {
+                    $this->auditoria($db, $userId, 'ajuste_dia.criado', 'ajustes_dia', null, null, ['ids_criados' => $idsCriados, 'funcionario_id' => $funcId, 'tipo_id' => $tipoId]);
+                }
             }
             $db->commit();
             return $this->json(200, ['mensagem' => 'Concluído', 'detalhes' => $resultado]);
@@ -524,6 +535,10 @@ class AjusteDiaController
 
         if (empty($datas) || !$tipoId) return $this->json(400, ['erro' => true, 'mensagem' => 'Datas e tipo são obrigatórios.']);
 
+        $stmtT = $db->prepare("SELECT id FROM tipos_justificacao WHERE id = :id AND activo = 1");
+        $stmtT->execute([':id' => $tipoId]);
+        if (!$stmtT->fetch()) return $this->json(400, ['erro' => true, 'mensagem' => 'Motivo inativo ou não existe.']);
+
         $dataBase = $datas[0];
         $fIds = $this->resolveFuncionariosLote($db, $selecao, $dataBase);
 
@@ -645,6 +660,13 @@ class AjusteDiaController
             if (!empty($plano['update_ids'])) {
                 $inUpd = implode(',', $plano['update_ids']);
                 $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = 'Substituído por lote {$loteId}' WHERE id IN ($inUpd)")->execute([$userId]);
+
+                if (count($plano['update_ids']) > 100) {
+                     $anuladosLimitados = array_slice($plano['update_ids'], 0, 100);
+                     $this->auditoria($db, $userId, 'ajuste_dia.anulado', 'ajustes_dia', null, ['ids_anulados' => $anuladosLimitados, 'total_anulados' => count($plano['update_ids']), 'truncado' => true], ['motivo' => "Substituído por lote {$loteId}"]);
+                } else {
+                     $this->auditoria($db, $userId, 'ajuste_dia.anulado', 'ajustes_dia', null, ['ids_anulados' => $plano['update_ids']], ['motivo' => "Substituído por lote {$loteId}"]);
+                }
             }
 
             // Inserção em bloco
@@ -666,8 +688,11 @@ class AjusteDiaController
             }
 
             $this->auditoria($db, $userId, 'ajuste_lote.criado', 'ajustes_lotes', (int)$loteId, null, [
-                'criterio' => $selecao,
-                'total_dias' => $aCriarCount
+                'lote_id' => (int)$loteId,
+                'total_funcionarios' => count($fIds),
+                'total_dias' => $aCriarCount,
+                'substituir' => $substituir,
+                'criterio' => $selecao
             ]);
 
             $db->commit();
@@ -760,7 +785,7 @@ class AjusteDiaController
             $db->prepare("UPDATE ajustes_dia SET estado = 'anulado', anulado_por = ?, anulado_em = NOW(), motivo_anulacao = ? WHERE lote_id = ? AND estado = 'activo'")
                ->execute([$userId, $motivo, $id]);
 
-            $this->auditoria($db, $userId, 'ajuste_lote.anulado', 'ajustes_lotes', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'criterio' => json_decode($lote['criterio'])]);
+            $this->auditoria($db, $userId, 'ajuste_lote.anulado', 'ajustes_lotes', $id, ['estado' => 'activo'], ['estado' => 'anulado', 'motivo' => $motivo]);
 
             $db->commit();
             return $this->json(200, ['mensagem' => 'Lote anulado.']);
