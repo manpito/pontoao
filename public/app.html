@@ -174,6 +174,11 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .aj-cell:not(.aj-vazio) { cursor: pointer; }
 .aj-cell:not(.aj-vazio):hover { outline: 2px solid var(--accent); }
 .aj-aviso { background: rgba(245,158,11,.12); border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 12px; }
+.aj-lote-lista { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+.form-group .aj-chk { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-weight: 400; cursor: pointer; }
+.form-group .aj-chk input { width: auto; }
+.aj-prev { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 13px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.aj-prev .aj-prev-v { font-family: var(--mono); text-align: right; }
 .aj-legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted2); margin-top: 14px; }
 .aj-legenda span.aj-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; border: 1px solid var(--border); }
 .page-title { font-size: 22px; font-weight: 700; }
@@ -697,6 +702,10 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="page" id="page-ajustes-mes">
       <div class="page-header">
         <div><div class="page-title">Ajustes do Mês</div><div class="page-sub">Ajustes manuais por funcionário e dia</div></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn" onclick="ajAbrirHistorico()">Histórico de lotes</button>
+          <button class="btn btn-accent" onclick="ajAbrirLote()">Ajuste em lote</button>
+        </div>
       </div>
       <div class="card" style="margin-bottom:16px">
         <div class="card-body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
@@ -1169,6 +1178,59 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalAjusteDia')">Cancelar</button>
       <button class="btn btn-accent" id="ajDiaBtnGuardar" onclick="ajGuardarAjuste()">Guardar ajuste</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modalAjusteLote">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-head">
+      <h3>Ajuste em lote</h3>
+      <button class="modal-close" onclick="fecharModal('modalAjusteLote')">✕</button>
+    </div>
+    <div class="modal-body" oninput="ajLoteInvalidar()" onchange="ajLoteInvalidar()" style="max-height:70vh;overflow:auto">
+      <div class="form-group"><label>Motivo *</label><select id="ajLoteTipo"></select></div>
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1"><label>De *</label><input type="date" id="ajLoteInicio"></div>
+        <div class="form-group" style="flex:1"><label>Até *</label><input type="date" id="ajLoteFim"></div>
+      </div>
+      <div class="form-group"><label>Nota</label><input id="ajLoteNota" maxlength="500" placeholder="Opcional"></div>
+      <div class="form-group"><label>Departamentos</label><div class="aj-lote-lista" id="ajLoteDeps"></div></div>
+      <div class="form-group"><label>Escalas</label><div class="aj-lote-lista" id="ajLoteEscalas"></div></div>
+      <div class="form-group">
+        <label>Funcionários individuais</label>
+        <input type="text" id="ajLoteSearch" placeholder="Pesquisar nome ou número" oninput="ajLoteRenderFuncs()" style="margin-bottom:6px">
+        <div class="aj-lote-lista" id="ajLoteFuncs"></div>
+        <div id="ajLoteContador" style="font-size:12px;color:var(--muted2);margin-top:4px">0 seleccionados</div>
+      </div>
+      <div class="form-group"><label class="aj-chk"><input type="checkbox" id="ajLoteSubstituir"> Substituir ajustes já existentes neste intervalo</label></div>
+      <div id="ajLotePrevisao"></div>
+      <div id="ajLoteErro" class="err-box" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAjusteLote')">Cancelar</button>
+      <button class="btn" id="ajLoteBtnPrever" onclick="ajLotePrever()">Calcular previsão</button>
+      <button class="btn btn-accent" id="ajLoteBtnAplicar" onclick="ajLoteAplicar()" disabled>Aplicar lote</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modalAjusteHistorico">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-head">
+      <h3>Histórico de lotes</h3>
+      <button class="modal-close" onclick="fecharModal('modalAjusteHistorico')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow:auto">
+      <div id="ajHistTabela"><div class="empty"><span class="spinner"></span></div></div>
+      <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-sm" id="ajHistAnt" onclick="ajHistoricoPagina(-1)">‹ Anterior</button>
+        <span id="ajHistPag" style="font-size:12px;color:var(--muted2)"></span>
+        <button class="btn btn-sm" id="ajHistSeg" onclick="ajHistoricoPagina(1)">Seguinte ›</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAjusteHistorico')">Fechar</button>
     </div>
   </div>
 </div>
@@ -4811,6 +4873,225 @@ async function ajAnularAjuste(id) {
     toast('Ajuste anulado.', 'ok');
     fecharModal('modalAjusteDia');
     ajCarregarAno();
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+let _ajLoteFuncSel = new Set();
+let _ajLotePrevisaoTotal = null;
+
+function ajLoteInvalidar() {
+  _ajLotePrevisaoTotal = null;
+  const btn = document.getElementById('ajLoteBtnAplicar');
+  if (btn) btn.disabled = true;
+  const p = document.getElementById('ajLotePrevisao');
+  if (p) p.innerHTML = '';
+}
+
+async function ajAbrirLote() {
+  if (!_ajFuncionarios.length) { toast('Aguarde o carregamento dos funcionários.', 'err'); return; }
+  _ajLoteFuncSel = new Set();
+  document.getElementById('ajLoteErro').style.display = 'none';
+  document.getElementById('ajLoteInicio').value = '';
+  document.getElementById('ajLoteFim').value = '';
+  document.getElementById('ajLoteNota').value = '';
+  document.getElementById('ajLoteSearch').value = '';
+  document.getElementById('ajLoteSubstituir').checked = false;
+
+  const deps = [...new Map(_ajFuncionarios.filter(f => f.departamento_id).map(f => [f.departamento_id, { id: f.departamento_id, nome: f.departamento }])).values()];
+  document.getElementById('ajLoteDeps').innerHTML = deps.length
+    ? deps.map(d => `<label class="aj-chk"><input type="checkbox" class="aj-lote-dep" value="${parseInt(d.id, 10)}"> ${esc(d.nome)}</label>`).join('')
+    : '<span style="font-size:12px;color:var(--muted2)">Sem departamentos.</span>';
+
+  try {
+    if (!_ajTiposCache.length) {
+      const resT = await api('GET', '/api/tipos-justificacao?activo=1');
+      _ajTiposCache = resT.dados || [];
+    }
+    document.getElementById('ajLoteTipo').innerHTML = _ajTiposCache.map(t => `<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+    const resE = await api('GET', '/api/escalas');
+    const escalas = resE.dados || [];
+    document.getElementById('ajLoteEscalas').innerHTML = escalas.length
+      ? escalas.map(e => `<label class="aj-chk"><input type="checkbox" class="aj-lote-esc" value="${parseInt(e.id, 10)}"> ${esc(e.nome)}</label>`).join('')
+      : '<span style="font-size:12px;color:var(--muted2)">Sem escalas.</span>';
+  } catch (e) { toast(e.message, 'err'); return; }
+
+  ajLoteRenderFuncs();
+  ajLoteInvalidar();
+  document.getElementById('modalAjusteLote').classList.add('open');
+}
+
+function ajLoteRenderFuncs() {
+  const search = document.getElementById('ajLoteSearch').value.trim().toLowerCase();
+  const filtered = _ajFuncionarios.filter(f =>
+    !search || f.nome_completo.toLowerCase().includes(search) || String(f.numero_funcionario).includes(search));
+  document.getElementById('ajLoteFuncs').innerHTML = filtered.map(f =>
+    `<label class="aj-chk"><input type="checkbox" ${_ajLoteFuncSel.has(Number(f.id)) ? 'checked' : ''} onchange="ajLoteToggleFunc(${Number(f.id)}, this.checked)"> <span style="font-family:var(--mono);color:var(--muted2);font-size:11px;min-width:40px">${esc(f.numero_funcionario)}</span> ${esc(f.nome_completo)}</label>`
+  ).join('') || '<span style="font-size:12px;color:var(--muted2)">Nenhum resultado.</span>';
+  document.getElementById('ajLoteContador').textContent = _ajLoteFuncSel.size + ' seleccionados';
+}
+
+function ajLoteToggleFunc(id, on) {
+  if (on) _ajLoteFuncSel.add(id); else _ajLoteFuncSel.delete(id);
+  document.getElementById('ajLoteContador').textContent = _ajLoteFuncSel.size + ' seleccionados';
+}
+
+function ajLotePayloadBase() {
+  const err = document.getElementById('ajLoteErro');
+  err.style.display = 'none';
+  const selecao = {
+    funcionarios: [..._ajLoteFuncSel],
+    departamentos: [...document.querySelectorAll('.aj-lote-dep:checked')].map(c => parseInt(c.value, 10)),
+    escalas: [...document.querySelectorAll('.aj-lote-esc:checked')].map(c => parseInt(c.value, 10))
+  };
+  const tipoId = parseInt(document.getElementById('ajLoteTipo').value, 10);
+  const inicio = document.getElementById('ajLoteInicio').value;
+  const fim = document.getElementById('ajLoteFim').value;
+  const msg = (t) => { err.textContent = t; err.style.display = 'block'; return null; };
+  if (!selecao.funcionarios.length && !selecao.departamentos.length && !selecao.escalas.length) return msg('Seleccione pelo menos um departamento, escala ou funcionário.');
+  if (!tipoId) return msg('Seleccione o motivo.');
+  if (!inicio || !fim) return msg('Indique as datas.');
+  if (inicio > fim) return msg('A data inicial não pode ser posterior à final.');
+  return {
+    selecao: selecao,
+    datas: { inicio: inicio, fim: fim },
+    tipo_justificacao_id: tipoId,
+    nota: document.getElementById('ajLoteNota').value.trim() || null,
+    substituir: document.getElementById('ajLoteSubstituir').checked
+  };
+}
+
+async function ajLotePrever() {
+  const base = ajLotePayloadBase();
+  if (!base) return;
+  const btn = document.getElementById('ajLoteBtnPrever');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/ajustes/lote/previsao', base);
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao calcular a previsão.');
+    _ajLotePrevisaoTotal = res.total_dias_a_criar || 0;
+    const linhas = [
+      ['Funcionários abrangidos', res.total_funcionarios],
+      ['Dias a ajustar', res.total_dias_a_criar],
+      ['Dias já ajustados', res.ja_ajustados],
+      ['Dias em férias (saltados)', res.em_ferias],
+      ['Dias com picagens', res.com_picagens],
+      ['Dias em período fechado (saltados)', res.periodo_fechado],
+      ['Funcionários sem escala/horário', res.sem_escala],
+      ['Funcionários ignorados (inactivos/inexistentes)', (res.ignorados || []).length]
+    ];
+    let h = '<div class="aj-prev">' + linhas.map(l => `<div>${l[0]}</div><div class="aj-prev-v">${esc(l[1] ?? 0)}</div>`).join('') + '</div>';
+    if (res.com_picagens > 0) h += '<div class="aj-aviso" style="margin-top:10px">Há dias com picagens: nesses dias o ajuste só aparece nas marcações diárias.</div>';
+    if (res.ja_ajustados > 0 && !base.substituir) h += '<div class="aj-aviso" style="margin-top:10px">Há dias já ajustados: sem "Substituir", esses dias são saltados.</div>';
+    document.getElementById('ajLotePrevisao').innerHTML = h;
+    document.getElementById('ajLoteBtnAplicar').disabled = _ajLotePrevisaoTotal <= 0;
+  } catch (e) {
+    const err = document.getElementById('ajLoteErro');
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function ajLoteAplicar() {
+  if (_ajLotePrevisaoTotal === null || _ajLotePrevisaoTotal <= 0) return;
+  const base = ajLotePayloadBase();
+  if (!base) return;
+  if (!confirm('Aplicar ' + _ajLotePrevisaoTotal + ' ajuste(s) de dia? Pode anular depois.')) return;
+  const btn = document.getElementById('ajLoteBtnAplicar');
+  btn.disabled = true;
+  try {
+    base.total_previsto = _ajLotePrevisaoTotal;
+    const res = await api('POST', '/api/ajustes/lote', base);
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao aplicar o lote.');
+    toast((res.total || 0) + ' ajuste(s) criado(s).', 'ok');
+    fecharModal('modalAjusteLote');
+    if (document.getElementById('ajFuncionario').value) ajCarregarAno();
+  } catch (e) {
+    ajLoteInvalidar();
+    const err = document.getElementById('ajLoteErro');
+    err.textContent = e.message + ' Calcule a previsão de novo.';
+    err.style.display = 'block';
+  }
+}
+
+let _ajHistPagina = 1;
+let _ajHistTotalPaginas = 1;
+
+function ajFmtData(iso) { return String(iso).split('-').reverse().join('/'); }
+
+function ajLoteDatasTexto(d) {
+  if (!d) return '—';
+  if (Array.isArray(d)) {
+    if (!d.length) return '—';
+    const s = [...d].sort();
+    return s.length === 1 ? ajFmtData(s[0]) : ajFmtData(s[0]) + ' … ' + ajFmtData(s[s.length - 1]) + ' (' + s.length + ' datas)';
+  }
+  if (d.inicio && d.fim) return d.inicio === d.fim ? ajFmtData(d.inicio) : ajFmtData(d.inicio) + ' a ' + ajFmtData(d.fim);
+  return '—';
+}
+
+function ajAbrirHistorico() {
+  _ajHistPagina = 1;
+  document.getElementById('modalAjusteHistorico').classList.add('open');
+  ajCarregarHistorico();
+}
+
+function ajHistoricoPagina(delta) {
+  const nova = _ajHistPagina + delta;
+  if (nova < 1 || nova > _ajHistTotalPaginas) return;
+  _ajHistPagina = nova;
+  ajCarregarHistorico();
+}
+
+async function ajCarregarHistorico() {
+  const el = document.getElementById('ajHistTabela');
+  el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  try {
+    const res = await api('GET', `/api/ajustes/lotes?pagina=${_ajHistPagina}&limite=20`);
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao carregar o histórico.');
+    const lotes = res.dados || [];
+    const pag = res.paginacao || {};
+    _ajHistTotalPaginas = Math.max(1, parseInt(pag.total_paginas, 10) || 1);
+    const rows = lotes.map(l => {
+      const activo = l.estado === 'activo';
+      const estado = activo
+        ? '<span style="color:var(--accent)">Activo</span>'
+        : '<span style="color:var(--muted2)">Anulado</span>' + (l.motivo_anulacao ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.motivo_anulacao) + '</div>' : '');
+      return `<tr>
+        <td style="font-family:var(--mono);font-size:12px">${esc(String(l.criado_em || '').slice(0, 16))}</td>
+        <td>${esc(l.criado_por_nome || '')}</td>
+        <td><strong>${esc(l.tipo_justificacao_nome || '')}</strong>${l.nota ? '<div style="font-size:11px;color:var(--muted2)">' + esc(l.nota) + '</div>' : ''}</td>
+        <td style="font-size:12px">${esc(ajLoteDatasTexto(l.datas))}</td>
+        <td style="font-family:var(--mono)">${esc(l.total_funcionarios)} func · ${esc(l.total_dias)} dias</td>
+        <td>${estado}</td>
+        <td>${activo ? `<button class="btn btn-sm" style="border-color:var(--danger);color:var(--danger)" onclick="ajAnularLote(${parseInt(l.id, 10)})">Anular lote</button>` : ''}</td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = `<table class="tbl">
+      <thead><tr><th>Criado em</th><th>Por</th><th>Motivo</th><th>Datas</th><th>Alcance</th><th>Estado</th><th></th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" class="empty">Sem lotes.</td></tr>'}</tbody>
+    </table>`;
+    document.getElementById('ajHistPag').textContent = 'Página ' + _ajHistPagina + ' de ' + _ajHistTotalPaginas;
+    document.getElementById('ajHistAnt').disabled = _ajHistPagina <= 1;
+    document.getElementById('ajHistSeg').disabled = _ajHistPagina >= _ajHistTotalPaginas;
+  } catch (e) {
+    el.innerHTML = '<div class="empty">Não foi possível carregar o histórico.</div>';
+    toast(e.message, 'err');
+  }
+}
+
+async function ajAnularLote(id) {
+  if (!id) return;
+  const motivo = prompt('Motivo da anulação do lote (opcional):');
+  if (motivo === null) return;
+  if (!confirm('Anular o lote ' + id + '? Todos os dias activos deste lote deixam de ter ajuste.')) return;
+  try {
+    const res = await api('POST', `/api/ajustes/lote/${id}/anular`, { motivo_anulacao: motivo.trim() || null });
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao anular o lote.');
+    toast('Lote anulado.', 'ok');
+    ajCarregarHistorico();
+    if (document.getElementById('ajFuncionario').value) ajCarregarAno();
   } catch (e) { toast(e.message, 'err'); }
 }
 
