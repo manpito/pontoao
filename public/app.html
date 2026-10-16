@@ -165,11 +165,11 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .aj-grid { border-collapse: separate; border-spacing: 2px; font-size: 11px; }
 .aj-grid th { color: var(--muted2); font-weight: 400; padding: 2px 4px; text-align: center; }
 .aj-grid th.aj-mes { text-align: left; min-width: 36px; }
-.aj-cell { width: 26px; height: 24px; border-radius: 4px; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--text); background: var(--s2); border: 1px solid var(--border); }
+.aj-cell { width: 26px; height: 24px; border-radius: 4px; text-align: center; font-family: var(--mono); font-size: 10px; line-height: 22px; color: #1e293b; background: #e2e8f0; border: 1px solid #cbd5e1; }
 .aj-cell.aj-vazio { background: transparent; border-color: transparent; }
-.aj-cell.aj-ferias { background: var(--blue); }
-.aj-cell.aj-feriado { background: var(--s3); color: var(--muted2); }
-.aj-cell.aj-ajuste { border-color: var(--text); font-weight: 700; }
+.aj-cell.aj-ferias { background: #bfdbfe; border-color: #93c5fd; }
+.aj-cell.aj-feriado { background: #fde68a; border-color: #fcd34d; }
+.aj-cell.aj-ajuste { border-color: #1e293b; font-weight: 700; background: #bbf7d0; }
 .aj-cell.aj-picagens::after { content: '•'; display: block; line-height: 6px; font-size: 9px; }
 .aj-cell:not(.aj-vazio) { cursor: pointer; }
 .aj-cell:not(.aj-vazio):hover { outline: 2px solid var(--accent); }
@@ -4738,6 +4738,14 @@ async function ajCarregarAno() {
   }
 }
 
+function ajCorTexto(hex) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(String(hex || ''));
+  if (!m) return '#1e293b';
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#1e293b' : '#ffffff';
+}
+
 function ajRenderGrelha() {
   const cont = document.getElementById('ajGridContainer');
   const dados = _ajDadosAno;
@@ -4761,7 +4769,7 @@ function ajRenderGrelha() {
         else if (info.feriado) cls += ' aj-feriado';
         if (info.ajuste) {
           cls += ' aj-ajuste';
-          if (info.ajuste.cor) style = `background:${esc(info.ajuste.cor)};`;
+          if (info.ajuste.cor) style = `background:${esc(info.ajuste.cor)};color:${ajCorTexto(info.ajuste.cor)};`;
           titulo += ' · Ajuste: ' + (info.ajuste.nome || '');
           if (info.ajuste.nota) titulo += ' (' + info.ajuste.nota + ')';
           txt = esc((info.ajuste.nome || '?').charAt(0).toUpperCase());
@@ -4777,9 +4785,9 @@ function ajRenderGrelha() {
   }
   h += '</tbody></table>';
   h += '<div class="aj-legenda">' +
-    '<div><span class="aj-sw" style="background:var(--blue)"></span>Férias</div>' +
-    '<div><span class="aj-sw" style="background:var(--s3)"></span>Feriado</div>' +
-    '<div><span class="aj-sw" style="background:var(--s2);border-color:var(--text)"></span>Dia com ajuste (cor do motivo)</div>' +
+    '<div><span class="aj-sw" style="background:#bfdbfe;border-color:#93c5fd"></span>Férias</div>' +
+    '<div><span class="aj-sw" style="background:#fde68a;border-color:#fcd34d"></span>Feriado</div>' +
+    '<div><span class="aj-sw" style="background:#bbf7d0;border-color:#1e293b"></span>Dia com ajuste (cor do motivo)</div>' +
     '<div>• Dia com picagens</div></div>';
   cont.innerHTML = h;
 }
