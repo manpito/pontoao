@@ -1131,7 +1131,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <option value="trabalho">Conta como trabalho</option>
           <option value="falta_justificada_remunerada">Falta justificada, remunerada</option>
           <option value="falta_justificada_nao_remunerada">Falta justificada, não remunerada</option>
+          <option value="folga">Folga</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label>Cor (opcional)</label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <input type="color" id="tjCor" value="#009cbf" style="width:56px;height:36px;padding:2px">
+          <label style="display:flex;gap:6px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px;margin:0"><input type="checkbox" id="tjSemCor" style="width:auto" onchange="document.getElementById('tjCor').disabled = this.checked"> Sem cor</label>
+        </div>
       </div>
       <div id="tjErro" class="err-box" style="display:none;margin-top:10px"></div>
     </div>
@@ -1697,7 +1705,8 @@ async function loadTiposJustificacao() {
     const comportamentos = {
       'trabalho': 'Conta como trabalho',
       'falta_justificada_remunerada': 'Falta justificada, remunerada',
-      'falta_justificada_nao_remunerada': 'Falta justificada, não remunerada'
+      'falta_justificada_nao_remunerada': 'Falta justificada, não remunerada',
+      'folga': 'Folga'
     };
 
     const readOnly = ['rh_colaborador', 'supervisor'].includes(USER.perfil);
@@ -1719,13 +1728,14 @@ async function loadTiposJustificacao() {
         <td><strong>${esc(t.nome)}</strong></td>
         <td style="font-family:var(--mono)">${esc(t.codigo)}</td>
         <td>${esc(comportamentoDisplay)}</td>
+        <td>${t.cor ? `<span style="display:inline-block;width:18px;height:18px;border-radius:4px;border:1px solid var(--border);background:${esc(t.cor)};vertical-align:middle"></span> <span style="font-family:var(--mono);font-size:11px;color:var(--muted2)">${esc(t.cor)}</span>` : '<span style="color:var(--muted2)">—</span>'}</td>
         <td>${state}</td>
         ${readOnly ? '' : `<td>${actions}</td>`}
       </tr>`;
     }).join("");
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Nome</th><th>Código</th><th>Comportamento</th><th>Estado</th>${readOnly ? '' : '<th>Acções</th>'}</tr></thead>
-      <tbody>${rows||"<tr><td colspan=\"5\" class=\"empty\">Sem motivos configurados.</td></tr>"}</tbody>
+      <thead><tr><th>Nome</th><th>Código</th><th>Comportamento</th><th>Cor</th><th>Estado</th>${readOnly ? '' : '<th>Acções</th>'}</tr></thead>
+      <tbody>${rows||"<tr><td colspan=\"6\" class=\"empty\">Sem motivos configurados.</td></tr>"}</tbody>
     </table>`;
   } catch(e) { el.innerHTML = "<div class=\"empty\">Erro ao carregar motivos de justificação.</div>"; }
 }
@@ -1747,13 +1757,14 @@ function sugerirCodigoTipoJustificacao() {
 
 function abrirModalTipoJustificacao(id = null) {
   _tjCodigoEditadoManualmente = false;
-  let codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada';
+  let codigo = '', nome = '', comportamento = 'falta_justificada_nao_remunerada', cor = null;
   if (id) {
     const tj = _tiposJustificacao.find(x => x.id === id);
     if (tj) {
       codigo = tj.codigo;
       nome = tj.nome;
       comportamento = tj.comportamento;
+      cor = tj.cor || null;
     }
   }
   document.getElementById("tjId").value = id || "";
@@ -1761,6 +1772,9 @@ function abrirModalTipoJustificacao(id = null) {
   document.getElementById("tjCodigo").disabled = !!id;
   document.getElementById("tjNome").value = nome;
   document.getElementById("tjComportamento").value = comportamento;
+  document.getElementById("tjCor").value = cor || '#009cbf';
+  document.getElementById("tjSemCor").checked = !cor;
+  document.getElementById("tjCor").disabled = !cor;
   document.getElementById("tjErro").style.display = 'none';
   document.getElementById("modalTipoJustificacaoTitle").textContent = id ? "Editar motivo" : "Novo motivo";
   document.getElementById("modalTipoJustificacao").classList.add("open");
@@ -1773,6 +1787,7 @@ async function guardarTipoJustificacao() {
     nome: document.getElementById("tjNome").value.trim(),
     comportamento: document.getElementById("tjComportamento").value
   };
+  payload.cor = document.getElementById("tjSemCor").checked ? null : document.getElementById("tjCor").value;
 
   const errBox = document.getElementById("tjErro");
   errBox.style.display = 'none';
@@ -1784,6 +1799,7 @@ async function guardarTipoJustificacao() {
     const res = id ? await api("PUT", `/api/tipos-justificacao/${id}`, payload) : await api("POST", "/api/tipos-justificacao", payload);
     if (res.erro) throw new Error(res.mensagem);
     fecharModal("modalTipoJustificacao");
+    _ajTiposCache = [];
     loadTiposJustificacao();
   } catch(e) {
     errBox.textContent = e.message;
