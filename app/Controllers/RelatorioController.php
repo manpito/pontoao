@@ -864,6 +864,9 @@ class RelatorioController
                                 }
                             }
                             $diaInfo['estado'] = 'justificado (' . $motivo . ')';
+                            if ($isAjuste) {
+                                $diaInfo['ajuste_id'] = $estadoDoDia['ajuste_id'];
+                            }
                         }
                     } elseif ($estadoDoDia['estado'] === 'servico_externo') {
                         $diaInfo['estado'] = 'presente';
@@ -896,7 +899,7 @@ class RelatorioController
                     $diaInfo['marcacao_falta_estado'] = $mf['estado'];
                     $diaInfo['marcacao_falta_nota'] = $mf['nota_classificacao'];
 
-                    if ($mf['estado'] === 'pendente') {
+                    if ($mf['estado'] === 'pendente' && empty($diaInfo['ajuste_id'])) {
                         $diaInfo['falta_marcacao'] = true;
                         $diaInfo['estado'] = 'fm';
                         $totalFM++;
