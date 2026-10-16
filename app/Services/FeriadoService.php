@@ -44,20 +44,7 @@ class FeriadoService
      */
     public static function calcularFeriadosMoveis(int $ano): array
     {
-        if (!function_exists('easter_date')) {
-            return self::calcularFeriadosMoveisManual($ano);
-        }
-
-        $timestamp = easter_date($ano);
-        $domingoPascoa = (new DateTimeImmutable('@' . $timestamp))->setTimezone(new \DateTimeZone('UTC'));
-
-        $carnaval = $domingoPascoa->modify('-47 days')->format('Y-m-d');
-        $sextaSanta = $domingoPascoa->modify('-2 days')->format('Y-m-d');
-
-        return [
-            'carnaval' => $carnaval,
-            'sexta_santa' => $sextaSanta,
-        ];
+        return self::calcularFeriadosMoveisManual($ano);
     }
 
     /**
