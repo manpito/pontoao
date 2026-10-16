@@ -171,6 +171,9 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 .aj-cell.aj-feriado { background: var(--s3); color: var(--muted2); }
 .aj-cell.aj-ajuste { border-color: var(--text); font-weight: 700; }
 .aj-cell.aj-picagens::after { content: '•'; display: block; line-height: 6px; font-size: 9px; }
+.aj-cell:not(.aj-vazio) { cursor: pointer; }
+.aj-cell:not(.aj-vazio):hover { outline: 2px solid var(--accent); }
+.aj-aviso { background: rgba(245,158,11,.12); border: 1px solid var(--warn); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 12px; }
 .aj-legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted2); margin-top: 14px; }
 .aj-legenda span.aj-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; border: 1px solid var(--border); }
 .page-title { font-size: 22px; font-weight: 700; }
@@ -1135,6 +1138,29 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
     <div class="modal-foot">
       <button class="btn" onclick="fecharModal('modalTipoJustificacao')">Cancelar</button>
       <button class="btn btn-accent" onclick="guardarTipoJustificacao()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="modalAjusteDia">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="ajDiaTitulo">Ajuste</h3>
+      <button class="modal-close" onclick="fecharModal('modalAjusteDia')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="ajDiaAvisos"></div>
+      <div id="ajDiaExistente" style="display:none;margin-bottom:16px"></div>
+      <div class="form-group"><label>Motivo *</label><select id="ajDiaTipo"></select></div>
+      <div class="form-group"><label>De *</label><input type="date" id="ajDiaInicio"></div>
+      <div class="form-group"><label>Até *</label><input type="date" id="ajDiaFim"></div>
+      <div class="form-group"><label>Nota</label><input id="ajDiaNota" maxlength="500" placeholder="Opcional"></div>
+      <div class="form-group"><label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:12px"><input type="checkbox" id="ajDiaSubstituir" style="width:auto"> Substituir ajustes já existentes neste intervalo</label></div>
+      <div id="ajDiaErro" class="err-box" style="display:none;margin-top:10px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalAjusteDia')">Cancelar</button>
+      <button class="btn btn-accent" id="ajDiaBtnGuardar" onclick="ajGuardarAjuste()">Guardar ajuste</button>
     </div>
   </div>
 </div>
@@ -4667,7 +4693,7 @@ function ajRenderGrelha() {
         if (info.feriado) titulo += ' · Feriado';
         titulo += ' · Estado: ' + (info.estado_dia || '');
       }
-      h += `<td><div class="${cls}" style="${style}" title="${esc(titulo)}">${txt}</div></td>`;
+      h += `<td><div class="${cls}" style="${style}" title="${esc(titulo)}" onclick="ajAbrirDia('${iso}')">${txt}</div></td>`;
     }
     h += '</tr>';
   }
@@ -4678,6 +4704,98 @@ function ajRenderGrelha() {
     '<div><span class="aj-sw" style="background:var(--s2);border-color:var(--text)"></span>Dia com ajuste (cor do motivo)</div>' +
     '<div>• Dia com picagens</div></div>';
   cont.innerHTML = h;
+}
+
+let _ajTiposCache = [];
+let _ajDiaActual = null;
+
+async function ajAbrirDia(iso) {
+  const fid = document.getElementById('ajFuncionario').value;
+  if (!fid || !_ajDadosAno) return;
+  const info = (_ajDadosAno.dias || []).find(d => d.data === iso);
+  if (!info) return;
+  _ajDiaActual = info;
+  document.getElementById('ajDiaErro').style.display = 'none';
+  document.getElementById('ajDiaTitulo').textContent = 'Ajuste · ' + iso.split('-').reverse().join('/');
+  document.getElementById('ajDiaInicio').value = iso;
+  document.getElementById('ajDiaFim').value = iso;
+  document.getElementById('ajDiaNota').value = '';
+  document.getElementById('ajDiaSubstituir').checked = false;
+
+  let avisos = '';
+  if (info.ferias) avisos += '<div class="aj-aviso">Este dia está em férias aprovadas. As férias prevalecem sobre qualquer ajuste: o ajuste não será criado para dias de férias.</div>';
+  if (info.tem_picagens) avisos += '<div class="aj-aviso">Este dia tem picagens. O ajuste fica registado, mas só aparece nas marcações diárias; os restantes relatórios continuam a usar as picagens.</div>';
+  document.getElementById('ajDiaAvisos').innerHTML = avisos;
+
+  const ex = document.getElementById('ajDiaExistente');
+  if (info.ajuste) {
+    ex.style.display = 'block';
+    ex.innerHTML = `<div style="font-size:13px;margin-bottom:8px">Ajuste actual: <strong>${esc(info.ajuste.nome || '')}</strong>${info.ajuste.nota ? ' · ' + esc(info.ajuste.nota) : ''}${info.ajuste.lote_id ? ' · (criado em lote)' : ''}</div>` +
+      `<button class="btn" style="border-color:var(--danger);color:var(--danger)" onclick="ajAnularAjuste(${parseInt(info.ajuste.id, 10)})">Anular este ajuste</button>`;
+  } else {
+    ex.style.display = 'none';
+    ex.innerHTML = '';
+  }
+
+  try {
+    if (!_ajTiposCache.length) {
+      const resT = await api('GET', '/api/tipos-justificacao?activo=1');
+      _ajTiposCache = resT.dados || [];
+    }
+    document.getElementById('ajDiaTipo').innerHTML = _ajTiposCache.map(t => `<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+  } catch (e) { toast(e.message, 'err'); return; }
+  document.getElementById('modalAjusteDia').classList.add('open');
+}
+
+async function ajGuardarAjuste() {
+  const fid = parseInt(document.getElementById('ajFuncionario').value, 10);
+  const tipoId = parseInt(document.getElementById('ajDiaTipo').value, 10);
+  const inicio = document.getElementById('ajDiaInicio').value;
+  const fim = document.getElementById('ajDiaFim').value;
+  const nota = document.getElementById('ajDiaNota').value.trim();
+  const err = document.getElementById('ajDiaErro');
+  err.style.display = 'none';
+  if (!fid || !tipoId) { err.textContent = 'Seleccione o motivo.'; err.style.display = 'block'; return; }
+  if (!inicio || !fim) { err.textContent = 'Indique as datas.'; err.style.display = 'block'; return; }
+  if (inicio > fim) { err.textContent = 'A data inicial não pode ser posterior à final.'; err.style.display = 'block'; return; }
+  const btn = document.getElementById('ajDiaBtnGuardar');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/ajustes', {
+      funcionario_id: fid,
+      tipo_justificacao_id: tipoId,
+      datas: { inicio: inicio, fim: fim },
+      nota: nota || null,
+      substituir: document.getElementById('ajDiaSubstituir').checked
+    });
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao guardar o ajuste.');
+    const d = res.detalhes || {};
+    let msg = (d.criados || 0) + ' dia(s) ajustado(s).';
+    if (d.saltados_ferias) msg += ' ' + d.saltados_ferias + ' em férias (saltados).';
+    if (d.saltados_conflito) msg += ' ' + d.saltados_conflito + ' com ajuste existente (saltados).';
+    if (d.periodo_fechado) msg += ' ' + d.periodo_fechado + ' em período fechado (saltados).';
+    toast(msg, (d.criados || 0) > 0 ? 'ok' : 'err');
+    fecharModal('modalAjusteDia');
+    ajCarregarAno();
+  } catch (e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function ajAnularAjuste(id) {
+  if (!id) return;
+  const motivo = prompt('Motivo da anulação (opcional):');
+  if (motivo === null) return;
+  try {
+    const res = await api('POST', `/api/ajustes/${id}/anular`, { motivo_anulacao: motivo.trim() || null });
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao anular o ajuste.');
+    toast('Ajuste anulado.', 'ok');
+    fecharModal('modalAjusteDia');
+    ajCarregarAno();
+  } catch (e) { toast(e.message, 'err'); }
 }
 
 // ── EXPORTAÇÁO ──
