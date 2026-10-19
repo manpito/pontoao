@@ -709,9 +709,9 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
       </div>
       <div class="toolbar">
         <select class="select-input" id="ajDepFiltro" title="Departamento" onchange="ajFiltrarFuncionarios()" style="min-width:200px"><option value="">Todos os departamentos</option></select>
-        <input class="search-input" type="text" id="ajSearch" title="Pesquisar funcionário" placeholder="Pesquisar nome ou número..." oninput="ajFiltrarFuncionarios()" style="flex:0;width:220px">
+        <input class="search-input" type="text" id="ajSearch" title="Pesquisar funcionário" placeholder="Pesquisar nome ou número..." oninput="ajFiltrarFuncionarios()" style="flex:0 0 260px">
         <select class="select-input" id="ajFuncionario" title="Funcionário" onchange="ajCarregarAno()" style="flex:1;min-width:280px"></select>
-        <input class="search-input" type="number" id="ajAno" title="Ano" placeholder="Ano" min="2000" max="2100" onchange="ajCarregarAno()" style="flex:0;min-width:0;width:110px">
+        <input class="search-input" type="number" id="ajAno" title="Ano" placeholder="Ano" min="2000" max="2100" onchange="ajCarregarAno()" style="flex:0 0 110px;min-width:0">
       </div>
       <div class="card">
         <div class="card-body" id="ajGridContainer" style="overflow-x:auto"><div class="empty">Seleccione um funcionário.</div></div>
