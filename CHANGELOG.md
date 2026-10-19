@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Os campos de data passam a mostrar um ícone de calendário visível no fundo escuro.
 - Corrigida a largura dos campos Ano e Pesquisar na barra de filtros dos Ajustes do Mês: o ano volta a ficar visível.
 - A barra de filtros da página Ajustes do Mês passa a ter o mesmo aspecto da barra de Marcações.
 - As justificações de ausência registadas pelo gestor de RH passam a ficar aprovadas automaticamente, sem necessidade de aprovação posterior. As registadas por supervisores continuam a aguardar aprovação.
