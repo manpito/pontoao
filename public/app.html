@@ -707,25 +707,11 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
           <button class="btn btn-accent" onclick="ajAbrirLote()">Ajuste em lote</button>
         </div>
       </div>
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-body" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
-          <div style="min-width:200px">
-            <label style="font-size:12px;color:var(--muted2)">Departamento</label>
-            <select id="ajDepFiltro" onchange="ajFiltrarFuncionarios()" style="width:100%"><option value="">Todos os departamentos</option></select>
-          </div>
-          <div style="min-width:220px">
-            <label style="font-size:12px;color:var(--muted2)">Pesquisar</label>
-            <input type="text" id="ajSearch" placeholder="Nome ou número" oninput="ajFiltrarFuncionarios()" style="width:100%">
-          </div>
-          <div style="min-width:280px;flex:1">
-            <label style="font-size:12px;color:var(--muted2)">Funcionário</label>
-            <select id="ajFuncionario" onchange="ajCarregarAno()" style="width:100%"></select>
-          </div>
-          <div style="width:110px">
-            <label style="font-size:12px;color:var(--muted2)">Ano</label>
-            <input type="number" id="ajAno" min="2000" max="2100" onchange="ajCarregarAno()" style="width:100%">
-          </div>
-        </div>
+      <div class="toolbar">
+        <select class="select-input" id="ajDepFiltro" title="Departamento" onchange="ajFiltrarFuncionarios()" style="min-width:200px"><option value="">Todos os departamentos</option></select>
+        <input class="search-input" type="text" id="ajSearch" title="Pesquisar funcionário" placeholder="Pesquisar nome ou número..." oninput="ajFiltrarFuncionarios()" style="flex:0;width:220px">
+        <select class="select-input" id="ajFuncionario" title="Funcionário" onchange="ajCarregarAno()" style="flex:1;min-width:280px"></select>
+        <input class="search-input" type="number" id="ajAno" title="Ano" placeholder="Ano" min="2000" max="2100" onchange="ajCarregarAno()" style="flex:0;min-width:0;width:110px">
       </div>
       <div class="card">
         <div class="card-body" id="ajGridContainer" style="overflow-x:auto"><div class="empty">Seleccione um funcionário.</div></div>

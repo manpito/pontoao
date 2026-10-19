@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- A barra de filtros da página Ajustes do Mês passa a ter o mesmo aspecto da barra de Marcações.
 - As justificações de ausência registadas pelo gestor de RH passam a ficar aprovadas automaticamente, sem necessidade de aprovação posterior. As registadas por supervisores continuam a aguardar aprovação.
 - Corrigido o registo do utilizador que cria e do que aprova ou rejeita as justificações de ausência: passa a ficar guardado.
 - Corrigida a renovação automática da sessão no browser: o pedido de renovação passa a identificar o cliente, deixando de terminar a sessão ao fim de uma hora.
