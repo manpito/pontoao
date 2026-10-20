@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Os ícones do menu lateral passam a ser coloridos, no mesmo estilo do ícone do Calendário.
 - O pedido de férias passa a permitir filtrar por departamento e seleccionar vários funcionários de uma vez, submetendo um pedido por funcionário e indicando os que falharam e porquê.
 - Os campos de data passam a mostrar um ícone de calendário visível no fundo escuro.
 - Corrigida a largura dos campos Ano e Pesquisar na barra de filtros dos Ajustes do Mês: o ano volta a ficar visível.
