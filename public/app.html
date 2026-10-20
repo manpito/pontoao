@@ -593,20 +593,28 @@ input[type="month"]::-webkit-calendar-picker-indicator {
           <button class="modal-close" onclick="fecharModal('modalNovoFerias')">✕</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label>Funcionário *</label>
-            <select id="nfFuncionario">
-              <option value="">— Seleccionar —</option>
-            </select>
-          </div>
           <div class="form-row">
             <div class="form-group"><label>Data início *</label><input type="date" id="nfInicio"></div>
             <div class="form-group"><label>Data fim *</label><input type="date" id="nfFim"></div>
           </div>
+          <div class="form-group">
+            <label>Funcionários *</label>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <select id="nfDep" onchange="nfRenderFuncs()" style="flex:1"><option value="">Todos os departamentos</option></select>
+              <input type="text" id="nfSearch" placeholder="Pesquisar nome ou número" oninput="nfRenderFuncs()" style="flex:1">
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="nfMarcarVisiveis(true)">Seleccionar todos os visíveis</button>
+              <button type="button" class="btn" style="padding:4px 10px;font-size:12px" onclick="nfMarcarVisiveis(false)">Limpar visíveis</button>
+            </div>
+            <div class="aj-lote-lista" id="nfFuncs" style="max-height:240px"></div>
+            <div id="nfContador" style="font-size:12px;color:var(--muted2);margin-top:4px">0 seleccionados</div>
+          </div>
+          <div id="nfResultado" class="err-box" style="display:none;margin-top:10px"></div>
         </div>
         <div class="modal-foot">
           <button class="btn" onclick="fecharModal('modalNovoFerias')">Cancelar</button>
-          <button class="btn btn-accent" onclick="guardarNovoFerias()">Submeter</button>
+          <button class="btn btn-accent" id="nfSubmeter" onclick="guardarNovoFerias()">Submeter</button>
         </div>
       </div>
     </div>
@@ -3061,38 +3069,105 @@ async function rejeitarPedidoHE(id) {
   } catch(e) { toast(e.message, 'err'); }
 }
 
+let _nfFuncionarios = [];
+const _nfSel = new Set();
+
 async function abrirModalNovoFerias() {
-  const sel = document.getElementById('nfFuncionario');
-  sel.innerHTML = '<option value="">— Seleccionar —</option>';
-  try {
-    const res = await api('GET', '/api/funcionarios?estado=activo&per_page=200');
-    (res.dados||[]).forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f.id;
-      opt.textContent = f.nome_completo + ' (' + f.numero_funcionario + ')';
-      sel.appendChild(opt);
-    });
-  } catch(_) {}
+  _nfSel.clear();
+  _nfFuncionarios = [];
+  document.getElementById('nfSearch').value = '';
   document.getElementById('nfInicio').value = '';
   document.getElementById('nfFim').value = '';
+  const resBox = document.getElementById('nfResultado');
+  resBox.style.display = 'none';
+  resBox.innerHTML = '';
+  document.getElementById('nfDep').innerHTML = '<option value="">Todos os departamentos</option>';
+  document.getElementById('nfFuncs').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  nfContador();
   document.getElementById('modalNovoFerias').classList.add('open');
+  try {
+    const res = await api('GET', '/api/funcionarios?estado=activo');
+    if (res.erro) throw new Error(res.mensagem || 'Erro ao carregar funcionários.');
+    _nfFuncionarios = res.dados || [];
+  } catch (e) { toast(e.message, 'err'); }
+  const deps = [...new Map(_nfFuncionarios.filter(f => f.departamento_id).map(f => [String(f.departamento_id), String(f.departamento || '')])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  document.getElementById('nfDep').innerHTML = '<option value="">Todos os departamentos</option>' +
+    deps.map(([id, nome]) => `<option value="${esc(id)}">${esc(nome)}</option>`).join('');
+  nfRenderFuncs();
+}
+
+function nfFiltrados() {
+  const search = document.getElementById('nfSearch').value.trim().toLowerCase();
+  const dep = document.getElementById('nfDep').value;
+  return _nfFuncionarios.filter(f =>
+    (!dep || String(f.departamento_id) === dep) &&
+    (!search || String(f.nome_completo).toLowerCase().includes(search) || String(f.numero_funcionario).includes(search)));
+}
+
+function nfRenderFuncs() {
+  const lista = nfFiltrados();
+  document.getElementById('nfFuncs').innerHTML = lista.map(f =>
+    `<label class="aj-chk"><input type="checkbox" ${_nfSel.has(Number(f.id)) ? 'checked' : ''} onchange="nfToggle(${Number(f.id)}, this.checked)"> <span style="font-family:var(--mono);color:var(--muted2);font-size:11px;min-width:48px">${esc(f.numero_funcionario)}</span> ${esc(f.nome_completo)}</label>`
+  ).join('') || '<span style="font-size:12px;color:var(--muted2)">Nenhum resultado.</span>';
+  nfContador();
+}
+
+function nfContador() {
+  const n = _nfSel.size;
+  document.getElementById('nfContador').textContent = n === 1 ? '1 seleccionado' : n + ' seleccionados';
+}
+
+function nfToggle(id, on) {
+  if (on) _nfSel.add(id); else _nfSel.delete(id);
+  nfContador();
+}
+
+function nfMarcarVisiveis(on) {
+  nfFiltrados().forEach(f => { if (on) _nfSel.add(Number(f.id)); else _nfSel.delete(Number(f.id)); });
+  nfRenderFuncs();
 }
 
 async function guardarNovoFerias() {
-  const funcionarioId = document.getElementById('nfFuncionario').value;
-  const dataInicio    = document.getElementById('nfInicio').value;
-  const dataFim       = document.getElementById('nfFim').value;
-  if (!funcionarioId) { toast('Selecciona um funcionário.', 'err'); return; }
+  const ids = [..._nfSel];
+  const dataInicio = document.getElementById('nfInicio').value;
+  const dataFim    = document.getElementById('nfFim').value;
+  const resBox     = document.getElementById('nfResultado');
+  if (!ids.length) { toast('Selecciona pelo menos um funcionário.', 'err'); return; }
   if (!dataInicio || !dataFim) { toast('Preenche as datas.', 'err'); return; }
   if (dataFim < dataInicio) { toast('A data de fim não pode ser anterior à de início.', 'err'); return; }
-  try {
-    const res = await api('POST', '/api/ferias', { funcionario_id: parseInt(funcionarioId), data_inicio: dataInicio, data_fim: dataFim });
-    if (res.erro) throw new Error(res.mensagem);
-    toast(res.mensagem || 'Pedido submetido.', 'ok');
+  const btn = document.getElementById('nfSubmeter');
+  btn.disabled = true;
+  resBox.style.display = 'none';
+  resBox.innerHTML = '';
+  const porId = new Map(_nfFuncionarios.map(f => [Number(f.id), f]));
+  const falhas = [];
+  let ok = 0;
+  for (let i = 0; i < ids.length; i++) {
+    btn.textContent = `A submeter ${i + 1}/${ids.length}…`;
+    try {
+      const res = await api('POST', '/api/ferias', { funcionario_id: ids[i], data_inicio: dataInicio, data_fim: dataFim });
+      if (res.erro) throw new Error(res.mensagem || 'Erro ao submeter.');
+      ok++;
+      _nfSel.delete(ids[i]);
+    } catch (e) {
+      falhas.push({ f: porId.get(ids[i]), msg: e.message });
+    }
+  }
+  btn.disabled = false;
+  btn.textContent = 'Submeter';
+  loadFerias();
+  loadFeriasCount();
+  if (!falhas.length) {
+    toast(ok === 1 ? 'Pedido submetido.' : `${ok} pedidos submetidos.`, 'ok');
     fecharModal('modalNovoFerias');
-    loadFerias();
-    loadFeriasCount();
-  } catch(e) { toast(e.message, 'err'); }
+    return;
+  }
+  if (ok) toast(`${ok} pedido(s) submetido(s).`, 'ok');
+  resBox.innerHTML = `<strong>${falhas.length} pedido(s) não submetido(s).</strong> Os funcionários abaixo continuam seleccionados; corrige e volta a submeter.<br>` +
+    falhas.map(x => `• ${esc(x.f ? x.f.numero_funcionario + ' · ' + x.f.nome_completo : '')}: ${esc(x.msg)}`).join('<br>');
+  resBox.style.display = 'block';
+  nfRenderFuncs();
 }
 
 // ── DEPARTAMENTOS ──
