@@ -1,15 +1,11 @@
 # CHANGELOG
 
-## Actualização — 2026-10-22 — Terminais Dahua no formulário
-
-- Formulário de terminais: nova opção de modelo "Dahua".
-- Backend: o modelo do terminal é validado (zkteco, facepro, dahua, outro) e um valor inválido devolve 400 com mensagem clara, em vez de 500.
-- Backend: tipo_protocolo passa a ser gravado de acordo com o modelo (dahua → dahua) no registo e na edição.
-- Frontend: respostas HTTP de erro (não 2xx) passam a ser mostradas como erro; deixa de aparecer "guardado com sucesso" quando a gravação falha.
-
 ## [Unreleased]
 
 ### Actualização
+- Terminais (PR #124): nova opção de modelo "Dahua"; modelo validado no backend (400 em vez de 500); tipo_protocolo gravado de acordo com o modelo; respostas HTTP de erro passam a ser mostradas no frontend.
+- Terminais: o formulário grava URL, utilizador e palavra-passe do relógio Dahua (palavra-passe cifrada; campo vazio mantém a actual).
+- Segurança: a listagem e o detalhe de terminais deixam de enviar device_password_enc e api_key_hash para o browser.
 - Os ícones do menu lateral passam a ser coloridos, no mesmo estilo do ícone do Calendário.
 - O pedido de férias passa a permitir filtrar por departamento e seleccionar vários funcionários de uma vez, submetendo um pedido por funcionário e indicando os que falharam e porquê.
 - Os campos de data passam a mostrar um ícone de calendário visível no fundo escuro.

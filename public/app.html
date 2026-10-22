@@ -1504,7 +1504,7 @@ input[type="month"]::-webkit-calendar-picker-indicator {
       </div>
       <div class="form-group">
         <label>Modelo</label>
-        <select id="termModelo">
+        <select id="termModelo" onchange="toggleCamposDahua()">
           <option value="zkteco">ZKTeco</option>
           <option value="facepro">FacePro</option>
           <option value="dahua">Dahua</option>
@@ -1512,6 +1512,13 @@ input[type="month"]::-webkit-calendar-picker-indicator {
         </select>
       </div>
       <div class="form-group"><label>Número de Série (SN)</label><input id="termDeviceId" placeholder="Ex: 5450251100118"></div>
+      <div id="termDahuaCampos" style="display:none">
+        <div class="form-group"><label>URL do relógio (Dahua)</label><input id="termDeviceUrl" placeholder="http://192.168.100.101" autocomplete="off"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Utilizador do relógio</label><input id="termDeviceUser" placeholder="admin" autocomplete="off"></div>
+          <div class="form-group"><label>Palavra-passe do relógio</label><input type="password" id="termDevicePass" placeholder="Deixar vazio para manter a actual" autocomplete="new-password"></div>
+        </div>
+      </div>
       <div class="form-group"><label>Departamento por defeito</label><select id="termDepDefault"><option value="">Nenhum</option></select></div>
     </div>
     <div class="modal-foot">
@@ -3649,6 +3656,10 @@ async function abrirModalTerminal(id = null) {
       document.getElementById('termModelo').value = t.modelo || 'zkteco';
       document.getElementById('termDepDefault').value = t.default_departamento_id || '';
       document.getElementById('termDeviceId').value = t.device_id || '';
+      document.getElementById('termDeviceUrl').value = t.device_url || '';
+      document.getElementById('termDeviceUser').value = t.device_user || '';
+      document.getElementById('termDevicePass').value = '';
+      document.getElementById('termDevicePass').placeholder = t.tem_password ? 'Definida — deixar vazio para manter' : 'Ainda não definida';
     }
   } else {
     document.getElementById('termNome').value = '';
@@ -3659,8 +3670,18 @@ async function abrirModalTerminal(id = null) {
     document.getElementById('termModelo').value = 'zkteco';
     document.getElementById('termDepDefault').value = '';
     document.getElementById('termDeviceId').value = '';
+    document.getElementById('termDeviceUrl').value = '';
+    document.getElementById('termDeviceUser').value = '';
+    document.getElementById('termDevicePass').value = '';
+    document.getElementById('termDevicePass').placeholder = 'Ainda não definida';
   }
+  toggleCamposDahua();
   document.getElementById('modalTerminal').classList.add('open');
+}
+
+function toggleCamposDahua() {
+  const isDahua = document.getElementById('termModelo').value === 'dahua';
+  document.getElementById('termDahuaCampos').style.display = isDahua ? '' : 'none';
 }
 
 async function guardarTerminal() {
@@ -3673,7 +3694,10 @@ async function guardarTerminal() {
     porta: parseInt(document.getElementById('termPorta').value),
     modelo: document.getElementById('termModelo').value,
     default_departamento_id: document.getElementById('termDepDefault').value || null,
-    device_id: document.getElementById('termDeviceId').value.trim() || null
+    device_id: document.getElementById('termDeviceId').value.trim() || null,
+    device_url: document.getElementById('termDeviceUrl').value.trim() || null,
+    device_user: document.getElementById('termDeviceUser').value.trim() || null,
+    device_password: document.getElementById('termDevicePass').value
   };
 
   if (!payload.nome || !payload.ip) { toast('Nome e IP são obrigatórios.', 'err'); return; }
