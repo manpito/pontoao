@@ -15,6 +15,8 @@ use Psr\Http\Message\ServerRequestInterface;
  */
 class TerminalController
 {
+    private const MODELOS_VALIDOS = ['zkteco', 'facepro', 'dahua', 'outro'];
+
     /**
      * GET /api/terminais
      */
@@ -151,9 +153,15 @@ class TerminalController
             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Nome e IP são obrigatórios.']);
         }
 
+        $modelo = $body['modelo'] ?? 'zkteco';
+        if (!in_array($modelo, self::MODELOS_VALIDOS, true)) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Modelo inválido. Valores aceites: zkteco, facepro, dahua, outro.']);
+        }
+        $tipoProtocolo = $modelo === 'dahua' ? 'dahua' : 'zkteco';
+
         $stmt = $db->prepare("
-            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, device_id, default_departamento_id, activo, api_key_hash)
-            VALUES (:nome, :loc, :ip, :porta, :modelo, :device_id, :dep_id, 1, :key)
+            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, tipo_protocolo, device_id, default_departamento_id, activo, api_key_hash)
+            VALUES (:nome, :loc, :ip, :porta, :modelo, :tipo_protocolo, :device_id, :dep_id, 1, :key)
         ");
 
         $stmt->execute([
@@ -161,9 +169,10 @@ class TerminalController
             ':loc'     => $body['localizacao'] ?? null,
             ':ip'      => $ip,
             ':porta'   => (int) ($body['porta'] ?? 4370),
-            ':modelo'  => $body['modelo'] ?? 'zkteco',
+            ':modelo'  => $modelo,
+            ':tipo_protocolo' => $tipoProtocolo,
             ':device_id' => trim($body['device_id'] ?? '') ?: null,
-            ':dep_id'  => $body['default_departamento_id'] ? (int) $body['default_departamento_id'] : null,
+            ':dep_id'  => !empty($body['default_departamento_id']) ? (int) $body['default_departamento_id'] : null,
             ':key'     => hash('sha256', bin2hex(random_bytes(16))) // API key inicial aleatória
         ]);
 
@@ -217,10 +226,23 @@ class TerminalController
             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Nome e IP são obrigatórios.']);
         }
 
+        $modelo = $body['modelo'] ?? 'zkteco';
+        if (!in_array($modelo, self::MODELOS_VALIDOS, true)) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Modelo inválido. Valores aceites: zkteco, facepro, dahua, outro.']);
+        }
+
+        // tipo_protocolo: passa a 'dahua' quando o modelo é dahua; volta a 'zkteco'
+        // só se estava em 'dahua' e o modelo deixou de o ser; nos outros casos mantém-se.
         $stmt = $db->prepare("
             UPDATE relogios
             SET nome = :nome, localizacao = :loc, ip = :ip, porta = :porta,
-                modelo = :modelo, device_id = :device_id, default_departamento_id = :dep_id
+                modelo = :modelo,
+                tipo_protocolo = CASE
+                    WHEN :modelo_tp = 'dahua' THEN 'dahua'
+                    WHEN tipo_protocolo = 'dahua' THEN 'zkteco'
+                    ELSE tipo_protocolo
+                END,
+                device_id = :device_id, default_departamento_id = :dep_id
             WHERE id = :id
         ");
 
@@ -229,9 +251,10 @@ class TerminalController
             ':loc'     => $body['localizacao'] ?? null,
             ':ip'      => $ip,
             ':porta'   => (int) ($body['porta'] ?? 4370),
-            ':modelo'  => $body['modelo'] ?? 'zkteco',
+            ':modelo'  => $modelo,
+            ':modelo_tp' => $modelo,
             ':device_id' => trim($body['device_id'] ?? '') ?: null,
-            ':dep_id'  => $body['default_departamento_id'] ? (int) $body['default_departamento_id'] : null,
+            ':dep_id'  => !empty($body['default_departamento_id']) ? (int) $body['default_departamento_id'] : null,
             ':id'      => $id
         ]);
 

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## Actualização — 2026-10-22 — Terminais Dahua no formulário
+
+- Formulário de terminais: nova opção de modelo "Dahua".
+- Backend: o modelo do terminal é validado (zkteco, facepro, dahua, outro) e um valor inválido devolve 400 com mensagem clara, em vez de 500.
+- Backend: tipo_protocolo passa a ser gravado de acordo com o modelo (dahua → dahua) no registo e na edição.
+- Frontend: respostas HTTP de erro (não 2xx) passam a ser mostradas como erro; deixa de aparecer "guardado com sucesso" quando a gravação falha.
+
 ## [Unreleased]
 
 ### Actualização
