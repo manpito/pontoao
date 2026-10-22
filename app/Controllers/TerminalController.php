@@ -18,6 +18,47 @@ class TerminalController
     private const MODELOS_VALIDOS = ['zkteco', 'facepro', 'dahua', 'outro'];
 
     /**
+     * Lê e valida os campos de ligação ao relógio Dahua.
+     * Devolve ['erro' => string|null, 'url' => ?string, 'user' => ?string, 'pw_enc' => ?string].
+     * pw_enc é null quando a palavra-passe vem vazia (no update, mantém a actual).
+     */
+    private function camposDispositivo(array $body): array
+    {
+        $url = trim((string) ($body['device_url'] ?? ''));
+        if ($url !== '' && !preg_match('#^https?://[^\s/]+/?$#', $url)) {
+            return ['erro' => 'URL do relógio inválido. Exemplo: http://192.168.100.101', 'url' => null, 'user' => null, 'pw_enc' => null];
+        }
+        $url  = $url !== '' ? rtrim($url, '/') : null;
+        $user = trim((string) ($body['device_user'] ?? ''));
+        $user = $user !== '' ? $user : null;
+        $pw   = (string) ($body['device_password'] ?? '');
+
+        return [
+            'erro'   => null,
+            'url'    => $url,
+            'user'   => $user,
+            'pw_enc' => $pw !== '' ? $this->cifrarPasswordDispositivo($pw) : null,
+        ];
+    }
+
+    /**
+     * Cifra a palavra-passe do relógio no formato que AgentController decifra
+     * (aes-256-cbc, chave APP_KEY, IV = primeiros 16 caracteres da APP_KEY).
+     */
+    private function cifrarPasswordDispositivo(string $pw): string
+    {
+        $appKey = $_ENV['APP_KEY'] ?? '';
+        if ($appKey === '') {
+            throw new \RuntimeException('APP_KEY não configurada no .env — não é possível cifrar a palavra-passe do relógio.');
+        }
+        $enc = openssl_encrypt($pw, 'aes-256-cbc', $appKey, 0, substr($appKey, 0, 16));
+        if ($enc === false) {
+            throw new \RuntimeException('Falha ao cifrar a palavra-passe do relógio.');
+        }
+        return $enc;
+    }
+
+    /**
      * GET /api/terminais
      */
     public function index(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -38,7 +79,10 @@ class TerminalController
         foreach ($dados as &$d) {
             $ultimo = $d['ultimo_heartbeat'] ? strtotime($d['ultimo_heartbeat']) : 0;
             $d['online'] = (time() - $ultimo) < 7200;
+            $d['tem_password'] = !empty($d['device_password_enc']);
+            unset($d['device_password_enc'], $d['api_key_hash']);
         }
+        unset($d);
 
         return $this->json($response, 200, ['dados' => $dados]);
     }
@@ -159,9 +203,14 @@ class TerminalController
         }
         $tipoProtocolo = $modelo === 'dahua' ? 'dahua' : 'zkteco';
 
+        $disp = $this->camposDispositivo($body);
+        if ($disp['erro'] !== null) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => $disp['erro']]);
+        }
+
         $stmt = $db->prepare("
-            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, tipo_protocolo, device_id, default_departamento_id, activo, api_key_hash)
-            VALUES (:nome, :loc, :ip, :porta, :modelo, :tipo_protocolo, :device_id, :dep_id, 1, :key)
+            INSERT INTO relogios (nome, localizacao, ip, porta, modelo, tipo_protocolo, device_id, device_url, device_user, device_password_enc, default_departamento_id, activo, api_key_hash)
+            VALUES (:nome, :loc, :ip, :porta, :modelo, :tipo_protocolo, :device_id, :device_url, :device_user, :device_password_enc, :dep_id, 1, :key)
         ");
 
         $stmt->execute([
@@ -172,6 +221,9 @@ class TerminalController
             ':modelo'  => $modelo,
             ':tipo_protocolo' => $tipoProtocolo,
             ':device_id' => trim($body['device_id'] ?? '') ?: null,
+            ':device_url' => $disp['url'],
+            ':device_user' => $disp['user'],
+            ':device_password_enc' => $disp['pw_enc'],
             ':dep_id'  => !empty($body['default_departamento_id']) ? (int) $body['default_departamento_id'] : null,
             ':key'     => hash('sha256', bin2hex(random_bytes(16))) // API key inicial aleatória
         ]);
@@ -195,6 +247,9 @@ class TerminalController
         if (!$terminal) {
             return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Terminal não encontrado.']);
         }
+
+        $terminal['tem_password'] = !empty($terminal['device_password_enc']);
+        unset($terminal['device_password_enc'], $terminal['api_key_hash']);
 
         // Departamentos associados
         $stmtDep = $db->prepare("
@@ -231,8 +286,14 @@ class TerminalController
             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Modelo inválido. Valores aceites: zkteco, facepro, dahua, outro.']);
         }
 
+        $disp = $this->camposDispositivo($body);
+        if ($disp['erro'] !== null) {
+            return $this->json($response, 400, ['erro' => true, 'mensagem' => $disp['erro']]);
+        }
+
         // tipo_protocolo: passa a 'dahua' quando o modelo é dahua; volta a 'zkteco'
         // só se estava em 'dahua' e o modelo deixou de o ser; nos outros casos mantém-se.
+        // device_password_enc: palavra-passe vazia no formulário mantém a actual.
         $stmt = $db->prepare("
             UPDATE relogios
             SET nome = :nome, localizacao = :loc, ip = :ip, porta = :porta,
@@ -242,7 +303,9 @@ class TerminalController
                     WHEN tipo_protocolo = 'dahua' THEN 'zkteco'
                     ELSE tipo_protocolo
                 END,
-                device_id = :device_id, default_departamento_id = :dep_id
+                device_id = :device_id, default_departamento_id = :dep_id,
+                device_url = :device_url, device_user = :device_user,
+                device_password_enc = COALESCE(:device_password_enc, device_password_enc)
             WHERE id = :id
         ");
 
@@ -254,6 +317,9 @@ class TerminalController
             ':modelo'  => $modelo,
             ':modelo_tp' => $modelo,
             ':device_id' => trim($body['device_id'] ?? '') ?: null,
+            ':device_url' => $disp['url'],
+            ':device_user' => $disp['user'],
+            ':device_password_enc' => $disp['pw_enc'],
             ':dep_id'  => !empty($body['default_departamento_id']) ? (int) $body['default_departamento_id'] : null,
             ':id'      => $id
         ]);
