@@ -1507,6 +1507,7 @@ input[type="month"]::-webkit-calendar-picker-indicator {
         <select id="termModelo">
           <option value="zkteco">ZKTeco</option>
           <option value="facepro">FacePro</option>
+          <option value="dahua">Dahua</option>
           <option value="outro">Outro</option>
         </select>
       </div>
@@ -3849,7 +3850,9 @@ async function api(method, path, body) {
   if (TENANT) opts.headers['X-Tenant'] = TENANT;
   if (body) opts.body = JSON.stringify(body);
   const res  = await fetch(path, opts);
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch (_) { data = {}; }
+  if (data === null || typeof data !== 'object') data = {};
   if (res.status === 401) {
     if (path.startsWith('/api/auth/')) {
       return data;
@@ -3861,6 +3864,10 @@ async function api(method, path, body) {
     } catch(_) {}
     doLogout();
     throw new Error('Sessão expirada.');
+  }
+  if (!res.ok && !data.erro) {
+    data.erro = true;
+    data.mensagem = data.mensagem || ('Erro do servidor (HTTP ' + res.status + '). A alteração não foi gravada.');
   }
   return data;
 }
