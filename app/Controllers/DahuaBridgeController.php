@@ -7,7 +7,6 @@ namespace App\Controllers;
 use App\Services\TerminalProcessamentoService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
-use Slim\Psr7\Response;
 
 class DahuaBridgeController
 {
@@ -18,20 +17,47 @@ class DahuaBridgeController
         $this->terminalService = new TerminalProcessamentoService();
     }
 
+    /**
+     * POST /dahua/events (rota antiga, autenticação Basic via DahuaBridgeAuthMiddleware).
+     * Os relógios Dahua testados não enviam credenciais no Auto Upload; mantida por compatibilidade.
+     * O relógio é resolvido pelo S/N do evento.
+     */
     public function receive(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $raw = (string) $request->getBody();
-        if (empty($raw)) {
-            // Se para facilitar o testing o input real for lido de php://input:
-            $raw = file_get_contents('php://input');
-            // Num mock request do slim php://input pode não ter nada e estar no body,
-            // então verificamos ambos. O Slim no ambiente HTTP devolve no $request->getBody().
-            if (empty($raw)) {
-                 $raw = (string) $request->getBody();
-            }
+        return $this->processarPedido($request, $response, null);
+    }
+
+    /**
+     * POST /dahua/events/{token}
+     * O token (64 caracteres hexadecimais) identifica o relógio: o seu sha256 está em relogios.api_key_hash.
+     * O S/N de cada evento tem de coincidir com o device_id desse relógio.
+     */
+    public function receiveToken(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $token = strtolower((string) ($args['token'] ?? ''));
+        if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
+            return $response->withStatus(401);
         }
 
-        // Tentar descomprimir
+        [$db, $relogio] = $this->terminalService->resolverRelogioPorToken($token);
+        if (!$db || !$relogio) {
+            return $response->withStatus(401);
+        }
+
+        return $this->processarPedido($request, $response, [$db, $relogio]);
+    }
+
+    /**
+     * Lê o corpo (deflate ou texto), aceita um evento isolado ou um lote {"Events":[...]}
+     * e processa cada evento. Responde sempre 200 a um JSON válido, para o relógio não reenviar.
+     */
+    private function processarPedido(ServerRequestInterface $request, ResponseInterface $response, ?array $contexto): ResponseInterface
+    {
+        $raw = (string) $request->getBody();
+        if ($raw === '') {
+            $raw = (string) file_get_contents('php://input');
+        }
+
         $decoded = @zlib_decode($raw);
         if ($decoded === false) {
             $decoded = @gzuncompress($raw);
@@ -41,73 +67,91 @@ class DahuaBridgeController
         }
 
         $payload = json_decode($decoded, true);
-        if ($payload === null) {
-            error_log("DahuaBridgeController: Failed to decode payload. Decoded string: " . $decoded);
+        if (!is_array($payload)) {
+            error_log('DahuaBridgeController: payload inválido (' . strlen($raw) . ' bytes).');
             return $response->withStatus(400);
         }
 
-        $code = $payload['Code'] ?? '';
+        // Picagens guardadas offline chegam em lote: {"Events":[{...},{...}]}
+        $eventos = (isset($payload['Events']) && is_array($payload['Events'])) ? $payload['Events'] : [$payload];
 
-        if ($code !== 'AccessControl') {
-            $response->getBody()->write(json_encode(["result" => "ok"]));
-            return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+        foreach ($eventos as $evento) {
+            if (is_array($evento)) {
+                $this->processarEvento($evento, $contexto);
+            }
         }
 
-        $data = $payload['Data'] ?? [];
+        $response->getBody()->write(json_encode(['result' => 'ok']));
+        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+    }
 
-        if (empty($data['UserID'])) {
-            $response->getBody()->write(json_encode(["result" => "ok"]));
-            return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+    /**
+     * Processa um evento. $contexto = [PDO, relogio] quando o relógio veio do token;
+     * null na rota antiga (resolve pelo S/N).
+     */
+    private function processarEvento(array $evento, ?array $contexto): void
+    {
+        if (($evento['Code'] ?? '') !== 'AccessControl') {
+            return;
         }
 
-        if (isset($data['FingerPrintData']) || isset($data['Password']) || isset($data['CardNo'])) {
-            $response->getBody()->write(json_encode(["result" => "ok"]));
-            return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+        $data = $evento['Data'] ?? null;
+        if (!is_array($data)) {
+            return;
         }
 
-        $sn = $data['SN'] ?? '';
-        [$db, $relogio] = $this->terminalService->resolverTenantPorSN($sn);
+        // Só aberturas com sucesso. Tentativas falhadas trazem Status 0 (e normalmente UserID vazio).
+        if ((int) ($data['Status'] ?? 0) !== 1) {
+            return;
+        }
+
+        $userId = trim((string) ($data['UserID'] ?? ''));
+        if ($userId === '') {
+            return;
+        }
+
+        // Defesa: eventos com dados biométricos nunca são processados nem registados.
+        if (isset($data['FingerPrintData'])) {
+            return;
+        }
+
+        $sn = (string) ($data['SN'] ?? '');
+
+        if ($contexto === null) {
+            [$db, $relogio] = $this->terminalService->resolverTenantPorSN($sn);
+        } else {
+            [$db, $relogio] = $contexto;
+            if ($sn === '' || $sn !== (string) ($relogio['device_id'] ?? '')) {
+                error_log('DahuaBridgeController: S/N do evento não corresponde ao relógio do token (relogio_id ' . ($relogio['id'] ?? '?') . ').');
+                return;
+            }
+        }
 
         if (!$db || !$relogio) {
-            $response->getBody()->write(json_encode(["result" => "ok"]));
-            return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
+            return;
         }
 
-        $type = $data['Type'] ?? '';
-        $method = $data['Method'] ?? 0;
-
-        $tipo = $type === 'Entry' ? 'entrada' : 'saida';
-
-        $origem = match((int)$method) {
-            1 => 'facial',
-            2 => 'impressao_digital',
-            3 => 'cartao',
-            4 => 'pin',
-            default => 'outro',
-        };
+        $tipo = ($data['Type'] ?? '') === 'Entry' ? 'entrada' : 'saida';
 
         if (isset($data['UTC'])) {
-            $dataHora = date('Y-m-d H:i:s', (int)$data['UTC']);
+            $ts = (int) $data['UTC'];
         } elseif (isset($data['RealUTC'])) {
-            $dataHora = date('Y-m-d H:i:s', (int)$data['RealUTC']);
+            $ts = (int) $data['RealUTC'];
         } else {
-            $dataHora = date('Y-m-d H:i:s');
+            $ts = time();
         }
 
         $registo = [
-            'UserID' => $data['UserID'],
-            'Timestamp' => $dataHora,
-            'tipo_dahua' => $tipo,
-            'origem_dahua' => $origem,
+            'UserID'       => $userId,
+            'Timestamp'    => date('Y-m-d H:i:s', $ts),
+            'tipo_dahua'   => $tipo,
+            'origem_dahua' => 'relogio',
         ];
 
         try {
             $this->terminalService->processarRegisto($db, $relogio, $registo);
         } catch (\Throwable $e) {
-            // se o funcionário não for encontrado etc
+            error_log('DahuaBridgeController: picagem do funcionário ' . $userId . ' no relogio_id ' . ($relogio['id'] ?? '?') . ' não gravada: ' . $e->getMessage());
         }
-
-        $response->getBody()->write(json_encode(["result" => "ok"]));
-        return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     }
 }

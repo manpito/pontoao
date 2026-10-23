@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Tests;
 
 use App\Controllers\DahuaBridgeController;
+use App\Services\TerminalProcessamentoService;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamInterface;
-use App\Services\TerminalProcessamentoService;
 
 class DahuaBridgeControllerTest extends TestCase
 {
+    private const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
     private function createRequestWithBody(string $body): ServerRequestInterface
     {
         $request = $this->createMock(ServerRequestInterface::class);
@@ -24,44 +26,54 @@ class DahuaBridgeControllerTest extends TestCase
 
     private function createResponse(): ResponseInterface
     {
-        $response = new \Slim\Psr7\Response();
-        return $response;
+        return new \Slim\Psr7\Response();
+    }
+
+    private function injectar(DahuaBridgeController $controller, TerminalProcessamentoService $mock): void
+    {
+        $reflection = new \ReflectionClass($controller);
+        $property = $reflection->getProperty('terminalService');
+        $property->setAccessible(true);
+        $property->setValue($controller, $mock);
+    }
+
+    private function picagem(array $extra = []): array
+    {
+        return [
+            'Action' => 'Pulse',
+            'Code'   => 'AccessControl',
+            'Data'   => array_merge([
+                'CardNo' => '132543',
+                'Method' => 6,
+                'SN'     => 'TEST-SN',
+                'Status' => 1,
+                'Type'   => 'Entry',
+                'UTC'    => 1792766283,
+                'UserID' => '132543',
+            ], $extra),
+            'Index' => 0,
+        ];
     }
 
     public function testPayloadAccessControlValido()
     {
-        $payload = json_encode([
-            "Action" => "Pulse",
-            "Code" => "AccessControl",
-            "Data" => [
-                "Method" => 1,
-                "SN" => "TEST-SN",
-                "Type" => "Entry",
-                "UserID" => "1",
-            ],
-            "Index" => 0
-        ]);
-
-        $compressed = gzdeflate($payload);
-        $request = $this->createRequestWithBody($compressed);
+        $request = $this->createRequestWithBody(gzdeflate(json_encode($this->picagem())));
 
         $controller = new DahuaBridgeController();
-        // Since we are not doing a full integration test with DB in this unit test (because we can't easily mock DB without altering TerminalProcessamentoService or using reflection, wait, TerminalProcessamentoService is instantiated inside DahuaBridgeController, we can't easily mock it).
-        // Let's actually use reflection to inject a mock TerminalProcessamentoService.
-
         $mockService = $this->createMock(TerminalProcessamentoService::class);
-        // Expect resolverTenantPorSN to be called
         $mockService->method('resolverTenantPorSN')->with('TEST-SN')->willReturn([
             $this->createMock(\PDO::class),
-            ['id' => 1]
+            ['id' => 1, 'device_id' => 'TEST-SN'],
         ]);
-
-        $mockService->expects($this->once())->method('processarRegisto');
-
-        $reflection = new \ReflectionClass($controller);
-        $property = $reflection->getProperty('terminalService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $mockService);
+        $mockService->expects($this->once())->method('processarRegisto')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->callback(fn ($r) => $r['UserID'] === '132543'
+                    && $r['origem_dahua'] === 'relogio'
+                    && $r['tipo_dahua'] === 'entrada')
+            );
+        $this->injectar($controller, $mockService);
 
         $response = $controller->receive($request, $this->createResponse());
 
@@ -72,24 +84,16 @@ class DahuaBridgeControllerTest extends TestCase
     public function testPayloadDoorStatus()
     {
         $payload = json_encode([
-            "Action" => "Pulse",
-            "Code" => "DoorStatus",
-            "Data" => [
-                "SN" => "TEST-SN",
-                "Status" => "Open"
-            ]
+            'Action' => 'Pulse',
+            'Code'   => 'DoorStatus',
+            'Data'   => ['SN' => 'TEST-SN', 'Status' => 'Open'],
         ]);
-
-        $request = $this->createRequestWithBody($payload); // Uncompressed fallback should work
+        $request = $this->createRequestWithBody($payload);
 
         $controller = new DahuaBridgeController();
         $mockService = $this->createMock(TerminalProcessamentoService::class);
         $mockService->expects($this->never())->method('processarRegisto');
-
-        $reflection = new \ReflectionClass($controller);
-        $property = $reflection->getProperty('terminalService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $mockService);
+        $this->injectar($controller, $mockService);
 
         $response = $controller->receive($request, $this->createResponse());
 
@@ -98,23 +102,26 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testPayloadAccessControlSemUserID()
     {
-        $payload = json_encode([
-            "Code" => "AccessControl",
-            "Data" => [
-                "SN" => "TEST-SN",
-            ]
-        ]);
-
-        $request = $this->createRequestWithBody($payload);
+        $request = $this->createRequestWithBody(json_encode($this->picagem(['UserID' => ''])));
 
         $controller = new DahuaBridgeController();
         $mockService = $this->createMock(TerminalProcessamentoService::class);
         $mockService->expects($this->never())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
 
-        $reflection = new \ReflectionClass($controller);
-        $property = $reflection->getProperty('terminalService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $mockService);
+        $response = $controller->receive($request, $this->createResponse());
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testTentativaFalhadaIgnorada()
+    {
+        $request = $this->createRequestWithBody(json_encode($this->picagem(['Status' => 0, 'ErrorCode' => 16])));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->expects($this->never())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
 
         $response = $controller->receive($request, $this->createResponse());
 
@@ -123,7 +130,7 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testBodyNaoDescomprimivelNaoJSON()
     {
-        $request = $this->createRequestWithBody("random binary non-json string");
+        $request = $this->createRequestWithBody('random binary non-json string');
 
         $controller = new DahuaBridgeController();
 
@@ -134,10 +141,8 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testAutenticacaoMiddlewares()
     {
-        // Testing middleware directly
         $middleware = new \App\Middleware\DahuaBridgeAuthMiddleware();
 
-        // 1. Missing Auth
         $request = $this->createMock(ServerRequestInterface::class);
         $request->method('getHeaderLine')->with('Authorization')->willReturn('');
 
@@ -145,7 +150,6 @@ class DahuaBridgeControllerTest extends TestCase
         $response = clone $middleware->process($request, $handler);
         $this->assertEquals(401, $response->getStatusCode());
 
-        // 2. Invalid Auth
         $request2 = $this->createMock(ServerRequestInterface::class);
         $request2->method('getHeaderLine')->with('Authorization')->willReturn('Basic ' . base64_encode('wrong:pass'));
 
@@ -155,7 +159,6 @@ class DahuaBridgeControllerTest extends TestCase
         $response2 = clone $middleware->process($request2, $handler);
         $this->assertEquals(401, $response2->getStatusCode());
 
-        // 3. Valid Auth
         $request3 = $this->createMock(ServerRequestInterface::class);
         $request3->method('getHeaderLine')->with('Authorization')->willReturn('Basic ' . base64_encode('pontoao:secret'));
 
@@ -166,24 +169,12 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testPayloadComBiometricos()
     {
-        $payload = json_encode([
-            "Code" => "AccessControl",
-            "Data" => [
-                "UserID" => "1",
-                "FingerPrintData" => base64_encode("dummy"),
-            ]
-        ]);
-
-        $request = $this->createRequestWithBody($payload);
+        $request = $this->createRequestWithBody(json_encode($this->picagem(['FingerPrintData' => base64_encode('dummy')])));
 
         $controller = new DahuaBridgeController();
         $mockService = $this->createMock(TerminalProcessamentoService::class);
         $mockService->expects($this->never())->method('processarRegisto');
-
-        $reflection = new \ReflectionClass($controller);
-        $property = $reflection->getProperty('terminalService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $mockService);
+        $this->injectar($controller, $mockService);
 
         $response = $controller->receive($request, $this->createResponse());
 
@@ -192,28 +183,110 @@ class DahuaBridgeControllerTest extends TestCase
 
     public function testSNDesconhecido()
     {
-        $payload = json_encode([
-            "Code" => "AccessControl",
-            "Data" => [
-                "UserID" => "1",
-                "SN" => "UNKNOWN",
-            ]
-        ]);
-
-        $request = $this->createRequestWithBody($payload);
+        $request = $this->createRequestWithBody(json_encode($this->picagem(['SN' => 'UNKNOWN'])));
 
         $controller = new DahuaBridgeController();
         $mockService = $this->createMock(TerminalProcessamentoService::class);
         $mockService->method('resolverTenantPorSN')->with('UNKNOWN')->willReturn([null, null]);
         $mockService->expects($this->never())->method('processarRegisto');
-
-        $reflection = new \ReflectionClass($controller);
-        $property = $reflection->getProperty('terminalService');
-        $property->setAccessible(true);
-        $property->setValue($controller, $mockService);
+        $this->injectar($controller, $mockService);
 
         $response = $controller->receive($request, $this->createResponse());
 
         $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testLoteOffline()
+    {
+        $lote = [
+            'Events' => [
+                array_merge($this->picagem(), ['DataSource' => 'Offline']),
+                array_merge($this->picagem(['UTC' => 1792766400]), ['DataSource' => 'Offline']),
+                ['Code' => 'DoorStatus', 'Data' => ['SN' => 'TEST-SN', 'Status' => 'Open']],
+            ],
+        ];
+        $request = $this->createRequestWithBody(gzdeflate(json_encode($lote)));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverTenantPorSN')->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 1, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->exactly(2))->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receive($request, $this->createResponse());
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testTokenFormatoInvalido()
+    {
+        $request = $this->createRequestWithBody(json_encode($this->picagem()));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->expects($this->never())->method('resolverRelogioPorToken');
+        $mockService->expects($this->never())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receiveToken($request, $this->createResponse(), ['token' => 'abc']);
+
+        $this->assertEquals(401, $response->getStatusCode());
+    }
+
+    public function testTokenDesconhecido()
+    {
+        $request = $this->createRequestWithBody(json_encode($this->picagem()));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverRelogioPorToken')->with(self::TOKEN)->willReturn([null, null]);
+        $mockService->expects($this->never())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receiveToken($request, $this->createResponse(), ['token' => self::TOKEN]);
+
+        $this->assertEquals(401, $response->getStatusCode());
+    }
+
+    public function testTokenComSNDiferente()
+    {
+        $request = $this->createRequestWithBody(json_encode($this->picagem(['SN' => 'OUTRO-SN'])));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverRelogioPorToken')->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 5, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->never())->method('processarRegisto');
+        $mockService->expects($this->never())->method('resolverTenantPorSN');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receiveToken($request, $this->createResponse(), ['token' => self::TOKEN]);
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testTokenValido()
+    {
+        $request = $this->createRequestWithBody(gzdeflate(json_encode($this->picagem())));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverRelogioPorToken')->with(self::TOKEN)->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 5, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->never())->method('resolverTenantPorSN');
+        $mockService->expects($this->once())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receiveToken($request, $this->createResponse(), ['token' => self::TOKEN]);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('{"result":"ok"}', (string) $response->getBody());
     }
 }

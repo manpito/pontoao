@@ -245,4 +245,48 @@ class TerminalProcessamentoService
 
         return [$db, $relogio];
     }
+
+    /**
+     * Encontra o relógio Dahua activo cujo api_key_hash é o sha256 do token.
+     * Devolve [PDO, relogio] ou [null, null]. Nunca usa fallback.
+     */
+    public function resolverRelogioPorToken(string $token): array
+    {
+        $hash = hash('sha256', $token);
+
+        $masterDsn = "mysql:host=" . ($_ENV['DB_MASTER_HOST'] ?? 'localhost') .
+                     ";dbname=" . ($_ENV['DB_MASTER_DATABASE'] ?? '') . ";charset=utf8mb4";
+        try {
+            $master  = new \PDO($masterDsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+            $stmt    = $master->prepare("SELECT db_nome, db_host FROM tenants LIMIT 100");
+            $stmt->execute();
+            $tenants = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+            foreach ($tenants as $tenant) {
+                $dsn = "mysql:host=" . ($tenant['db_host'] ?? 'localhost') .
+                       ";dbname=" . $tenant['db_nome'] . ";charset=utf8mb4";
+                try {
+                    $tdb   = new \PDO($dsn, $_ENV['DB_MASTER_USERNAME'], $_ENV['DB_MASTER_PASSWORD']);
+                    $stmt2 = $tdb->prepare("
+                        SELECT * FROM relogios
+                        WHERE api_key_hash = :h
+                          AND tipo_protocolo = 'dahua'
+                          AND activo = 1
+                        LIMIT 1
+                    ");
+                    $stmt2->execute([':h' => $hash]);
+                    $rel = $stmt2->fetch(\PDO::FETCH_ASSOC);
+                    if ($rel) {
+                        return [$tdb, $rel];
+                    }
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->log("ERRO master DB (token Dahua): " . $e->getMessage());
+        }
+
+        return [null, null];
+    }
 }
