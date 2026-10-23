@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Relógios Dahua: o endpoint /dahua/events passa a responder 401 com o cabeçalho WWW-Authenticate (Basic), para os relógios enviarem as credenciais e as picagens entrarem no PontoAO.
 - Terminais (PR #124): nova opção de modelo "Dahua"; modelo validado no backend (400 em vez de 500); tipo_protocolo gravado de acordo com o modelo; respostas HTTP de erro passam a ser mostradas no frontend.
 - Terminais: o formulário grava URL, utilizador e palavra-passe do relógio Dahua (palavra-passe cifrada; campo vazio mantém a actual).
 - Segurança: a listagem e o detalhe de terminais deixam de enviar device_password_enc e api_key_hash para o browser.
