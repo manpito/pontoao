@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Relógios Dahua: a resposta do endpoint de eventos passa a levar Content-Length (o relógio não aceita respostas em chunked e reenviava o mesmo evento).
 - Relógios Dahua: o endpoint de eventos passa a responder {"Result":true}, a confirmação que os relógios esperam; sem ela o relógio reenviava o mesmo evento e as picagens seguintes ficavam presas.
 - Relógios Dahua: o corpo dos eventos passa a ser lido primeiro como JSON de texto (os relógios enviam "Content-Encoding: deflate" mas o corpo vem sem compressão), corrigindo o erro 400 que impedia a gravação das picagens.
 - Relógios Dahua: nova rota /dahua/events/{token} (token por relógio, os relógios não enviam credenciais); picagens offline em lote passam a ser processadas; só aberturas com sucesso; picagens com cartão deixam de ser descartadas; origem gravada como "relogio".

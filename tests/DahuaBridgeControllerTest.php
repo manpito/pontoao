@@ -325,5 +325,6 @@ class DahuaBridgeControllerTest extends TestCase
 
         $this->assertEquals(200, $response->getStatusCode());
         $this->assertEquals('{"Result":true}', (string) $response->getBody());
+        $this->assertEquals('15', $response->getHeaderLine('Content-Length'));
     }
 }
