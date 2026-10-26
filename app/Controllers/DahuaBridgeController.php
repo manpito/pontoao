@@ -145,7 +145,7 @@ class DahuaBridgeController
             return;
         }
 
-        $tipo = ($data['Type'] ?? '') === 'Entry' ? 'entrada' : 'saida';
+        $tipo = $this->mapearTipoDahua($data);
 
         if (isset($data['UTC'])) {
             $ts = (int) $data['UTC'];
@@ -167,5 +167,28 @@ class DahuaBridgeController
         } catch (\Throwable $e) {
             error_log('DahuaBridgeController: picagem do funcionário ' . $userId . ' no relogio_id ' . ($relogio['id'] ?? '?') . ' não gravada: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Converte o estado de assiduidade do relógio Dahua no tipo de marcação.
+     * O relógio envia sempre Type = "Entry"; o estado real vem em AttendanceState
+     * (função "Attendance" ligada no relógio). Valores confirmados em teste real.
+     * 5 e 6 (horas extra) seguem a regra dos ZKTeco: tipos ignorados pelo cálculo de horas.
+     */
+    private function mapearTipoDahua(array $data): string
+    {
+        if (isset($data['AttendanceState'])) {
+            switch ((int) $data['AttendanceState']) {
+                case 1: return 'entrada';
+                case 2: return 'inicio_intervalo';
+                case 3: return 'fim_intervalo';
+                case 4: return 'saida';
+                case 5: return 'saida_servico';
+                case 6: return 'regresso_servico';
+            }
+        }
+
+        // Sem AttendanceState (função desligada no relógio) ou valor desconhecido: comportamento anterior.
+        return ($data['Type'] ?? '') === 'Entry' ? 'entrada' : 'saida';
     }
 }

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Relógios Dahua: o tipo da marcação passa a vir do estado de assiduidade do relógio (AttendanceState: entrada, intervalo, saída, horas extra), em vez de ficar sempre "entrada". Requer a função "Attendance" ligada no relógio.
 - Relógios Dahua: a resposta do endpoint de eventos passa a levar Content-Length (o relógio não aceita respostas em chunked e reenviava o mesmo evento).
 - Relógios Dahua: o endpoint de eventos passa a responder {"Result":true}, a confirmação que os relógios esperam; sem ela o relógio reenviava o mesmo evento e as picagens seguintes ficavam presas.
 - Relógios Dahua: o corpo dos eventos passa a ser lido primeiro como JSON de texto (os relógios enviam "Content-Encoding: deflate" mas o corpo vem sem compressão), corrigindo o erro 400 que impedia a gravação das picagens.
