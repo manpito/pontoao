@@ -58,15 +58,23 @@ class DahuaBridgeController
             $raw = (string) file_get_contents('php://input');
         }
 
-        $decoded = @zlib_decode($raw);
-        if ($decoded === false) {
-            $decoded = @gzuncompress($raw);
-        }
-        if ($decoded === false) {
-            $decoded = $raw;
+        // Os relógios Dahua enviam "Content-Encoding: deflate" mas o corpo chega em JSON de texto.
+        // Tentar primeiro o JSON directo: num texto que começa por "{\n", o zlib_decode não falha,
+        // devolve lixo. Só depois tentar as descompressões, aceitando a primeira que dê JSON válido.
+        $payload = json_decode($raw, true);
+        if (!is_array($payload)) {
+            foreach (['zlib_decode', 'gzinflate', 'gzuncompress'] as $funcao) {
+                $decoded = @$funcao($raw);
+                if ($decoded === false) {
+                    continue;
+                }
+                $payload = json_decode($decoded, true);
+                if (is_array($payload)) {
+                    break;
+                }
+            }
         }
 
-        $payload = json_decode($decoded, true);
         if (!is_array($payload)) {
             error_log('DahuaBridgeController: payload inválido (' . strlen($raw) . ' bytes).');
             return $response->withStatus(400);

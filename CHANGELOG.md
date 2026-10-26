@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Relógios Dahua: o corpo dos eventos passa a ser lido primeiro como JSON de texto (os relógios enviam "Content-Encoding: deflate" mas o corpo vem sem compressão), corrigindo o erro 400 que impedia a gravação das picagens.
 - Relógios Dahua: nova rota /dahua/events/{token} (token por relógio, os relógios não enviam credenciais); picagens offline em lote passam a ser processadas; só aberturas com sucesso; picagens com cartão deixam de ser descartadas; origem gravada como "relogio".
 - Relógios Dahua: o endpoint /dahua/events passa a responder 401 com o cabeçalho WWW-Authenticate (Basic), para os relógios enviarem as credenciais e as picagens entrarem no PontoAO.
 - Terminais (PR #124): nova opção de modelo "Dahua"; modelo validado no backend (400 em vez de 500); tipo_protocolo gravado de acordo com o modelo; respostas HTTP de erro passam a ser mostradas no frontend.
