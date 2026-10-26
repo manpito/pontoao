@@ -81,6 +81,43 @@ class DahuaBridgeControllerTest extends TestCase
         $this->assertEquals('{"result":"ok"}', (string) $response->getBody());
     }
 
+    public function testCorpoJsonFormatadoSemCompressao()
+    {
+        // Formato real dos relógios: JSON de texto formatado, apesar de Content-Encoding: deflate.
+        $request = $this->createRequestWithBody(json_encode($this->picagem(), JSON_PRETTY_PRINT));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverTenantPorSN')->with('TEST-SN')->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 1, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->once())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receive($request, $this->createResponse());
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testCorpoRawDeflate()
+    {
+        $request = $this->createRequestWithBody(gzdeflate(json_encode($this->picagem(), JSON_PRETTY_PRINT)));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverTenantPorSN')->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 1, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->once())->method('processarRegisto');
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receive($request, $this->createResponse());
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
     public function testPayloadDoorStatus()
     {
         $payload = json_encode([
