@@ -78,7 +78,7 @@ class DahuaBridgeControllerTest extends TestCase
         $response = $controller->receive($request, $this->createResponse());
 
         $this->assertEquals(200, $response->getStatusCode());
-        $this->assertEquals('{"result":"ok"}', (string) $response->getBody());
+        $this->assertEquals('{"Result":true}', (string) $response->getBody());
     }
 
     public function testCorpoJsonFormatadoSemCompressao()
@@ -324,6 +324,6 @@ class DahuaBridgeControllerTest extends TestCase
         $response = $controller->receiveToken($request, $this->createResponse(), ['token' => self::TOKEN]);
 
         $this->assertEquals(200, $response->getStatusCode());
-        $this->assertEquals('{"result":"ok"}', (string) $response->getBody());
+        $this->assertEquals('{"Result":true}', (string) $response->getBody());
     }
 }
