@@ -89,7 +89,9 @@ class DahuaBridgeController
             }
         }
 
-        $response->getBody()->write(json_encode(['result' => 'ok']));
+        // Os relógios Dahua só dão o evento como entregue com {"Result":true};
+        // com outra resposta reenviam o mesmo evento e a fila de picagens não avança.
+        $response->getBody()->write(json_encode(['Result' => true]));
         return $response->withStatus(200)->withHeader('Content-Type', 'application/json');
     }
 
