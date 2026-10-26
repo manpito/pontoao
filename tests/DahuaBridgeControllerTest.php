@@ -118,6 +118,45 @@ class DahuaBridgeControllerTest extends TestCase
         $this->assertEquals(200, $response->getStatusCode());
     }
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('estadosAssiduidade')]
+    public function testAttendanceStateDefineTipo(?int $estado, string $tipoEsperado)
+    {
+        $extra = $estado === null ? [] : ['AttendanceState' => $estado];
+        $request = $this->createRequestWithBody(json_encode($this->picagem($extra), JSON_PRETTY_PRINT));
+
+        $controller = new DahuaBridgeController();
+        $mockService = $this->createMock(TerminalProcessamentoService::class);
+        $mockService->method('resolverTenantPorSN')->willReturn([
+            $this->createMock(\PDO::class),
+            ['id' => 1, 'device_id' => 'TEST-SN'],
+        ]);
+        $mockService->expects($this->once())->method('processarRegisto')
+            ->with(
+                $this->anything(),
+                $this->anything(),
+                $this->callback(fn ($r) => $r['tipo_dahua'] === $tipoEsperado)
+            );
+        $this->injectar($controller, $mockService);
+
+        $response = $controller->receive($request, $this->createResponse());
+
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public static function estadosAssiduidade(): array
+    {
+        return [
+            'check in'            => [1, 'entrada'],
+            'break out'           => [2, 'inicio_intervalo'],
+            'break in'            => [3, 'fim_intervalo'],
+            'check out'           => [4, 'saida'],
+            'overtime check in'   => [5, 'saida_servico'],
+            'overtime check out'  => [6, 'regresso_servico'],
+            'valor desconhecido'  => [9, 'entrada'],
+            'sem AttendanceState' => [null, 'entrada'],
+        ];
+    }
+
     public function testPayloadDoorStatus()
     {
         $payload = json_encode([
