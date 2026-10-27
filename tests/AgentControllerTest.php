@@ -30,7 +30,10 @@ class AgentControllerTest extends TestCase
             VALUES (1, '0001', 'MARCO CARNEIRO', 'Marco', 2, 'activo');
 
             INSERT INTO funcionarios (id, numero_funcionario, nome_completo, nome, departamento_id, estado)
-            VALUES (2, '0002', 'JOAO SILVA', 'Joao', 1, 'inactivo');
+            VALUES (2, '0002', 'JOAO SILVA', 'Joao', 1, 'desligado');
+
+            INSERT INTO funcionarios (id, numero_funcionario, nome_completo, nome, departamento_id, estado)
+            VALUES (3, '0003', 'ANA COSTA', 'Ana', 1, 'suspenso');
         ");
 
         $appKey = '12345678901234567890123456789012'; // 32 chars
@@ -145,8 +148,12 @@ class AgentControllerTest extends TestCase
 
         $body = json_decode((string) $response->getBody(), true);
         $this->assertArrayHasKey('funcionarios', $body);
-        $this->assertCount(2, $body['funcionarios']);
+        $this->assertCount(3, $body['funcionarios']);
         $this->assertEquals('MARCO CARNEIRO', $body['funcionarios'][0]['nome_completo']);
+
+        $estados = array_column($body['funcionarios'], 'estado', 'numero_funcionario');
+        $this->assertEquals(['0001' => 'activo', '0002' => 'desligado', '0003' => 'suspenso'], $estados);
+        $this->assertNotNull($body['funcionarios'][0]['atualizado_em']);
     }
 
     // 2. Middleware sem chave ou com chave desconhecida -> 401

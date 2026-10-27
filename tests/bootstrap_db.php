@@ -22,7 +22,8 @@ function bootstrap_db(): PDO
             cargo_id INTEGER,
             horario_id INTEGER,
             data_admissao TEXT,
-            estado TEXT DEFAULT 'activo'
+            estado TEXT DEFAULT 'activo',
+            actualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE departamentos (

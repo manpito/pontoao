@@ -30,7 +30,7 @@ class AgentController
                 f.estado,
                 f.actualizado_em AS atualizado_em
             FROM funcionarios f
-            WHERE f.estado IN ('activo', 'inactivo')
+            WHERE f.estado IN ('activo', 'suspenso', 'desligado')
             ORDER BY f.numero_funcionario ASC
         ");
 
