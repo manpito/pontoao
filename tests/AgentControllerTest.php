@@ -35,7 +35,77 @@ class AgentControllerTest extends TestCase
 
         $appKey = '12345678901234567890123456789012'; // 32 chars
         $_ENV['APP_KEY'] = $appKey;
-        $_ENV['AGENT_API_KEY_HASH'] = hash('sha256', 'agent-secret');
+    }
+
+    /**
+     * Base master mínima em SQLite: tenants + agent_chaves.
+     */
+    private function criarMaster(): PDO
+    {
+        $master = new PDO('sqlite::memory:');
+        $master->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $master->exec("
+            CREATE TABLE tenants (
+                id INTEGER PRIMARY KEY,
+                subdominio TEXT NOT NULL
+            );
+
+            CREATE TABLE agent_chaves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tenant_id INTEGER NOT NULL,
+                chave_hash TEXT NOT NULL UNIQUE,
+                relogio_id INTEGER NULL,
+                criado_por_utilizador_id INTEGER NULL,
+                criado_em TEXT NOT NULL,
+                revogada_em TEXT NULL,
+                ultimo_uso_em TEXT NULL
+            );
+
+            INSERT INTO tenants (id, subdominio) VALUES (1, 'tenant1'), (2, 'tenant2');
+        ");
+        return $master;
+    }
+
+    private function inserirChave(PDO $master, int $tenantId, string $chave, ?string $revogadaEm = null): void
+    {
+        $stmt = $master->prepare("
+            INSERT INTO agent_chaves (tenant_id, chave_hash, criado_em, revogada_em)
+            VALUES (:tid, :hash, '2026-10-27 10:00:00', :rev)
+        ");
+        $stmt->execute([':tid' => $tenantId, ':hash' => hash('sha256', $chave), ':rev' => $revogadaEm]);
+    }
+
+    /**
+     * Middleware com a base master e a base do tenant substituídas por SQLite.
+     */
+    private function middlewareComMaster(PDO $master): AgentAuthMiddleware
+    {
+        return new class($master, $this->pdo) extends AgentAuthMiddleware {
+            public function __construct(private PDO $masterTeste, private PDO $tenantTeste)
+            {
+            }
+
+            protected function master(): PDO
+            {
+                return $this->masterTeste;
+            }
+
+            protected function abrirTenant(string $subdominio): PDO
+            {
+                return $this->tenantTeste;
+            }
+        };
+    }
+
+    private function requestComCabecalhos(string $authorization, string $tenant): ServerRequestInterface
+    {
+        $request = $this->createRequest();
+        $request->method('getHeaderLine')->willReturnMap([
+            ['Authorization', $authorization],
+            ['X-Tenant-ID', $tenant],
+        ]);
+        $request->method('withAttribute')->willReturnSelf();
+        return $request;
     }
 
     private function createRequestWithBody(string $body): ServerRequestInterface
@@ -79,33 +149,88 @@ class AgentControllerTest extends TestCase
         $this->assertEquals('MARCO CARNEIRO', $body['funcionarios'][0]['nome_completo']);
     }
 
-    // 2. Middleware test without API key -> 401
+    // 2. Middleware sem chave ou com chave desconhecida -> 401
     public function testMiddlewareSemApiKey(): void
     {
-        $middleware = new AgentAuthMiddleware();
-
-        // Sem authorization
-        $request = $this->createRequest();
-        $request->method('getHeaderLine')->willReturnMap([
-            ['Authorization', ''],
-            ['X-Tenant-ID', 'tenant1']
-        ]);
+        $master = $this->criarMaster();
+        $this->inserirChave($master, 1, 'chave-tenant1');
+        $middleware = $this->middlewareComMaster($master);
 
         $handler = $this->createMock(RequestHandlerInterface::class);
         $handler->expects($this->never())->method('handle');
 
-        $response = $middleware->process($request, $handler);
+        // Sem authorization
+        $response = $middleware->process($this->requestComCabecalhos('', 'tenant1'), $handler);
         $this->assertEquals(401, $response->getStatusCode());
 
-        // Com authorization errada
-        $request2 = $this->createRequest();
-        $request2->method('getHeaderLine')->willReturnMap([
-            ['Authorization', 'Bearer invalid-key'],
-            ['X-Tenant-ID', 'tenant1']
-        ]);
-
-        $response2 = $middleware->process($request2, $handler);
+        // Com chave desconhecida
+        $response2 = $middleware->process($this->requestComCabecalhos('Bearer invalid-key', 'tenant1'), $handler);
         $this->assertEquals(401, $response2->getStatusCode());
+
+        // Sem X-Tenant-ID
+        $response3 = $middleware->process($this->requestComCabecalhos('Bearer chave-tenant1', ''), $handler);
+        $this->assertEquals(401, $response3->getStatusCode());
+    }
+
+    // 2b. Chave válida do próprio tenant -> passa e regista o último uso
+    public function testMiddlewareChaveValidaDoTenant(): void
+    {
+        $master = $this->criarMaster();
+        $this->inserirChave($master, 1, 'chave-tenant1');
+        $middleware = $this->middlewareComMaster($master);
+
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->expects($this->once())->method('handle')->willReturn(new \Slim\Psr7\Response(200));
+
+        $response = $middleware->process($this->requestComCabecalhos('Bearer chave-tenant1', 'tenant1'), $handler);
+        $this->assertEquals(200, $response->getStatusCode());
+
+        $ultimoUso = $master->query("SELECT ultimo_uso_em FROM agent_chaves WHERE tenant_id = 1")->fetchColumn();
+        $this->assertNotNull($ultimoUso);
+    }
+
+    // 2c. Chave de um tenant usada com o X-Tenant-ID de outro -> 401
+    public function testMiddlewareChaveDeOutroTenant(): void
+    {
+        $master = $this->criarMaster();
+        $this->inserirChave($master, 1, 'chave-tenant1');
+        $middleware = $this->middlewareComMaster($master);
+
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->expects($this->never())->method('handle');
+
+        $response = $middleware->process($this->requestComCabecalhos('Bearer chave-tenant1', 'tenant2'), $handler);
+        $this->assertEquals(401, $response->getStatusCode());
+    }
+
+    // 2d. Chave revogada -> 401
+    public function testMiddlewareChaveRevogada(): void
+    {
+        $master = $this->criarMaster();
+        $this->inserirChave($master, 1, 'chave-antiga', '2026-10-27 11:00:00');
+        $middleware = $this->middlewareComMaster($master);
+
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->expects($this->never())->method('handle');
+
+        $response = $middleware->process($this->requestComCabecalhos('Bearer chave-antiga', 'tenant1'), $handler);
+        $this->assertEquals(401, $response->getStatusCode());
+    }
+
+    // 2e. A chave global antiga do .env deixa de ser aceite
+    public function testMiddlewareIgnoraChaveGlobalDoEnv(): void
+    {
+        $_ENV['AGENT_API_KEY_HASH'] = hash('sha256', 'agent-secret');
+        $master = $this->criarMaster();
+        $middleware = $this->middlewareComMaster($master);
+
+        $handler = $this->createMock(RequestHandlerInterface::class);
+        $handler->expects($this->never())->method('handle');
+
+        $response = $middleware->process($this->requestComCabecalhos('Bearer agent-secret', 'tenant1'), $handler);
+        $this->assertEquals(401, $response->getStatusCode());
+
+        unset($_ENV['AGENT_API_KEY_HASH']);
     }
 
     // 3. GET /api/agent/relogios with valid API key -> 200 and decrypted password

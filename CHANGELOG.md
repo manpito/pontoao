@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Segurança (agente PontoAO): a chave do agente passa a ser por instalação e por tenant, guardada na base master (tabela agent_chaves, só o hash). O agente só acede ao tenant da sua chave; descarregar um novo instalador revoga as chaves anteriores desse tenant; o download deixa de alterar o .env de produção e a variável AGENT_API_KEY_HASH deixa de ser usada.
 - Relógios Dahua: o tipo da marcação passa a vir do estado de assiduidade do relógio (AttendanceState: entrada, intervalo, saída, horas extra), em vez de ficar sempre "entrada". Requer a função "Attendance" ligada no relógio.
 - Relógios Dahua: a resposta do endpoint de eventos passa a levar Content-Length (o relógio não aceita respostas em chunked e reenviava o mesmo evento).
 - Relógios Dahua: o endpoint de eventos passa a responder {"Result":true}, a confirmação que os relógios esperam; sem ela o relógio reenviava o mesmo evento e as picagens seguintes ficavam presas.
