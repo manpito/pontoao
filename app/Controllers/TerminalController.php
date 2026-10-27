@@ -111,19 +111,43 @@ class TerminalController
         // implementar resolução de domínio por tenant (ver tabela de tenants na base master).
         $pontoaoUrl = rtrim($_ENV['APP_URL'] ?? 'https://rh.ftl-angola.net', '/');
 
-        // Gerar chave nova para esta instalação
-        $rawKey  = bin2hex(random_bytes(16)); // 32 caracteres hex
+        // Gerar chave nova para esta instalação, ligada a este tenant (tabela agent_chaves na base master).
+        // Só o sha256 fica guardado; a chave em claro existe apenas no config.ini do .zip.
+        // Uma instalação por tenant: as chaves anteriores deste tenant ficam revogadas.
+        $rawKey  = bin2hex(random_bytes(32)); // 64 caracteres hex
         $keyHash = hash('sha256', $rawKey);
 
-        // Actualizar AGENT_API_KEY_HASH no .env (substituir a linha existente)
-        $envPath = __DIR__ . '/../../.env';
-        $envContent = file_get_contents($envPath);
-        if (preg_match('/^AGENT_API_KEY_HASH=.*/m', $envContent)) {
-            $envContent = preg_replace('/^AGENT_API_KEY_HASH=.*/m', "AGENT_API_KEY_HASH=$keyHash", $envContent);
-        } else {
-            $envContent .= "\nAGENT_API_KEY_HASH=$keyHash\n";
+        $master = Database::master();
+        $stmtTenant = $master->prepare("SELECT id FROM tenants WHERE subdominio = :sub LIMIT 1");
+        $stmtTenant->execute([':sub' => $sub]);
+        $tenantMasterId = $stmtTenant->fetchColumn();
+
+        if ($tenantMasterId === false) {
+            return $this->json($response, 500, ['erro' => true, 'mensagem' => 'Tenant não encontrado na base master.']);
         }
-        file_put_contents($envPath, $envContent);
+
+        $agora = date('Y-m-d H:i:s');
+        try {
+            $master->beginTransaction();
+            $master->prepare("UPDATE agent_chaves SET revogada_em = :agora WHERE tenant_id = :tid AND revogada_em IS NULL")
+                   ->execute([':agora' => $agora, ':tid' => (int) $tenantMasterId]);
+            $master->prepare("
+                INSERT INTO agent_chaves (tenant_id, chave_hash, relogio_id, criado_por_utilizador_id, criado_em)
+                VALUES (:tid, :hash, :relogio, :utilizador, :agora)
+            ")->execute([
+                ':tid'        => (int) $tenantMasterId,
+                ':hash'       => $keyHash,
+                ':relogio'    => $id,
+                ':utilizador' => $request->getAttribute('auth_user_id'),
+                ':agora'      => $agora,
+            ]);
+            $master->commit();
+        } catch (\Throwable $e) {
+            if ($master->inTransaction()) {
+                $master->rollBack();
+            }
+            return $this->json($response, 500, ['erro' => true, 'mensagem' => 'Não foi possível gerar a chave do agente.']);
+        }
 
         // Gerar config.ini com a chave raw — este é o ÚNICO sítio onde o raw existe
         $configIni  = "[pontoao]\n";
