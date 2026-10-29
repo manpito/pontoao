@@ -27,6 +27,9 @@ class CalculoHorasService
         int $minutosExtraAprovados = 0,
         ?array $estadoDia = null // Novo parametro: Estado retornado pelo EstadoDiaService
     ): array {
+        // Picagens repetidas do mesmo tipo a menos de 120 s contam como uma só (não altera a base de dados)
+        $marcacoes = self::deduplicarMarcacoes($marcacoes);
+
         // Inicializar o resultado
         $resultado = [
             'tipo_presenca'                => 'ausente', // completo, meio_dia, ausente, servico_externo, ferias
@@ -181,6 +184,12 @@ class CalculoHorasService
             $resultado['ultima_saida_str'] = date('H:i', $ultimaSaidaTs);
         }
 
+        // Dia em curso: só a entrada e o dia (ou o turno nocturno) ainda não terminou -> não é meio dia
+        if (count($todasEntradas) === 1 && count($todasSaidas) === 0 && $this->diaEmCurso($dataStr, $turno)) {
+            $resultado['tipo_presenca'] = 'em_curso';
+            return $resultado;
+        }
+
         // Regra: se só tem entrada e não tem saída, ou vice-versa (exactamente 1 picagem), é MEIO DIA
         if ((count($todasEntradas) === 1 && count($todasSaidas) === 0) || (count($todasSaidas) === 1 && count($todasEntradas) === 0)) {
             $resultado['tipo_presenca'] = 'meio_dia';
@@ -326,6 +335,50 @@ class CalculoHorasService
         }
 
         return $resultado;
+    }
+
+    /**
+     * Remove picagens repetidas do mesmo tipo feitas a menos de $janelaSegundos
+     * da anterior desse tipo. Mantém a primeira. Só afecta o cálculo.
+     */
+    public static function deduplicarMarcacoes(array $marcacoes, int $janelaSegundos = 120): array
+    {
+        usort($marcacoes, fn($a, $b) => strcmp((string) $a['data_hora'], (string) $b['data_hora']));
+
+        $resultado = [];
+        $ultimoPorTipo = [];
+        foreach ($marcacoes as $m) {
+            $ts = strtotime((string) $m['data_hora']);
+            $tipo = (string) ($m['tipo'] ?? '');
+            if ($ts !== false && isset($ultimoPorTipo[$tipo]) && ($ts - $ultimoPorTipo[$tipo]) < $janelaSegundos) {
+                continue;
+            }
+            if ($ts !== false) {
+                $ultimoPorTipo[$tipo] = $ts;
+            }
+            $resultado[] = $m;
+        }
+
+        return $resultado;
+    }
+
+    /**
+     * Um dia está em curso se for hoje, ou se for ontem com turno nocturno e ainda não forem 12:00.
+     * Todos os tenants estão em Angola: o fuso é fixo aqui de propósito.
+     */
+    private function diaEmCurso(string $dataStr, ?array $turno): bool
+    {
+        $agora = new \DateTime('now', new \DateTimeZone('Africa/Luanda'));
+        if ($dataStr === $agora->format('Y-m-d')) {
+            return true;
+        }
+
+        $ontem = (clone $agora)->modify('-1 day')->format('Y-m-d');
+        if ($dataStr === $ontem && $turno && !empty($turno['atravessa_dia_civil']) && $agora->format('H:i:s') < '12:00:00') {
+            return true;
+        }
+
+        return false;
     }
 
     private function arredondarHorasExtra(int $minutos): int

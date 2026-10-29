@@ -314,7 +314,7 @@ class ExportacaoController
 
                 // Faltas (priorizar presença real)
                 $faltaEmitida = false;
-                if (isset($faltasMap[$fId][$dataStr]) && !in_array($resultadoDia['tipo_presenca'], ['meio_dia', 'completo'])) {
+                if (isset($faltasMap[$fId][$dataStr]) && !in_array($resultadoDia['tipo_presenca'], ['meio_dia', 'completo', 'em_curso'])) {
                     $estado = $faltasMap[$fId][$dataStr];
                     $map = [
                         'injustificada_meio_dia' => ['F08', 0.5],
