@@ -213,7 +213,7 @@ class MarcacaoController
             $funcionarioId = $proprioFuncionarioId;
             $dataHora      = $agora;
             $origem        = 'web_pin';
-        } elseif (in_array($perfil, ['super_admin_tenant', 'rh_manager', 'supervisor'], true)) {
+        } elseif (in_array($perfil, ['super_admin_tenant', 'rh_manager', 'supervisor', 'rh_colaborador'], true)) {
             $funcionarioId = (int) ($body['funcionario_id'] ?? 0);
 
             if ($funcionarioId === 0 || $funcionarioId === $proprioFuncionarioId) {
@@ -223,6 +223,9 @@ class MarcacaoController
                 $origem        = 'web_pin';
             } else {
                 // Marcação manual para outro funcionário
+                if ($perfil === 'rh_colaborador') {
+                    return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para registar marcações manuais.']);
+                }
                 if ($perfil === 'supervisor') {
                     $chkEquipa = $db->prepare("SELECT id FROM funcionarios WHERE id = :fid AND supervisor_id = :sid LIMIT 1");
                     $chkEquipa->execute([':fid' => $funcionarioId, ':sid' => $proprioFuncionarioId]);
