@@ -172,24 +172,105 @@ class MarcacaoController
      * POST /api/marcacoes
      * Regista uma marcação manual ou web
      */
+
     public function store(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
         $body = $request->getParsedBody() ?? [];
         $user = $request->getAttribute('auth_user');
         $db   = $this->db();
 
-        $funcionarioId = (int) ($body['funcionario_id'] ?? ($user ? $user->sub : 0));
-        $tipo          = $body['tipo'] ?? '';
-        $dataHora      = $body['data_hora'] ?? date('Y-m-d H:i:s');
-        $origem        = $body['origem'] ?? 'manual';
-
-        if (!$funcionarioId || !$tipo) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'funcionario_id e tipo são obrigatórios.']);
+        if (!$user) {
+            return $this->json(401, ['erro' => true, 'mensagem' => 'Não autenticado.']);
         }
 
+        $perfil = $user->perfil ?? '';
+        $tipo   = $body['tipo'] ?? '';
+
         $tiposValidos = ['entrada', 'saida', 'inicio_intervalo', 'fim_intervalo', 'saida_servico', 'regresso_servico'];
-        if (!in_array($tipo, $tiposValidos)) {
+        if (!in_array($tipo, $tiposValidos, true)) {
             return $this->json(422, ['erro' => true, 'mensagem' => 'Tipo de marcação inválido.']);
+        }
+
+        // Hora actual no fuso horário do tenant
+        $tz = 'Africa/Luanda';
+        $stmtTz = $db->query("SELECT valor FROM configuracoes WHERE chave = 'timezone'");
+        $rowTz  = $stmtTz ? $stmtTz->fetch(PDO::FETCH_ASSOC) : false;
+        if ($rowTz && !empty($rowTz['valor'])) {
+            $tz = $rowTz['valor'];
+        }
+        try {
+            $agoraDt = new \DateTime('now', new \DateTimeZone($tz));
+        } catch (\Exception $e) {
+            $agoraDt = new \DateTime('now', new \DateTimeZone('Africa/Luanda'));
+        }
+        $agora = $agoraDt->format('Y-m-d H:i:s');
+
+        $proprioFuncionarioId = (int) ($user->funcionario_id ?? 0);
+        $motivoManual = null;
+
+        if ($perfil === 'funcionario') {
+            // Picagem própria: funcionário, hora e origem definidos pelo servidor
+            $funcionarioId = $proprioFuncionarioId;
+            $dataHora      = $agora;
+            $origem        = 'web_pin';
+        } elseif (in_array($perfil, ['super_admin_tenant', 'rh_manager', 'supervisor'], true)) {
+            $funcionarioId = (int) ($body['funcionario_id'] ?? 0);
+
+            if ($funcionarioId === 0 || $funcionarioId === $proprioFuncionarioId) {
+                // Picagem própria
+                $funcionarioId = $proprioFuncionarioId;
+                $dataHora      = $agora;
+                $origem        = 'web_pin';
+            } else {
+                // Marcação manual para outro funcionário
+                if ($perfil === 'supervisor') {
+                    $chkEquipa = $db->prepare("SELECT id FROM funcionarios WHERE id = :fid AND supervisor_id = :sid LIMIT 1");
+                    $chkEquipa->execute([':fid' => $funcionarioId, ':sid' => $proprioFuncionarioId]);
+                    if (!$chkEquipa->fetch()) {
+                        return $this->json(403, ['erro' => true, 'mensagem' => 'Só pode registar marcações de funcionários da sua equipa.']);
+                    }
+                }
+
+                $dataHoraBruta = trim((string) ($body['data_hora'] ?? ''));
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/', $dataHoraBruta)) {
+                    return $this->json(422, ['erro' => true, 'mensagem' => 'Data/hora inválida.']);
+                }
+                $dataHora = str_replace('T', ' ', $dataHoraBruta);
+                if (strlen($dataHora) === 16) {
+                    $dataHora .= ':00';
+                }
+                $dtValida = \DateTime::createFromFormat('Y-m-d H:i:s', $dataHora, $agoraDt->getTimezone());
+                if (!$dtValida || $dtValida->format('Y-m-d H:i:s') !== $dataHora) {
+                    return $this->json(422, ['erro' => true, 'mensagem' => 'Data/hora inválida.']);
+                }
+                if ($dataHora > $agora) {
+                    return $this->json(422, ['erro' => true, 'mensagem' => 'Não é possível registar uma marcação no futuro.']);
+                }
+
+                $motivoManual = trim((string) ($body['motivo_edicao'] ?? ''));
+                if ($motivoManual === '') {
+                    return $this->json(422, ['erro' => true, 'mensagem' => 'O motivo da marcação manual é obrigatório.']);
+                }
+
+                // Regra: uma picagem existente não é substituída nem duplicada por uma marcação manual
+                $chkDia = $db->prepare("
+                    SELECT id FROM marcacoes
+                    WHERE funcionario_id = :fid AND tipo = :tipo AND DATE(data_hora) = :dia
+                    LIMIT 1
+                ");
+                $chkDia->execute([':fid' => $funcionarioId, ':tipo' => $tipo, ':dia' => substr($dataHora, 0, 10)]);
+                if ($chkDia->fetch()) {
+                    return $this->json(409, ['erro' => true, 'mensagem' => 'Já existe uma marcação deste tipo neste dia. Não é possível acrescentar uma marcação manual.']);
+                }
+
+                $origem = 'manual';
+            }
+        } else {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para registar marcações.']);
+        }
+
+        if ($funcionarioId <= 0) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'Utilizador sem funcionário associado.']);
         }
 
         // Verificar se o período está fechado
@@ -202,10 +283,27 @@ class MarcacaoController
             LIMIT 1
         ");
         $periodo->execute([':data' => $dataApenas]);
-        $p = $periodo->fetch(PDO::FETCH_ASSOC);
-
-        if ($p) {
+        if ($periodo->fetch(PDO::FETCH_ASSOC)) {
             return $this->json(409, ['erro' => true, 'mensagem' => 'O período mensal está fechado. Não é possível registar marcações.']);
+        }
+
+        // Duplicado: mesma pessoa, mesmo tipo, a menos de 120 segundos
+        $dup = $db->prepare("
+            SELECT id FROM marcacoes
+            WHERE funcionario_id = :fid
+              AND tipo = :tipo
+              AND data_hora BETWEEN DATE_SUB(:dh1, INTERVAL 120 SECOND) AND DATE_ADD(:dh2, INTERVAL 120 SECOND)
+            ORDER BY id ASC
+            LIMIT 1
+        ");
+        $dup->execute([':fid' => $funcionarioId, ':tipo' => $tipo, ':dh1' => $dataHora, ':dh2' => $dataHora]);
+        $existente = $dup->fetch(PDO::FETCH_ASSOC);
+        if ($existente) {
+            return $this->json(200, [
+                'mensagem'  => 'Marcação já registada.',
+                'id'        => (int) $existente['id'],
+                'duplicada' => true,
+            ]);
         }
 
         $stmt = $db->prepare("
@@ -218,16 +316,16 @@ class MarcacaoController
             )
         ");
         $stmt->execute([
-            ':fid'           => $funcionarioId,
-            ':tipo'          => $tipo,
-            ':data_hora'     => $dataHora,
+            ':fid'            => $funcionarioId,
+            ':tipo'           => $tipo,
+            ':data_hora'      => $dataHora,
             ':data_hora_orig' => $dataHora,
-            ':origem'        => $origem,
-            ':ip'       => $_SERVER['REMOTE_ADDR'] ?? null,
-            ':ua'       => $_SERVER['HTTP_USER_AGENT'] ?? null,
-            ':lat'      => $body['latitude'] ?? null,
-            ':lng'      => $body['longitude'] ?? null,
-            ':geofence' => isset($body['dentro_geofence']) ? (int) $body['dentro_geofence'] : null,
+            ':origem'         => $origem,
+            ':ip'             => $_SERVER['REMOTE_ADDR'] ?? null,
+            ':ua'             => $_SERVER['HTTP_USER_AGENT'] ?? null,
+            ':lat'            => $body['latitude'] ?? null,
+            ':lng'            => $body['longitude'] ?? null,
+            ':geofence'       => isset($body['dentro_geofence']) ? (int) $body['dentro_geofence'] : null,
         ]);
 
         $id = (int) $db->lastInsertId();
@@ -237,9 +335,15 @@ class MarcacaoController
             INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_depois, ip)
             VALUES (:uid, 'marcacao.criada', 'marcacao', :eid, :dados, :ip)
         ")->execute([
-            ':uid'   => $user ? (int) $user->sub : null,
+            ':uid'   => (int) $user->sub,
             ':eid'   => $id,
-            ':dados' => json_encode(['tipo' => $tipo, 'data_hora' => $dataHora, 'origem' => $origem]),
+            ':dados' => json_encode([
+                'funcionario_id' => $funcionarioId,
+                'tipo'           => $tipo,
+                'data_hora'      => $dataHora,
+                'origem'         => $origem,
+                'motivo'         => $motivoManual,
+            ], JSON_UNESCAPED_UNICODE),
             ':ip'    => $_SERVER['REMOTE_ADDR'] ?? null,
         ]);
 

@@ -1023,6 +1023,7 @@ function dentroGeofence(lat, lng) {
 }
 
 // ── MARCAÇÃO ──
+let marcacaoEmCurso = false;
 async function marcar(tipo) {
   if (geofencingActivo && geofencingLat) {
     if (!geoPos) { toast('Aguarde a obtenção de localização.', 'error'); return; }
@@ -1046,13 +1047,21 @@ async function marcar(tipo) {
 
   const tipoLabel = { entrada:'Entrada', saida:'Saída', inicio_intervalo:'Início de intervalo', fim_intervalo:'Fim de intervalo' };
 
+  if (marcacaoEmCurso) return;
+  marcacaoEmCurso = true;
   try {
     const res = await api('POST', '/api/marcacoes', payload);
     if (res.erro) throw new Error(res.mensagem);
-    toast(`${tipoLabel[tipo] || tipo} registada com sucesso!`, 'success');
+    if (res.duplicada) {
+      toast(`${tipoLabel[tipo] || tipo} já tinha sido registada.`, 'success');
+    } else {
+      toast(`${tipoLabel[tipo] || tipo} registada com sucesso!`, 'success');
+    }
     await carregarHistorico();
   } catch(e) {
     toast(e.message || 'Erro ao registar marcação.', 'error');
+  } finally {
+    marcacaoEmCurso = false;
   }
 }
 

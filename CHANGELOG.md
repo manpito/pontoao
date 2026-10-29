@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Marcações (POST /api/marcacoes): o perfil funcionário só regista picagens próprias, com hora e origem definidas pelo servidor; marcações manuais apenas por super_admin_tenant, rh_manager e supervisor (só da sua equipa), com motivo obrigatório, sem datas futuras e sem duplicar um tipo já picado nesse dia; picagens repetidas do mesmo tipo a menos de 120 s não são gravadas; botão de picagem protegido contra duplo envio.
 - Agente PontoAO: a lista de funcionários enviada ao agente passa a incluir os suspensos e os desligados (o filtro usava o estado "inactivo", que não existe), para que possam ser bloqueados ou removidos dos relógios Dahua.
 - Segurança (agente PontoAO): a chave do agente passa a ser por instalação e por tenant, guardada na base master (tabela agent_chaves, só o hash). O agente só acede ao tenant da sua chave; descarregar um novo instalador revoga as chaves anteriores desse tenant; o download deixa de alterar o .env de produção e a variável AGENT_API_KEY_HASH deixa de ser usada.
 - Relógios Dahua: o tipo da marcação passa a vir do estado de assiduidade do relógio (AttendanceState: entrada, intervalo, saída, horas extra), em vez de ficar sempre "entrada". Requer a função "Attendance" ligada no relógio.
