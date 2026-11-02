@@ -375,6 +375,11 @@ class MarcacaoController
             return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação não encontrada.']);
         }
 
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $marcacao['funcionario_id']);
+        if ($erroPermissao !== null) {
+            return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+        }
+
         // Check if the original or new date falls in a closed period
         $dataOriginal = substr($marcacao['data_hora'], 0, 10);
         $dataNova = isset($body['data_hora']) ? substr($body['data_hora'], 0, 10) : $dataOriginal;
@@ -400,8 +405,8 @@ class MarcacaoController
             return $this->json(409, ['erro' => true, 'mensagem' => 'Marcação bloqueada — período mensal fechado. Não é possível editar.']);
         }
 
-        if (empty($body['motivo_edicao'])) {
-            return $this->json(422, ['erro' => true, 'mensagem' => 'O campo motivo_edicao é obrigatório para editar uma marcação.']);
+        if (mb_strlen(trim((string) ($body['motivo_edicao'] ?? ''))) < 10) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'O motivo da edição é obrigatório e deve ter pelo menos 10 caracteres.']);
         }
 
         $db->prepare("

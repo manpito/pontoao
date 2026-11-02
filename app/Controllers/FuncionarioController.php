@@ -473,6 +473,8 @@ class FuncionarioController
         $id   = (int) $args['id'];
         $body = $request->getParsedBody() ?? [];
         $db   = $this->db();
+        $user = $request->getAttribute('auth_user');
+        $perfilQuemAltera = (string) ($user->perfil ?? '');
 
         $stmt = $db->prepare("SELECT id, nome_completo, estado FROM funcionarios WHERE id = :id LIMIT 1");
         $stmt->execute([':id' => $id]);
@@ -480,6 +482,11 @@ class FuncionarioController
 
         if (!$func) {
             return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Funcionário não encontrado.']);
+        }
+
+        // Ninguém abaixo do Admin altera o próprio acesso
+        if ($perfilQuemAltera !== 'super_admin_tenant' && (int) ($user->funcionario_id ?? 0) === $id) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Não pode alterar o seu próprio acesso ao portal.']);
         }
 
         if (empty($body['email'])) {
@@ -496,16 +503,31 @@ class FuncionarioController
         if ($check->fetch()) {
             return $this->json($response, 409, ['erro' => true, 'mensagem' => 'Este email já está em uso por outro utilizador.']);
         }
-	$perfil = in_array($body['perfil'] ?? '', ['funcionario', 'supervisor', 'rh_manager', 'rh_colaborador'])
-	? $body['perfil']
-	: 'funcionario';
-        $hash   = password_hash($body['password'], PASSWORD_BCRYPT, ['cost' => 12]);
-        $activo = $func['estado'] === 'activo' ? 1 : 0;
 
         // Verificar se já tem utilizador associado
-        $existing = $db->prepare("SELECT id FROM utilizadores WHERE funcionario_id = :fid LIMIT 1");
+        $existing = $db->prepare("SELECT id, perfil FROM utilizadores WHERE funcionario_id = :fid LIMIT 1");
         $existing->execute([':fid' => $id]);
         $util = $existing->fetch(\PDO::FETCH_ASSOC);
+        $perfilAnterior = $util ? (string) $util['perfil'] : null;
+
+        $perfisValidos = ['funcionario', 'supervisor', 'rh_manager', 'rh_colaborador'];
+        $perfilPedido  = $body['perfil'] ?? null;
+        if ($perfilPedido === null || $perfilPedido === '') {
+            $perfil = $perfilAnterior ?? 'funcionario';
+        } elseif (in_array($perfilPedido, $perfisValidos, true)) {
+            $perfil = $perfilPedido;
+        } else {
+            return $this->json($response, 422, ['erro' => true, 'mensagem' => 'Perfil inválido.']);
+        }
+
+        // Só o Administrador define ou altera perfis
+        $mudaPerfil = $util ? ($perfil !== $perfilAnterior) : ($perfil !== 'funcionario');
+        if ($mudaPerfil && $perfilQuemAltera !== 'super_admin_tenant') {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Só o Administrador pode alterar perfis de acesso.']);
+        }
+
+        $hash   = password_hash($body['password'], PASSWORD_BCRYPT, ['cost' => 12]);
+        $activo = $func['estado'] === 'activo' ? 1 : 0;
 
         if ($util) {
             // Actualizar credenciais existentes
@@ -524,8 +546,8 @@ class FuncionarioController
                 ':email'  => $body['email'],
                 ':hash'   => $hash,
                 ':fid'    => $id,
-		':perfil' => $perfil,
-		':activo' => $activo,
+                ':perfil' => $perfil,
+                ':activo' => $activo,
             ]);
             $mensagem = 'Acesso ao portal criado com sucesso.';
         }
@@ -534,7 +556,11 @@ class FuncionarioController
         $db->prepare("UPDATE funcionarios SET email = :email WHERE id = :id AND (email IS NULL OR email = '')")
            ->execute([':email' => $body['email'], ':id' => $id]);
 
-        $this->auditoria($db, $request, 'funcionario.acesso_portal', 'funcionario', $id, null, ['email' => $body['email']]);
+        $this->auditoria(
+            $db, $request, 'funcionario.acesso_portal', 'funcionario', $id,
+            ['perfil' => $perfilAnterior],
+            ['email' => $body['email'], 'perfil' => $perfil]
+        );
 
         return $this->json($response, 200, ['mensagem' => $mensagem]);
     }

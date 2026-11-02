@@ -112,7 +112,21 @@ class FeriasController
         $user = $request->getAttribute('auth_user');
         $db   = $this->db();
 
-        $funcionarioId = (int) ($body['funcionario_id'] ?? ($user ? $user->sub : 0));
+        $proprioFuncionarioId = (int) ($user->funcionario_id ?? 0);
+        $funcionarioId = (int) ($body['funcionario_id'] ?? 0);
+        if ($funcionarioId === 0 || ($user->perfil ?? '') === 'funcionario') {
+            // Pedido próprio
+            $funcionarioId = $proprioFuncionarioId;
+        } elseif ($funcionarioId !== $proprioFuncionarioId) {
+            // Pedido em nome de outro funcionário: só RH, Admin ou o supervisor da equipa
+            if (!in_array($user->perfil ?? '', ['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor'], true)) {
+                return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para submeter férias de outro funcionário.']);
+            }
+            $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, $funcionarioId);
+            if ($erroPermissao !== null) {
+                return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+            }
+        }
         $dataInicio    = $body['data_inicio'] ?? '';
         $dataFim       = $body['data_fim']    ?? '';
 
@@ -202,6 +216,15 @@ class FeriasController
 
         $accao  = $body['accao'] ?? 'aprovar';
         $perfil = $user ? $user->perfil : '';
+
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $pedido['funcionario_id']);
+        if ($erroPermissao !== null) {
+            return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+        }
+
+        if ($accao === 'rejeitar' && !in_array($pedido['estado'], ['pendente', 'aprovado_supervisor'], true)) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Só é possível rejeitar pedidos pendentes ou aprovados pelo supervisor.']);
+        }
 
         if ($accao === 'rejeitar') {
             $db->prepare("UPDATE ferias_pedidos SET estado = 'rejeitado', motivo_rejeicao = :motivo WHERE id = :id")

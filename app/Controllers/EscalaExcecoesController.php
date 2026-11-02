@@ -119,14 +119,13 @@ class EscalaExcecoesController
             return $this->json($response, 400, ['erro' => true, 'mensagem' => 'Turno inválido.']);
         }
 
-        // RBAC adicional para supervisor
-        if ($user && $user->perfil === 'supervisor') {
-            $stmt = $db->prepare("SELECT id, supervisor_id FROM funcionarios WHERE id = :id");
-            $stmt->execute([':id' => $ausenteId]);
-            $func = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$func || ($func['supervisor_id'] != $user->funcionario_id && $func['id'] != $user->funcionario_id)) {
-                return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para criar excepções para este funcionário.']);
-            }
+        // Permissões: ninguém abaixo do Admin age sobre si próprio; supervisor só na sua equipa
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, $ausenteId);
+        if ($erroPermissao === null && $substitutoId !== null) {
+            $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, $substitutoId);
+        }
+        if ($erroPermissao !== null) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => $erroPermissao]);
         }
 
         if ($tipo === 'substituicao') {
@@ -183,17 +182,20 @@ class EscalaExcecoesController
             return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Excepção não encontrada.']);
         }
 
-        // RBAC adicional para supervisor
-        if ($user && $user->perfil === 'supervisor') {
-            $stmt = $db->prepare("SELECT supervisor_id FROM funcionarios WHERE id = :id");
-            $stmt->execute([':id' => $exc['funcionario_ausente_id']]);
-            $func = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$func || ($func['supervisor_id'] != $user->funcionario_id && $exc['funcionario_ausente_id'] != $user->funcionario_id)) {
-                return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para alterar excepções deste funcionário.']);
-            }
+        // Permissões: ninguém abaixo do Admin age sobre si próprio; supervisor só na sua equipa
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $exc['funcionario_ausente_id']);
+        if ($erroPermissao !== null) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => $erroPermissao]);
         }
 
         $substitutoId = isset($body['funcionario_substituto_id']) ? (!empty($body['funcionario_substituto_id']) ? (int) $body['funcionario_substituto_id'] : null) : $exc['funcionario_substituto_id'];
+
+        if ($substitutoId !== null) {
+            $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $substitutoId);
+            if ($erroPermissao !== null) {
+                return $this->json($response, 403, ['erro' => true, 'mensagem' => $erroPermissao]);
+            }
+        }
         $descricao = isset($body['descricao']) ? $body['descricao'] : $exc['descricao'];
 
         if ($substitutoId !== null && $substitutoId === (int)$exc['funcionario_ausente_id']) {
@@ -233,14 +235,10 @@ class EscalaExcecoesController
             return $this->json($response, 404, ['erro' => true, 'mensagem' => 'Excepção não encontrada.']);
         }
 
-        // RBAC adicional para supervisor
-        if ($user && $user->perfil === 'supervisor') {
-            $stmt = $db->prepare("SELECT supervisor_id FROM funcionarios WHERE id = :id");
-            $stmt->execute([':id' => $exc['funcionario_ausente_id']]);
-            $func = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$func || ($func['supervisor_id'] != $user->funcionario_id && $exc['funcionario_ausente_id'] != $user->funcionario_id)) {
-                return $this->json($response, 403, ['erro' => true, 'mensagem' => 'Sem permissão para eliminar excepções deste funcionário.']);
-            }
+        // Permissões: ninguém abaixo do Admin age sobre si próprio; supervisor só na sua equipa
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $exc['funcionario_ausente_id']);
+        if ($erroPermissao !== null) {
+            return $this->json($response, 403, ['erro' => true, 'mensagem' => $erroPermissao]);
         }
 
         $db->prepare("DELETE FROM escala_excepcoes WHERE id = :id")->execute([':id' => $id]);

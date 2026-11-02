@@ -196,18 +196,10 @@ class MarcacaoFaltaController
             return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação em falta não encontrada.']);
         }
 
-        // Filtro supervisor para PUT
-        if ($perfil === 'supervisor' && !empty($user->funcionario_id)) {
-            $check = $db->prepare("
-                SELECT mf.id
-                FROM marcacoes_em_falta mf
-                JOIN funcionarios f ON mf.funcionario_id = f.id
-                WHERE mf.id = :id AND (f.supervisor_id = :sid OR f.id = :sid_self)
-            ");
-            $check->execute([':id' => $id, ':sid' => (int) $user->funcionario_id, ':sid_self' => (int) $user->funcionario_id]);
-            if (!$check->fetch()) {
-                return $this->json(403, ['erro' => true, 'mensagem' => 'Sem permissão para classificar esta marcação.']);
-            }
+        // Permissões: ninguém abaixo do Admin classifica os próprios registos; supervisor só na sua equipa
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $mfAtual['funcionario_id']);
+        if ($erroPermissao !== null) {
+            return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
         }
 
         $stmt = $db->prepare("
