@@ -155,6 +155,9 @@ class PedidoHorasExtraController
         if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $horaInicio) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $horaFim)) {
             return $this->json(422, ['erro' => true, 'mensagem' => 'Indique a hora prevista de início e de fim (HH:MM).']);
         }
+        if ($horaInicio === $horaFim) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'A hora de fim tem de ser diferente da hora de início.']);
+        }
         $minutos = LimitesHorasExtra::minutosEntre($horaInicio, $horaFim);
 
         $motivo = trim((string) ($body['motivo'] ?? ''));
@@ -186,7 +189,7 @@ class PedidoHorasExtraController
         $feriado = (new FeriadoService($db))->isFeriado($data);
         $turno = (new EscalaService($db))->calcularTurnoEm($funcionarioId, $data);
         if ($turno) {
-            $diaNormal = !$feriado && ($turno['tipo'] ?? '') !== 'folga';
+            $diaNormal = !$feriado && !in_array($turno['tipo'] ?? '', ['folga', 'compensatorio'], true);
         } else {
             $diaNormal = !$feriado && (int) $dtData->format('N') <= 5;
         }
