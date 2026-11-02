@@ -601,7 +601,7 @@ class FuncionarioController
         $id  = (int) $args['id'];
         $db  = $this->db();
 
-        $stmt = $db->prepare("SELECT id, email, activo, ultimo_login FROM utilizadores WHERE funcionario_id = :fid LIMIT 1");
+        $stmt = $db->prepare("SELECT id, email, activo, ultimo_login, perfil FROM utilizadores WHERE funcionario_id = :fid LIMIT 1");
         $stmt->execute([':fid' => $id]);
         $util = $stmt->fetch(\PDO::FETCH_ASSOC);
 
@@ -615,6 +615,7 @@ class FuncionarioController
                 'email'       => $util['email'],
                 'activo'      => (bool) $util['activo'],
                 'ultimo_login' => $util['ultimo_login'],
+                'perfil'      => $util['perfil'],
             ],
         ]);
     }
