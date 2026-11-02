@@ -112,6 +112,12 @@ class JustificacaoAusenciaController
                 continue;
             }
 
+            $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $request->getAttribute('auth_user'), $fid);
+            if ($erroPermissao !== null) {
+                $erros[] = "Funcionário ID $fid: $erroPermissao";
+                continue;
+            }
+
             $stmt->execute([
                 ':fid' => $fid,
                 ':dini' => $dataInicio,
