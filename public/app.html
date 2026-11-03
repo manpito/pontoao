@@ -1618,6 +1618,28 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- MODAL REGISTO DE HORAS EXTRA REALIZADAS -->
+<div class="overlay" id="modalRegistoHE">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Registar horas extra realizadas</h3>
+      <button class="modal-close" onclick="fecharModal('modalRegistoHE')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="heRegId">
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:16px">Registo do trabalho extraordinário efectivamente prestado (Lei n.º 12/23, art. 187.º). Conta para o cálculo o menor entre os minutos aprovados e os realizados. Depois do registo, o trabalhador visa-o no portal de ponto; um novo registo apaga o visto anterior.</p>
+      <div id="heRegResumo" style="font-size:13px;margin-bottom:16px"></div>
+      <div class="form-group"><label>Hora real de início *</label><input type="time" id="heRegInicio"></div>
+      <div class="form-group"><label>Hora real de fim *</label><input type="time" id="heRegFim"></div>
+      <div class="form-group"><label>Justificação do supervisor * (mínimo 10 caracteres)</label><textarea id="heRegJustificacao" rows="3" placeholder="Trabalho efectivamente prestado, segundo o supervisor..."></textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalRegistoHE')">Cancelar</button>
+      <button class="btn btn-accent" id="heRegBtn" onclick="submeterRegistoHE()">Registar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL INSERIR MARCAÇÃO MANUAL -->
 <div class="overlay" id="modalInserirMarcacao">
   <div class="modal">
@@ -3053,6 +3075,18 @@ async function acaoFerias(id, accao) {
 }
 
 // ── HORAS EXTRA ──
+let _hePedidos = {};
+
+function heHoraDe(dt) {
+  return dt ? String(dt).slice(11, 16) : '';
+}
+
+function heSemVisto72h(p) {
+  if (!p.registado_em || p.visto_em) return false;
+  const t = new Date(String(p.registado_em).replace(' ', 'T') + '+01:00').getTime();
+  return !isNaN(t) && (Date.now() - t) > 72 * 3600 * 1000;
+}
+
 async function carregarPedidosHorasExtra() {
   const el = document.getElementById('horasExtraTable');
   if (!el) return;
@@ -3060,32 +3094,50 @@ async function carregarPedidosHorasExtra() {
   const estado = document.getElementById('heEstadoFiltro').value;
   const podeDecidir = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
   const estadoLabel = { pendente: 'Pendente', aprovado_rh: 'Validado RH', aprovado: 'Aprovado', rejeitado: 'Rejeitado' };
+  const hoje = hojeLocalHE();
+  const proprio = USER.funcionario_id ? String(USER.funcionario_id) : null;
+  _hePedidos = {};
   try {
     const res = await api('GET', '/api/pedidos-horas-extra' + (estado ? `?estado=${encodeURIComponent(estado)}` : ''));
     if (res.erro) throw new Error(res.mensagem);
     const pedidos = res.dados || [];
     const rows = pedidos.map(p => {
+      _hePedidos[parseInt(p.id)] = p;
       const aberto = p.estado === 'pendente' || p.estado === 'aprovado_rh';
       const badgeClass = p.estado === 'aprovado' ? 'green' : (p.estado === 'rejeitado' ? 'red' : 'warn');
       const horario = (p.hora_inicio && p.hora_fim) ? `${String(p.hora_inicio).slice(0,5)}–${String(p.hora_fim).slice(0,5)}` : '—';
       const fund = p.fundamento ? `${p.fundamento})` : '—';
       const tituloRej = (p.estado === 'rejeitado' && p.rejeitado_motivo) ? ` title="${esc(p.rejeitado_motivo)}"` : '';
+      const temRegisto = p.minutos_reais !== null && p.minutos_reais !== undefined;
+      let realizado = '—';
+      if (temRegisto) {
+        const vistoBadge = p.visto_em
+          ? '<span class="badge badge-green">Visado</span>'
+          : (heSemVisto72h(p)
+              ? '<span class="badge badge-warn">Sem visto há mais de 72 h</span>'
+              : '<span class="badge badge-gray">Aguarda visto</span>');
+        realizado = `<span style="font-family:var(--mono)" title="${esc(p.registo_justificacao || '')}">${esc(heHoraDe(p.inicio_real))}–${esc(heHoraDe(p.fim_real))} · ${esc(p.minutos_reais)} min</span><br>${vistoBadge}`;
+      }
+      const podeRegistar = podeDecidir && p.estado === 'aprovado' && String(p.data) <= hoje
+        && (USER.perfil === 'super_admin_tenant' || String(p.funcionario_id) !== proprio);
       return `<tr>
         <td><span style="font-family:var(--mono)">${esc(p.data)}</span></td>
         <td><span style="font-family:var(--mono);color:var(--muted2)">${esc(p.numero_funcionario)}</span> <strong>${esc(p.nome_completo)}</strong></td>
         <td style="font-family:var(--mono)">${esc(horario)}</td>
         <td>${esc(p.minutos)} min</td>
+        <td>${realizado}</td>
         <td>${esc(fund)}</td>
         <td>${esc(p.motivo)}</td>
         <td><span class="badge badge-${badgeClass}"${tituloRej}>${esc(estadoLabel[p.estado] || p.estado)}</span></td>
         <td>
           ${podeDecidir && aberto ? `<button class="btn btn-sm btn-accent" onclick="aprovarPedidoHE(${parseInt(p.id)})">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="rejeitarPedidoHE(${parseInt(p.id)})">Rejeitar</button>` : ''}
+          ${podeRegistar ? `<button class="btn btn-sm" onclick="abrirModalRegistoHE(${parseInt(p.id)})">${temRegisto ? 'Corrigir registo' : 'Registar realizado'}</button>` : ''}
         </td>
       </tr>`;
     }).join('');
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Horário previsto</th><th>Minutos</th><th>Fundamento</th><th>Motivo</th><th>Estado</th><th>Acções</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="8" class="empty">Nenhum pedido encontrado.</td></tr>'}</tbody>
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Horário previsto</th><th>Aprovado</th><th>Realizado</th><th>Fundamento</th><th>Motivo</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="9" class="empty">Nenhum pedido encontrado.</td></tr>'}</tbody>
     </table>`;
   } catch(e) { el.innerHTML = `<div class="empty">${esc(e.message || 'Erro ao carregar pedidos.')}</div>`; }
 }
@@ -3122,6 +3174,42 @@ async function rejeitarPedidoHE(id) {
     carregarPedidosHorasExtra();
     carregarHorasExtraCount();
   } catch(e) { toast(esc(e.message || 'Erro ao rejeitar.'), 'err'); }
+}
+
+function abrirModalRegistoHE(id) {
+  const p = _hePedidos[parseInt(id)];
+  if (!p) return;
+  if (p.visto_em && !confirm('Este registo já foi visado pelo trabalhador. Um novo registo apaga o visto e o trabalhador terá de o visar outra vez. Continuar?')) return;
+  const prevIni = p.hora_inicio ? String(p.hora_inicio).slice(0, 5) : '';
+  const prevFim = p.hora_fim ? String(p.hora_fim).slice(0, 5) : '';
+  document.getElementById('heRegId').value = String(parseInt(p.id));
+  document.getElementById('heRegResumo').innerHTML =
+    `<strong>${esc(p.numero_funcionario)} · ${esc(p.nome_completo)}</strong><br>` +
+    `Data: <span style="font-family:var(--mono)">${esc(p.data)}</span> · Aprovado: <span style="font-family:var(--mono)">${esc(prevIni)}–${esc(prevFim)}</span> (${esc(p.minutos)} min)`;
+  document.getElementById('heRegInicio').value = p.inicio_real ? heHoraDe(p.inicio_real) : prevIni;
+  document.getElementById('heRegFim').value = p.fim_real ? heHoraDe(p.fim_real) : prevFim;
+  document.getElementById('heRegJustificacao').value = p.registo_justificacao || '';
+  document.getElementById('modalRegistoHE').classList.add('open');
+}
+
+async function submeterRegistoHE() {
+  const id = parseInt(document.getElementById('heRegId').value);
+  const horaInicio = document.getElementById('heRegInicio').value;
+  const horaFim = document.getElementById('heRegFim').value;
+  const justificacao = document.getElementById('heRegJustificacao').value.trim();
+  if (!id || !horaInicio || !horaFim) { toast('Indique a hora real de início e de fim.', 'err'); return; }
+  if (horaInicio === horaFim) { toast('A hora de fim tem de ser diferente da hora de início.', 'err'); return; }
+  if (justificacao.length < 10) { toast('A justificação deve ter pelo menos 10 caracteres.', 'err'); return; }
+  const btn = document.getElementById('heRegBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('PUT', `/api/pedidos-horas-extra/${id}/registar`, { hora_inicio_real: horaInicio, hora_fim_real: horaFim, justificacao });
+    if (res.erro) throw new Error(res.mensagem);
+    toast(esc(res.mensagem || 'Horas realizadas registadas.'), 'ok');
+    fecharModal('modalRegistoHE');
+    carregarPedidosHorasExtra();
+  } catch(e) { toast(esc(e.message || 'Erro ao registar as horas realizadas.'), 'err'); }
+  finally { btn.disabled = false; }
 }
 
 function hojeLocalHE() {
