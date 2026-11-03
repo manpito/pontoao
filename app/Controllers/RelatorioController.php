@@ -154,7 +154,7 @@ class RelatorioController
 
         // Carregar pedidos de horas extra aprovados do período
         $stmtPHE = $db->prepare("
-            SELECT data, minutos FROM pedidos_horas_extra
+            SELECT data, LEAST(minutos, COALESCE(minutos_reais, minutos)) AS minutos FROM pedidos_horas_extra
             WHERE funcionario_id = :fid
               AND estado = 'aprovado'
               AND data BETWEEN :ini AND :fim
@@ -614,7 +614,7 @@ class RelatorioController
 
         // Carregar pedidos de horas extra aprovados do período
         $stmtPHE = $db->prepare("
-            SELECT data, minutos FROM pedidos_horas_extra
+            SELECT data, LEAST(minutos, COALESCE(minutos_reais, minutos)) AS minutos FROM pedidos_horas_extra
             WHERE funcionario_id = :fid
               AND estado = 'aprovado'
               AND data BETWEEN :ini AND :fim
@@ -1395,7 +1395,7 @@ class RelatorioController
         $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
 
         $stmtPHE = $db->prepare("
-            SELECT funcionario_id, data, minutos
+            SELECT funcionario_id, data, LEAST(minutos, COALESCE(minutos_reais, minutos)) AS minutos
             FROM pedidos_horas_extra
             WHERE funcionario_id IN ({$inStr})
               AND estado = 'aprovado'

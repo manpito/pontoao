@@ -274,6 +274,12 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
     $group->put('/pedidos-horas-extra/{id}/rejeitar',      [\App\Controllers\PedidoHorasExtraController::class, 'rejeitar'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
 
+    $group->put('/pedidos-horas-extra/{id}/registar',      [\App\Controllers\PedidoHorasExtraController::class, 'registar'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+
+    $group->put('/pedidos-horas-extra/{id}/visar',         [\App\Controllers\PedidoHorasExtraController::class, 'visar'])
+          ->add(AuthMiddleware::class);
+
     // --- Feriados ---
     $group->get('/feriados',            [\App\Controllers\FeriadoController::class, 'index'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador']));
