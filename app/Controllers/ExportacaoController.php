@@ -309,7 +309,8 @@ class ExportacaoController
                 $resultadoDia = $calculoService->calcularDia(
                     $mDia, $turno, $tipoDia, $regimeEscala, $dataStr,
                     false, false, false, $contarEntradaAntecipada,
-                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia,
+                    \App\Services\ConfigHorasExtra::aprovacaoObrigatoriaDesde($db)
                 );
 
                 // Faltas (priorizar presença real)
