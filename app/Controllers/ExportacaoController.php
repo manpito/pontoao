@@ -174,7 +174,7 @@ class ExportacaoController
         $contarSaidaTardia = ($rowCfg2 && $rowCfg2['valor'] === '1');
 
         $stmtPHE = $db->prepare("
-            SELECT funcionario_id, data, minutos
+            SELECT funcionario_id, data, LEAST(minutos, COALESCE(minutos_reais, minutos)) AS minutos
             FROM pedidos_horas_extra
             WHERE funcionario_id IN ({$inStr})
               AND estado = 'aprovado'

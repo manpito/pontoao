@@ -113,7 +113,7 @@ class RelatorioPeriodoService
 
             // 7. Horas Extra Aprovadas
             $stmtPHE = $this->pdo->prepare("
-                SELECT funcionario_id, data, minutos
+                SELECT funcionario_id, data, LEAST(minutos, COALESCE(minutos_reais, minutos)) AS minutos
                 FROM pedidos_horas_extra
                 WHERE funcionario_id IN ({$inStr})
                   AND estado = 'aprovado'

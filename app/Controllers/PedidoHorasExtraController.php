@@ -336,6 +336,126 @@ class PedidoHorasExtraController
     }
 
     /**
+     * PUT /api/pedidos-horas-extra/{id}/registar
+     * Registo do trabalho extraordinário prestado (Lei n.º 12/23, art. 187.º) — só gestor de RH e Administrador.
+     */
+    public function registar(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $body = $request->getParsedBody() ?? [];
+        $user = $request->getAttribute('auth_user');
+        $db = $this->db();
+        $perfil = (string) ($user->perfil ?? '');
+
+        if (!in_array($perfil, ['rh_manager', 'super_admin_tenant'], true)) {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Só o gestor de RH ou o Administrador podem registar as horas realizadas.']);
+        }
+
+        $stmt = $db->prepare("SELECT * FROM pedidos_horas_extra WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$pedido) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Pedido não encontrado.']);
+        }
+
+        $erroPermissao = PermissaoFuncionario::verificar($db, $user, (int) $pedido['funcionario_id']);
+        if ($erroPermissao !== null) {
+            return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+        }
+
+        if ($pedido['estado'] !== 'aprovado') {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Só é possível registar as horas realizadas de pedidos aprovados.']);
+        }
+
+        $hoje = (new \DateTime('now', new \DateTimeZone('Africa/Luanda')))->format('Y-m-d');
+        if ($pedido['data'] > $hoje) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'Só é possível registar as horas realizadas depois da data do trabalho.']);
+        }
+
+        $stPer = $db->prepare("SELECT id FROM periodos_mensais WHERE estado = 'fechado' AND :data BETWEEN data_inicio AND data_fim LIMIT 1");
+        $stPer->execute([':data' => $pedido['data']]);
+        if ($stPer->fetch()) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'O período mensal desta data está fechado.']);
+        }
+
+        $horaInicio = (string) ($body['hora_inicio_real'] ?? '');
+        $horaFim    = (string) ($body['hora_fim_real'] ?? '');
+        if (!preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $horaInicio) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $horaFim)) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'Indique a hora real de início e de fim (HH:MM).']);
+        }
+        if ($horaInicio === $horaFim) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'A hora de fim tem de ser diferente da hora de início.']);
+        }
+
+        $justificacao = trim((string) ($body['justificacao'] ?? ''));
+        if (mb_strlen($justificacao) < 10) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'A justificação é obrigatória e deve ter pelo menos 10 caracteres.']);
+        }
+
+        $minutosReais = LimitesHorasExtra::minutosEntre($horaInicio, $horaFim);
+        $inicioReal = $pedido['data'] . ' ' . $horaInicio . ':00';
+        $dataFim = $pedido['data'];
+        if ($horaFim <= $horaInicio) {
+            $dataFim = (new \DateTime($pedido['data']))->modify('+1 day')->format('Y-m-d');
+        }
+        $fimReal = $dataFim . ' ' . $horaFim . ':00';
+
+        $db->prepare("
+            UPDATE pedidos_horas_extra
+            SET inicio_real = :ini, fim_real = :fim, minutos_reais = :min, registo_justificacao = :just,
+                registado_por = :uid, registado_em = NOW(), visto_em = NULL, visto_por = NULL
+            WHERE id = :id
+        ")->execute([
+            ':ini' => $inicioReal, ':fim' => $fimReal, ':min' => $minutosReais,
+            ':just' => $justificacao, ':uid' => (int) $user->sub, ':id' => $id,
+        ]);
+
+        $this->auditar($db, $request, 'horas_extra.registo_realizado', $id,
+            ['inicio_real' => $pedido['inicio_real'] ?? null, 'fim_real' => $pedido['fim_real'] ?? null, 'minutos_reais' => $pedido['minutos_reais'] ?? null, 'visto_em' => $pedido['visto_em'] ?? null],
+            ['inicio_real' => $inicioReal, 'fim_real' => $fimReal, 'minutos_reais' => $minutosReais, 'justificacao' => $justificacao]
+        );
+
+        return $this->json(200, ['mensagem' => 'Horas realizadas registadas. Aguarda o visto do trabalhador.']);
+    }
+
+    /**
+     * PUT /api/pedidos-horas-extra/{id}/visar
+     * Visto do trabalhador no registo de trabalho extraordinário (Lei n.º 12/23, art. 187.º, n.º 2) — só o próprio.
+     */
+    public function visar(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = (int) $args['id'];
+        $user = $request->getAttribute('auth_user');
+        $db = $this->db();
+
+        $stmt = $db->prepare("SELECT * FROM pedidos_horas_extra WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$pedido) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Registo não encontrado.']);
+        }
+
+        if ((int) $pedido['funcionario_id'] !== (int) ($user->funcionario_id ?? 0)) {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Só o próprio trabalhador pode visar este registo.']);
+        }
+
+        if ($pedido['inicio_real'] === null) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Este registo ainda não tem as horas realizadas.']);
+        }
+
+        if ($pedido['visto_em'] !== null) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Este registo já foi visado.']);
+        }
+
+        $db->prepare("UPDATE pedidos_horas_extra SET visto_em = NOW(), visto_por = :uid WHERE id = :id")
+           ->execute([':uid' => (int) $user->sub, ':id' => $id]);
+
+        $this->auditar($db, $request, 'horas_extra.registo_visado', $id, null, ['visto_por' => (int) $user->sub]);
+
+        return $this->json(200, ['mensagem' => 'Registo visado.']);
+    }
+
+    /**
      * GET /api/pedidos-horas-extra/pendentes
      */
     public function pendentes(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
