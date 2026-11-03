@@ -25,7 +25,8 @@ class CalculoHorasService
         bool $contarEntradaAntecipada = true,
         bool $contarSaidaTardia = false,
         int $minutosExtraAprovados = 0,
-        ?array $estadoDia = null // Novo parametro: Estado retornado pelo EstadoDiaService
+        ?array $estadoDia = null, // Novo parametro: Estado retornado pelo EstadoDiaService
+        ?string $aprovacaoObrigatoriaDesde = null // Desde esta data, só conta trabalho extraordinário aprovado (Lei 12/23, art. 184.º, n.º 3)
     ): array {
         // Picagens repetidas do mesmo tipo a menos de 120 s contam como uma só (não altera a base de dados)
         $marcacoes = self::deduplicarMarcacoes($marcacoes);
@@ -301,6 +302,14 @@ class CalculoHorasService
             }
             if ($resultado['minutos_extra_extraordinario'] > 0) {
                 $resultado['minutos_extra_extraordinario'] = $this->arredondarHorasExtra($resultado['minutos_extra_extraordinario']);
+            }
+
+            // Desde a data configurada, só conta o trabalho extraordinário aprovado (até ao total aprovado no dia)
+            if ($aprovacaoObrigatoriaDesde !== null && $dataStr >= $aprovacaoObrigatoriaDesde) {
+                $restanteAprovado = max(0, $minutosExtraAprovados);
+                $resultado['minutos_extra'] = min($resultado['minutos_extra'], $restanteAprovado);
+                $restanteAprovado -= $resultado['minutos_extra'];
+                $resultado['minutos_extra_extraordinario'] = min($resultado['minutos_extra_extraordinario'], $restanteAprovado);
             }
         }
 

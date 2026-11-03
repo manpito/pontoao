@@ -207,7 +207,8 @@ class RelatorioPeriodoService
                 $resultadoDia = $calculoService->calcularDia(
                     $marcacoesDia, $turno, $tipoDia, $regimeEscala, $dia,
                     false, false, false, $contarEntradaAntecipada,
-                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia
+                    $contarSaidaTardia, $minutosExtraAprovadosParaCorte, $estadoDoDia,
+                    \App\Services\ConfigHorasExtra::aprovacaoObrigatoriaDesde($this->pdo)
                 );
 
                 if ($resultadoDia['tipo_presenca'] === 'meio_dia') {
