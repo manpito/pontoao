@@ -558,6 +558,7 @@ input[type="month"]::-webkit-calendar-picker-indicator {
     <div class="page" id="page-horas-extra">
       <div class="page-header">
         <div><div class="page-title">Horas Extra</div><div class="page-sub">Pedidos e aprovações</div></div>
+        <button class="btn btn-accent" id="btnNovoPedidoHE" onclick="abrirModalNovoPedidoHE()">+ Novo pedido</button>
       </div>
       <div class="toolbar">
         <select class="select-input" id="heEstadoFiltro">
@@ -1574,6 +1575,49 @@ input[type="month"]::-webkit-calendar-picker-indicator {
   </div>
 </div>
 
+<!-- MODAL NOVO PEDIDO DE HORAS EXTRA -->
+<div class="overlay" id="modalNovoPedidoHE">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Novo pedido de horas extra</h3>
+      <button class="modal-close" onclick="fecharModal('modalNovoPedidoHE')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--muted2);margin-bottom:16px">O trabalho extraordinário tem de ser determinado antes de ser prestado (Lei n.º 12/23, art. 184.º, n.º 3). Limites: 2 h por dia normal de trabalho, 40 h por mês e 200 h por ano (art. 185.º). As alíneas a) e d) não têm limites e podem ser registadas depois, para ratificação.</p>
+      <div class="form-group">
+        <label>Funcionário *</label>
+        <input type="text" class="search-input" placeholder="Pesquisar por número ou nome..." id="heFuncSearch" oninput="filtrarHeFuncs()" style="margin-bottom: 8px; width: 100%;">
+        <div id="heFuncList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px;"></div>
+      </div>
+      <div class="form-group"><label>Data *</label><input type="date" id="heNovoData"></div>
+      <div class="form-group">
+        <label>Fundamento legal (art. 184.º, n.º 2) *</label>
+        <select id="heFundamento">
+          <option value="">— Seleccionar —</option>
+          <option value="a">a) Acidente, calamidade ou força maior</option>
+          <option value="b">b) Montagem, manutenção ou reparação de equipamentos e instalações</option>
+          <option value="c">c) Volume anormal e temporário de trabalho</option>
+          <option value="d">d) Substituição de trabalhador que não se apresentou no início do turno</option>
+          <option value="e">e) Produtos facilmente deterioráveis</option>
+          <option value="f">f) Trabalhos preparatórios ou complementares fora do horário de funcionamento</option>
+          <option value="g">g) Prolongamento até 30 min após o encerramento</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Hora prevista de início *</label><input type="time" id="heHoraInicio"></div>
+      <div class="form-group"><label>Hora prevista de fim *</label><input type="time" id="heHoraFim"></div>
+      <div class="form-group"><label>Motivo * (mínimo 10 caracteres)</label><textarea id="heNovoMotivo" rows="2" placeholder="Descreva a necessidade do serviço..."></textarea></div>
+      <div id="heAdminBloco" style="display:none">
+        <div class="form-group"><label>Referência da autorização da IGT (só acima dos limites legais)</label><input type="text" id="heIgtRef" maxlength="100"></div>
+        <div class="form-group"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:normal"><input type="checkbox" id="heConsentimento" style="width:auto;margin:0"> O trabalhador deu o seu consentimento (art. 185.º, n.º 3)</label></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="fecharModal('modalNovoPedidoHE')">Cancelar</button>
+      <button class="btn btn-accent" id="heBtnNovo" onclick="submeterNovoPedidoHE()">Submeter</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL INSERIR MARCAÇÃO MANUAL -->
 <div class="overlay" id="modalInserirMarcacao">
   <div class="modal">
@@ -1979,7 +2023,7 @@ function applyPermissions() {
   hide('nav-marcacoes-falta', ['rh_colaborador', 'funcionario'].includes(p));
   hide('nav-funcionarios', p === 'supervisor');
   hide('nav-ferias', false);
-  hide('nav-horas-extra', ['supervisor', 'funcionario'].includes(p));
+  hide('nav-horas-extra', p === 'funcionario');
   hide('nav-departamentos', ['rh_colaborador', 'supervisor'].includes(p));
   hide('nav-horarios', p === 'supervisor');
   hide('nav-relatorios', p === 'supervisor');
@@ -3014,33 +3058,36 @@ async function carregarPedidosHorasExtra() {
   if (!el) return;
   el.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   const estado = document.getElementById('heEstadoFiltro').value;
+  const podeDecidir = ['super_admin_tenant', 'rh_manager'].includes(USER.perfil);
+  const estadoLabel = { pendente: 'Pendente', aprovado_rh: 'Validado RH', aprovado: 'Aprovado', rejeitado: 'Rejeitado' };
   try {
-    const res = await api('GET', '/api/pedidos-horas-extra' + (estado ? `?estado=${estado}` : ''));
+    const res = await api('GET', '/api/pedidos-horas-extra' + (estado ? `?estado=${encodeURIComponent(estado)}` : ''));
+    if (res.erro) throw new Error(res.mensagem);
     const pedidos = res.dados || [];
     const rows = pedidos.map(p => {
-      const isPendente = p.estado === 'pendente';
-      const isAprovadoRH = p.estado === 'aprovado_rh';
-      const podeAprovar = (isPendente && USER.perfil === 'rh_colaborador') || (isAprovadoRH && USER.perfil === 'rh_manager') || (isPendente && USER.perfil === 'rh_manager' && p.minutos <= 120);
+      const aberto = p.estado === 'pendente' || p.estado === 'aprovado_rh';
       const badgeClass = p.estado === 'aprovado' ? 'green' : (p.estado === 'rejeitado' ? 'red' : 'warn');
-
+      const horario = (p.hora_inicio && p.hora_fim) ? `${String(p.hora_inicio).slice(0,5)}–${String(p.hora_fim).slice(0,5)}` : '—';
+      const fund = p.fundamento ? `${p.fundamento})` : '—';
+      const tituloRej = (p.estado === 'rejeitado' && p.rejeitado_motivo) ? ` title="${esc(p.rejeitado_motivo)}"` : '';
       return `<tr>
-        <td><span style="font-family:var(--mono)">${p.data}</span></td>
-        <td><strong>${p.funcionario_nome}</strong></td>
-        <td>${p.minutos} min</td>
-        <td><span class="badge badge-gray">${p.tipo}</span></td>
-        <td>${p.motivo}</td>
-        <td><span class="badge badge-${badgeClass}">${p.estado}</span></td>
+        <td><span style="font-family:var(--mono)">${esc(p.data)}</span></td>
+        <td><span style="font-family:var(--mono);color:var(--muted2)">${esc(p.numero_funcionario)}</span> <strong>${esc(p.nome_completo)}</strong></td>
+        <td style="font-family:var(--mono)">${esc(horario)}</td>
+        <td>${esc(p.minutos)} min</td>
+        <td>${esc(fund)}</td>
+        <td>${esc(p.motivo)}</td>
+        <td><span class="badge badge-${badgeClass}"${tituloRej}>${esc(estadoLabel[p.estado] || p.estado)}</span></td>
         <td>
-          ${podeAprovar ? `<button class="btn btn-sm btn-accent" onclick="aprovarPedidoHE(${p.id})">Aprovar</button>` : ''}
-          ${isPendente || isAprovadoRH ? `<button class="btn btn-sm btn-danger" onclick="rejeitarPedidoHE(${p.id})">Rejeitar</button>` : ''}
+          ${podeDecidir && aberto ? `<button class="btn btn-sm btn-accent" onclick="aprovarPedidoHE(${parseInt(p.id)})">Aprovar</button> <button class="btn btn-sm btn-danger" onclick="rejeitarPedidoHE(${parseInt(p.id)})">Rejeitar</button>` : ''}
         </td>
       </tr>`;
     }).join('');
     el.innerHTML = `<table class="tbl">
-      <thead><tr><th>Data</th><th>Funcionário</th><th>Minutos</th><th>Tipo</th><th>Motivo</th><th>Estado</th><th>Acções</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="7" class="empty">Nenhum pedido encontrado.</td></tr>'}</tbody>
+      <thead><tr><th>Data</th><th>Funcionário</th><th>Horário previsto</th><th>Minutos</th><th>Fundamento</th><th>Motivo</th><th>Estado</th><th>Acções</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="empty">Nenhum pedido encontrado.</td></tr>'}</tbody>
     </table>`;
-  } catch(e) { el.innerHTML = '<div class="empty">Erro ao carregar pedidos.</div>'; }
+  } catch(e) { el.innerHTML = `<div class="empty">${esc(e.message || 'Erro ao carregar pedidos.')}</div>`; }
 }
 
 async function carregarHorasExtraCount() {
@@ -3059,22 +3106,93 @@ async function aprovarPedidoHE(id) {
   try {
     const res = await api('PUT', `/api/pedidos-horas-extra/${id}/aprovar`);
     if (res.erro) throw new Error(res.mensagem);
-    toast(res.mensagem || 'Pedido aprovado.', 'ok');
+    toast(esc(res.mensagem || 'Pedido aprovado.'), 'ok');
     carregarPedidosHorasExtra();
     carregarHorasExtraCount();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch(e) { toast(esc(e.message || 'Erro ao aprovar.'), 'err'); }
 }
 
 async function rejeitarPedidoHE(id) {
   const motivo = prompt('Motivo da rejeição:');
-  if (!motivo) return;
+  if (!motivo || !motivo.trim()) return;
   try {
-    const res = await api('PUT', `/api/pedidos-horas-extra/${id}/rejeitar`, { motivo_rejeicao: motivo });
+    const res = await api('PUT', `/api/pedidos-horas-extra/${id}/rejeitar`, { motivo: motivo.trim() });
     if (res.erro) throw new Error(res.mensagem);
-    toast(res.mensagem || 'Pedido rejeitado.', 'ok');
+    toast(esc(res.mensagem || 'Pedido rejeitado.'), 'ok');
     carregarPedidosHorasExtra();
     carregarHorasExtraCount();
-  } catch(e) { toast(e.message, 'err'); }
+  } catch(e) { toast(esc(e.message || 'Erro ao rejeitar.'), 'err'); }
+}
+
+function hojeLocalHE() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${dd}`;
+}
+
+async function abrirModalNovoPedidoHE() {
+  document.getElementById('heFuncSearch').value = '';
+  document.getElementById('heNovoData').value = hojeLocalHE();
+  document.getElementById('heFundamento').value = '';
+  document.getElementById('heHoraInicio').value = '';
+  document.getElementById('heHoraFim').value = '';
+  document.getElementById('heNovoMotivo').value = '';
+  document.getElementById('heIgtRef').value = '';
+  document.getElementById('heConsentimento').checked = false;
+  document.getElementById('heAdminBloco').style.display = USER.perfil === 'super_admin_tenant' ? '' : 'none';
+  const listEl = document.getElementById('heFuncList');
+  listEl.innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  document.getElementById('modalNovoPedidoHE').classList.add('open');
+  try {
+    const res = await api('GET', '/api/funcionarios?estado=activo');
+    if (res.erro) throw new Error(res.mensagem);
+    const proprio = USER.funcionario_id ? String(USER.funcionario_id) : null;
+    const funcs = (res.dados || []).filter(f => USER.perfil === 'super_admin_tenant' || String(f.id) !== proprio);
+    listEl.innerHTML = funcs.map(f => `
+      <label class="he-func-item" style="display:flex;align-items:center;gap:12px;padding:8px 16px;cursor:pointer;border-bottom:1px solid var(--border);text-transform:none;letter-spacing:normal;">
+        <input type="radio" name="heFunc" value="${esc(f.id)}" style="width:auto;margin:0;">
+        <span style="font-family:var(--mono);font-size:12px;color:var(--muted2);width:52px;flex-shrink:0;">${esc(f.numero_funcionario)}</span>
+        <span title="${esc(f.nome_completo)}" style="flex:1;font-weight:600;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.nome_completo)}</span>
+      </label>
+    `).join('') || '<div class="empty">Sem funcionários disponíveis.</div>';
+  } catch(e) { listEl.innerHTML = `<div class="empty">${esc(e.message || 'Erro ao carregar funcionários.')}</div>`; }
+}
+
+function filtrarHeFuncs() {
+  const term = document.getElementById('heFuncSearch').value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  document.querySelectorAll('#heFuncList .he-func-item').forEach(item => {
+    const text = item.textContent.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    item.style.display = text.includes(term) ? 'flex' : 'none';
+  });
+}
+
+async function submeterNovoPedidoHE() {
+  const sel = document.querySelector('input[name="heFunc"]:checked');
+  const data = document.getElementById('heNovoData').value;
+  const fundamento = document.getElementById('heFundamento').value;
+  const horaInicio = document.getElementById('heHoraInicio').value;
+  const horaFim = document.getElementById('heHoraFim').value;
+  const motivo = document.getElementById('heNovoMotivo').value.trim();
+  if (!sel || !data || !fundamento || !horaInicio || !horaFim) { toast('Preencha o funcionário, a data, o fundamento e as horas.', 'err'); return; }
+  if (horaInicio === horaFim) { toast('A hora de fim tem de ser diferente da hora de início.', 'err'); return; }
+  if (motivo.length < 10) { toast('O motivo deve ter pelo menos 10 caracteres.', 'err'); return; }
+  const body = { funcionario_id: parseInt(sel.value), data, fundamento, hora_inicio: horaInicio, hora_fim: horaFim, motivo };
+  if (USER.perfil === 'super_admin_tenant') {
+    body.igt_autorizacao_ref = document.getElementById('heIgtRef').value.trim();
+    body.consentimento_trabalhador = document.getElementById('heConsentimento').checked ? 1 : 0;
+  }
+  const btn = document.getElementById('heBtnNovo');
+  btn.disabled = true;
+  try {
+    const res = await api('POST', '/api/pedidos-horas-extra', body);
+    if (res.erro) throw new Error(res.mensagem);
+    toast('Pedido submetido.', 'ok');
+    fecharModal('modalNovoPedidoHE');
+    carregarPedidosHorasExtra();
+    carregarHorasExtraCount();
+  } catch(e) { toast(esc(e.message || 'Erro ao submeter pedido.'), 'err'); }
+  finally { btn.disabled = false; }
 }
 
 let _nfFuncionarios = [];
