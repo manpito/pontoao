@@ -173,7 +173,7 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
 
     $group->get('/marcacoes',           [\App\Controllers\MarcacaoController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor', 'funcionario']));
 
     $group->post('/marcacoes',          [\App\Controllers\MarcacaoController::class, 'store'])
           ->add(AuthMiddleware::class);
@@ -250,7 +250,7 @@ $group->post('/zk-bridge/relogios',    [\App\Controllers\ZkBridgeController::cla
 
     // --- Férias ---
     $group->get('/ferias',              [\App\Controllers\FeriasController::class, 'index'])
-          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor', 'funcionario']));
 
     $group->post('/ferias',             [\App\Controllers\FeriasController::class, 'store'])
           ->add(AuthMiddleware::class);
@@ -438,7 +438,7 @@ $group->put('/funcionarios/{id}/acesso-portal/toggle', [\App\Controllers\Funcion
 
 // --- Saldo Férias ---
 $group->get('/ferias/saldo/{funcionario_id}',          [\App\Controllers\FeriasController::class, 'saldo'])
-      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor']));
+      ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager', 'rh_colaborador', 'supervisor', 'funcionario']));
 
 $group->put('/ferias/{funcionario_id}/ajustar',        [\App\Controllers\FeriasController::class, 'ajustarPorFaltas'])
       ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
