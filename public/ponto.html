@@ -747,6 +747,7 @@ body::before {
       <div class="card">
         <div class="card-title">Horas extra</div>
         <div id="horasExtraStatus" style="font-size:13px;color:var(--muted);margin-bottom:12px">A carregar...</div>
+        <div id="horasExtraVistos"></div>
         <div style="font-size:12px;color:var(--muted)">Os pedidos de horas extra são feitos pelo seu supervisor ou pelo RH.</div>
       </div>
 
@@ -1169,17 +1170,76 @@ async function submeterHorasExtra() {
   } finally { btn.disabled = false; }
 }
 
+function escHE(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function horaHE(dt) {
+  return dt ? String(dt).slice(11, 16) : '';
+}
+
 async function carregarStatusHorasExtra() {
-  const fid = currentUser.funcionario_id || currentUser.utilizador_id || currentUser.id;
+  const statusEl = document.getElementById('horasExtraStatus');
+  const vistosEl = document.getElementById('horasExtraVistos');
+  const fid = currentUser && currentUser.funcionario_id;
+  if (!fid) {
+    statusEl.textContent = 'Sem funcionário associado.';
+    vistosEl.innerHTML = '';
+    return;
+  }
   try {
-    const res = await api('GET', `/api/pedidos-horas-extra?funcionario_id=${fid}`);
+    const res = await api('GET', `/api/pedidos-horas-extra?funcionario_id=${encodeURIComponent(fid)}`);
+    if (res.erro) throw new Error(res.mensagem);
     const pedidos = res.dados || [];
-    const pendentes = pedidos.filter(p => p.estado === 'pendente').length;
-    const aprovados = pedidos.filter(p => p.estado === 'aprovado').length;
-    document.getElementById('horasExtraStatus').textContent =
-      pendentes > 0 ? `${pendentes} pedido(s) pendente(s)` :
-      aprovados > 0 ? `${aprovados} pedido(s) aprovado(s)` : 'Sem pedidos recentes.';
-  } catch(_) {}
+    const temRegisto = p => p.minutos_reais !== null && p.minutos_reais !== undefined;
+    const porVisar = p => p.estado === 'aprovado' && temRegisto(p) && !p.visto_em;
+    const d30 = new Date(); d30.setDate(d30.getDate() - 30);
+    const desde = localDate(d30);
+    const mostrar = pedidos.filter(p => porVisar(p) || String(p.data) >= desde).slice(0, 15);
+    const nPorVisar = pedidos.filter(porVisar).length;
+    statusEl.textContent =
+      nPorVisar > 0 ? `${nPorVisar} registo(s) de horas extra por visar.` :
+      mostrar.length > 0 ? 'Pedidos dos últimos 30 dias e próximos:' : 'Sem pedidos recentes.';
+    const estadoLabel = { pendente: 'Pendente', aprovado_rh: 'Em aprovação', aprovado: 'Aprovado', rejeitado: 'Rejeitado' };
+    const estadoCor = { pendente: 'var(--warn)', aprovado_rh: 'var(--warn)', aprovado: 'var(--accent)', rejeitado: 'var(--danger)' };
+    const aviso = nPorVisar === 0 ? '' :
+      '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Ao visar, confirma que as horas registadas pelo RH correspondem ao trabalho extraordinário que prestou (Lei n.º 12/23, art. 187.º). Se não concordar, não vise e fale com o RH.</div>';
+    vistosEl.innerHTML = aviso + mostrar.map(p => {
+      const previsto = (p.hora_inicio && p.hora_fim) ? `${String(p.hora_inicio).slice(0,5)}–${String(p.hora_fim).slice(0,5)}` : '—';
+      const linhaRejeicao = (p.estado === 'rejeitado' && p.rejeitado_motivo)
+        ? `<div style="color:var(--muted);margin-top:6px">Motivo da rejeição: ${escHE(p.rejeitado_motivo)}</div>` : '';
+      let linhaRealizado = '';
+      if (temRegisto(p)) {
+        const visto = p.visto_em ? ' · <span style="color:var(--accent)">Visado</span>' : ' · <span style="color:var(--warn)">Por visar</span>';
+        linhaRealizado = `<div style="margin-top:6px">Realizado: <span style="font-family:var(--mono)">${escHE(horaHE(p.inicio_real))}–${escHE(horaHE(p.fim_real))}</span> · ${escHE(p.minutos_reais)} min${visto}</div>`;
+        if (porVisar(p)) {
+          linhaRealizado += `<div style="color:var(--muted);margin:6px 0 10px">${escHE(p.registo_justificacao)}</div>
+          <button class="btn-sm" onclick="visarRegistoHE(${parseInt(p.id)})">Visar</button>`;
+        }
+      }
+      return `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px">
+          <div><strong>${escHE(p.data)}</strong> · Previsto: <span style="font-family:var(--mono)">${escHE(previsto)}</span> · ${escHE(p.minutos)} min · <span style="color:${estadoCor[p.estado] || 'var(--muted)'}">${escHE(estadoLabel[p.estado] || p.estado)}</span></div>
+          ${linhaRejeicao}${linhaRealizado}
+        </div>`;
+    }).join('');
+  } catch(e) {
+    statusEl.textContent = e.message || 'Erro ao carregar as horas extra.';
+  }
+}
+
+async function visarRegistoHE(id) {
+  if (!confirm('Confirma que as horas registadas correspondem ao trabalho extraordinário que prestou?')) return;
+  try {
+    const res = await api('PUT', `/api/pedidos-horas-extra/${parseInt(id)}/visar`);
+    if (res.erro) throw new Error(res.mensagem);
+    toast(escHE(res.mensagem || 'Registo visado.'), 'success');
+    carregarStatusHorasExtra();
+  } catch(e) {
+    toast(escHE(e.message || 'Erro ao visar o registo.'), 'error');
+  }
 }
 
 function abrirPedidoFerias() {
