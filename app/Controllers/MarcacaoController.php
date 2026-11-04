@@ -42,8 +42,8 @@ class MarcacaoController
             $bind[':sid_self'] = (int) $user->funcionario_id;
         } else
         if ($user && in_array($user->perfil, ['funcionario'])) {
-            $where[]            = 'f.id = :func_id';
-            $bind[':func_id']   = (int) $user->sub;
+            $where[]            = 'm.funcionario_id = :func_id';
+            $bind[':func_id']   = (int) ($user->funcionario_id ?? 0);
         } elseif (!empty($params['funcionario_id'])) {
             $where[]            = 'm.funcionario_id = :func_id';
             $bind[':func_id']   = (int) $params['funcionario_id'];

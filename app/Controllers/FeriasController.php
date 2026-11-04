@@ -47,7 +47,7 @@ class FeriasController
         } else
         if ($user && $user->perfil === 'funcionario') {
             $where[]        = 'fp.funcionario_id = :fid';
-            $bind[':fid']   = (int) $user->sub;
+            $bind[':fid']   = (int) ($user->funcionario_id ?? 0);
         } elseif (!empty($params['funcionario_id'])) {
             $where[]        = 'fp.funcionario_id = :fid';
             $bind[':fid']   = (int) $params['funcionario_id'];
@@ -96,6 +96,20 @@ class FeriasController
         $fid = (int) $args['funcionario_id'];
         $ano = (int) ($request->getQueryParams()['ano'] ?? date('Y'));
         $db  = $this->db();
+
+        $user    = $request->getAttribute('auth_user');
+        $perfil  = (string) ($user->perfil ?? '');
+        $proprio = (int) ($user->funcionario_id ?? 0);
+        if ($perfil === 'funcionario' && ($proprio <= 0 || $fid !== $proprio)) {
+            return $this->json(403, ['erro' => true, 'mensagem' => 'Só pode consultar o seu próprio saldo de férias.']);
+        }
+        if ($perfil === 'supervisor' && $fid !== $proprio) {
+            $st = $db->prepare('SELECT id FROM funcionarios WHERE id = :fid AND supervisor_id = :sid LIMIT 1');
+            $st->execute([':fid' => $fid, ':sid' => $proprio]);
+            if ($proprio <= 0 || !$st->fetch()) {
+                return $this->json(403, ['erro' => true, 'mensagem' => 'Só pode consultar o saldo de férias de funcionários da sua equipa.']);
+            }
+        }
 
         $saldo = $this->calcularSaldoReal($db, $fid, $ano);
 
