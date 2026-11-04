@@ -75,8 +75,12 @@ class PedidoHorasExtraController
             $bind[':fid'] = (int) $user->funcionario_id;
         } elseif ($user->perfil === 'supervisor') {
             $where[] = '(f.supervisor_id = :sid OR f.id = :sid_self)';
-            $bind[':sid'] = (int) $user->funcionario_id;
-            $bind[':sid_self'] = (int) $user->funcionario_id;
+            $bind[':sid'] = (int) ($user->funcionario_id ?? 0);
+            $bind[':sid_self'] = (int) ($user->funcionario_id ?? 0);
+            if (!empty($params['funcionario_id'])) {
+                $where[] = 'phe.funcionario_id = :fid';
+                $bind[':fid'] = (int) $params['funcionario_id'];
+            }
         } elseif (!empty($params['funcionario_id'])) {
             $where[] = 'phe.funcionario_id = :fid';
             $bind[':fid'] = (int) $params['funcionario_id'];
