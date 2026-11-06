@@ -2589,6 +2589,9 @@ async function submeterFunc() {
     supervisor_id:       document.getElementById('fSupervisor').value || null,
   };
   if (!payload.nome_completo || !payload.data_admissao) { toast('Nome e data de admissão são obrigatórios.','err'); return; }
+  const btn = document.getElementById('btnGuardarFunc');
+  if (btn.disabled) return;
+  btn.disabled = true;
   try {
     const res = _editFuncId
       ? await api('PUT', `/api/funcionarios/${_editFuncId}`, payload)
@@ -2598,9 +2601,9 @@ async function submeterFunc() {
     fecharModal('modalFunc');
     loadFuncionarios();
     carregarSelectores();
-  applyPermissions();
-
+    applyPermissions();
   } catch(e) { toast(e.message,'err'); }
+  finally { btn.disabled = false; }
 }
 
 async function desligarFunc(id, nome) {
