@@ -263,16 +263,16 @@ input[type="month"]::-webkit-calendar-picker-indicator {
 .overlay {
   position: fixed; inset: 0; z-index: 500;
   background: rgba(7,9,13,.85); backdrop-filter: blur(6px);
-  display: flex; align-items: center; justify-content: center; padding: 24px;
-  opacity: 0; pointer-events: none; transition: opacity .2s;
+  display: none; align-items: center; justify-content: center; padding: 24px;
 }
-.overlay.open { opacity: 1; pointer-events: all; }
+.overlay.open { display: flex; animation: ovIn .2s ease; }
+@keyframes ovIn { from { opacity: 0; } to { opacity: 1; } }
 .modal {
   background: var(--s1); border: 1px solid var(--border); border-radius: 16px;
   width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto;
-  transform: translateY(16px); transition: transform .2s;
+  animation: modalIn .2s ease;
 }
-.overlay.open .modal { transform: translateY(0); }
+@keyframes modalIn { from { transform: translateY(16px); } to { transform: translateY(0); } }
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 20px 24px; border-bottom: 1px solid var(--border);
