@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Portal de ponto: novo aspecto claro (fundo claro, cartões brancos, cabeçalho azul-escuro da marca FTL e ciano como cor de destaque), substituindo o tema escuro. Sem alterações de funcionalidade: só cores, sombras e contrastes. Os textos sobre fundo claro passam a ter contraste mínimo de 4,5:1 (WCAG AA).
 - Painel de RH: os modais fechados deixam de ser desenhados (display none em vez de opacidade 0 com desfoque de fundo); corrige o ecrã de login em branco em tablets e telemóveis.
 - Funcionários: impedido mais de um horário em vigor por funcionário (índice único, migração 020); edição do funcionário em transacção com bloqueio da linha, horário só é trocado quando muda, conflito devolve 409; botão Guardar bloqueado durante o pedido.
 - Supervisor: nas listas de marcações, férias e horas extra, o parâmetro funcionario_id passa a filtrar dentro da equipa (antes era ignorado e vinha a equipa inteira; no portal de ponto o supervisor via as marcações e as horas extra da equipa como se fossem suas). Um supervisor sem funcionário associado deixa de ver as marcações e as férias de todo o tenant e passa a não ver nenhuma.

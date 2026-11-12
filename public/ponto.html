@@ -8,21 +8,28 @@
   <link rel="apple-touch-icon" sizes="192x192" href="/assets/favicon-192x192.png">
   <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
 <title>Ponto — Portal de Assiduidade</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:        #0a0e14;
-  --surface:   #111720;
-  --surface2:  #1a2233;
-  --border:    #1e2d42;
-  --accent:    #00e5a0;
-  --accent2:   #0095ff;
-  --warn:      #ff6b35;
-  --danger:    #ff3b5c;
-  --text:      #e8edf5;
-  --muted:     #5a6a80;
+  --bg:        #F4F7FB;
+  --surface:   #FFFFFF;
+  --surface2:  #EEF2F7;
+  --border:    #DCE3EE;
+  --accent:    #00708C;
+  --accent-vivo: #009CBF;
+  --accent2:   #0B63A8;
+  --warn:      #B45309;
+  --danger:    #B91C1C;
+  --text:      #0B1B3F;
+  --muted:     #56657F;
+  --nav:       #152F70;
+  --nav-forte: #0B2256;
+  --nav-texto: #FFFFFF;
+  --nav-suave: #B8C5E0;
+  --nav-borda: #4A5F96;
   --mono:      'DM Mono', monospace;
   --sans:      'Sora', sans-serif;
 }
@@ -43,8 +50,8 @@ body::before {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(0,229,160,.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,160,.03) 1px, transparent 1px);
+    linear-gradient(rgba(21,47,112,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(21,47,112,.035) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;
@@ -58,8 +65,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
 }
-.glow-1 { top: -200px; left: -200px; background: rgba(0,229,160,.07); }
-.glow-2 { bottom: -200px; right: -200px; background: rgba(0,149,255,.06); }
+.glow-1 { top: -200px; left: -200px; background: rgba(0,156,191,.11); }
+.glow-2 { bottom: -200px; right: -200px; background: rgba(21,47,112,.07); }
 
 /* ── LAYOUT ── */
 #app { position: relative; z-index: 1; }
@@ -82,6 +89,7 @@ body::before {
   padding: 48px 40px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 10px 30px rgba(11,27,63,.08);
 }
 
 .login-card::before {
@@ -89,7 +97,7 @@ body::before {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  background: linear-gradient(90deg, var(--accent-vivo), var(--nav));
 }
 
 .login-logo {
@@ -102,8 +110,7 @@ body::before {
 .login-logo .dot {
   width: 10px; height: 10px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 12px var(--accent);
+  background: var(--accent-vivo);
   animation: pulse 2s infinite;
 }
 
@@ -177,16 +184,16 @@ body::before {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #0a0e14;
+  background: var(--nav);
+  color: var(--nav-texto);
 }
 
-.btn-primary:hover { background: #00ffb2; transform: translateY(-1px); }
+.btn-primary:hover { background: var(--nav-forte); transform: translateY(-1px); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 .login-error {
-  background: rgba(255,59,92,.1);
-  border: 1px solid rgba(255,59,92,.3);
+  background: #FEE2E2;
+  border: 1px solid #F3B4B4;
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 13px;
@@ -205,8 +212,8 @@ body::before {
   justify-content: space-between;
   padding: 0 24px;
   height: 60px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--nav);
+  border-bottom: 1px solid var(--nav);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -220,10 +227,10 @@ body::before {
   font-weight: 600;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--nav-texto);
 }
 
-.header-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+.header-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-vivo); }
 
 .header-user {
   display: flex;
@@ -233,27 +240,27 @@ body::before {
 
 .header-name {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--nav-suave);
 }
 
-.header-name strong { color: var(--text); font-weight: 600; }
+.header-name strong { color: var(--nav-texto); font-weight: 600; }
 
 .btn-logout {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid var(--nav-borda);
   border-radius: 6px;
   padding: 6px 14px;
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--nav-suave);
   cursor: pointer;
   letter-spacing: .05em;
   text-transform: uppercase;
   transition: all .2s;
 }
 
-.btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+.btn-logout:hover { border-color: var(--nav-texto); color: var(--nav-texto); }
 
 /* MAIN */
 .main {
@@ -273,13 +280,14 @@ body::before {
   text-align: center;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 1px 2px rgba(11,27,63,.05);
 }
 
 .clock-card::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse at 50% 0%, rgba(0,229,160,.05) 0%, transparent 70%);
+  background: radial-gradient(ellipse at 50% 0%, rgba(0,156,191,.08) 0%, transparent 70%);
   pointer-events: none;
 }
 
@@ -327,7 +335,7 @@ body::before {
   letter-spacing: .03em;
 }
 
-.marca-btn:hover { transform: translateY(-2px); }
+.marca-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(11,27,63,.10); }
 .marca-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
 
 .marca-btn .icon {
@@ -339,13 +347,13 @@ body::before {
   font-size: 20px;
 }
 
-.marca-btn.entrada .icon { background: rgba(0,229,160,.15); }
+.marca-btn.entrada .icon { background: #E0F5FA; color: var(--accent); }
 .marca-btn.entrada:hover { border-color: var(--accent); }
-.marca-btn.saida .icon { background: rgba(255,107,53,.15); }
+.marca-btn.saida .icon { background: #FEF3C7; color: #92400E; }
 .marca-btn.saida:hover { border-color: var(--warn); }
-.marca-btn.ini-int .icon { background: rgba(0,149,255,.15); }
+.marca-btn.ini-int .icon { background: #E7F1FA; color: var(--accent2); }
 .marca-btn.ini-int:hover { border-color: var(--accent2); }
-.marca-btn.fim-int .icon { background: rgba(0,149,255,.15); }
+.marca-btn.fim-int .icon { background: #E7F1FA; color: var(--accent2); }
 .marca-btn.fim-int:hover { border-color: var(--accent2); }
 
 /* STATUS BAR */
@@ -359,7 +367,7 @@ body::before {
 }
 
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
-.status-dot.ok { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.ok { background: var(--accent); }
 .status-dot.warn { background: var(--warn); }
 .status-dot.err { background: var(--danger); }
 
@@ -377,6 +385,7 @@ body::before {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 24px;
+  box-shadow: 0 1px 2px rgba(11,27,63,.05);
 }
 
 .card-title {
@@ -395,7 +404,7 @@ body::before {
   content: '';
   width: 3px; height: 12px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--accent-vivo);
 }
 
 /* HISTÓRICO */
@@ -425,12 +434,12 @@ body::before {
   border-radius: 4px;
 }
 
-.tipo-entrada  { background: rgba(0,229,160,.12); color: var(--accent); }
-.tipo-saida    { background: rgba(255,107,53,.12); color: var(--warn); }
-.tipo-ini_int  { background: rgba(0,149,255,.12); color: var(--accent2); }
-.tipo-fim_int  { background: rgba(0,149,255,.12); color: var(--accent2); }
-.tipo-saida_servico    { background: rgba(255,59,92,.12); color: var(--danger); }
-.tipo-regresso_servico { background: rgba(0,229,160,.12); color: var(--accent); }
+.tipo-entrada  { background: #E0F5FA; color: var(--accent); }
+.tipo-saida    { background: #FEF3C7; color: #92400E; }
+.tipo-ini_int  { background: #E7F1FA; color: var(--accent2); }
+.tipo-fim_int  { background: #E7F1FA; color: var(--accent2); }
+.tipo-saida_servico    { background: #FEE2E2; color: var(--danger); }
+.tipo-regresso_servico { background: #E0F5FA; color: var(--accent); }
 
 .marcacao-hora {
   font-family: var(--mono);
@@ -492,7 +501,7 @@ body::before {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10,14,20,.85);
+  background: rgba(11,27,63,.45);
   backdrop-filter: blur(8px);
   z-index: 200;
   display: flex;
@@ -514,6 +523,7 @@ body::before {
   max-width: 400px;
   width: 100%;
   position: relative;
+  box-shadow: 0 20px 48px rgba(11,27,63,.18);
   transform: translateY(20px);
   transition: transform .3s;
   text-align: center;
@@ -601,12 +611,12 @@ body::before {
   align-items: center;
   gap: 10px;
   animation: slideIn .3s ease;
-  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  box-shadow: 0 8px 24px rgba(11,27,63,.14);
 }
 
-.toast.success { border-color: rgba(0,229,160,.3); }
-.toast.error   { border-color: rgba(255,59,92,.3); }
-.toast.info    { border-color: rgba(0,149,255,.3); }
+.toast.success { border-color: var(--accent); }
+.toast.error   { border-color: var(--danger); }
+.toast.info    { border-color: var(--accent2); }
 
 .toast-icon { font-size: 16px; }
 
@@ -659,8 +669,8 @@ body::before {
   </div>
 </div>
 
-<div id="modalAlterarPassword" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center">
-  <div style="background:#1a2744;border-radius:16px;padding:32px;width:100%;max-width:400px;margin:20px;border:1px solid var(--accent);box-shadow:0 24px 64px rgba(0,0,0,.8)">
+<div id="modalAlterarPassword" style="display:none;position:fixed;inset:0;background:rgba(11,27,63,.45);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border-radius:16px;padding:32px;width:100%;max-width:400px;margin:20px;border:1px solid var(--border);box-shadow:0 24px 64px rgba(11,27,63,.22)">
     <h2 style="margin-bottom:8px;font-size:18px">Alterar password</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:24px" id="alterarPassSub">Por segurança, defina uma nova password para a sua conta.</p>
     <div style="margin-bottom:16px">
@@ -675,10 +685,10 @@ body::before {
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">CONFIRMAR NOVA PASSWORD</label>
       <input type="password" id="passConfirm" placeholder="••••••••" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;box-sizing:border-box">
     </div>
-    <div id="alterarPassErro" style="display:none;color:#ef4444;font-size:13px;margin-bottom:16px"></div>
+    <div id="alterarPassErro" style="display:none;color:var(--danger);font-size:13px;margin-bottom:16px"></div>
     <div style="display:flex;gap:10px">
       <button onclick="document.getElementById('modalAlterarPassword').style.display='none'" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;cursor:pointer">Cancelar</button>
-      <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="flex:2;background:var(--accent);color:#07090d;border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
+      <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="flex:2;background:var(--nav);color:var(--nav-texto);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
     </div>
   </div>
 </div>
