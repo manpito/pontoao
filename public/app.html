@@ -22,7 +22,7 @@
   --bg3:      #E6ECF8;
   --border:   #DCE3EE;
   --accent:   #00708C;
-  --accent-vivo: #009CBF;
+  --accent-vivo: #008CAC;
   --blue:     #152F70;
   --warn:     #B45309;
   --danger:   #B91C1C;
@@ -30,12 +30,15 @@
   --text:     #0B1B3F;
   --muted:    #475569;
   --muted2:   #56657F;
-  --nav:        #152F70;
-  --nav-forte:  #0B2256;
+  --nav:        #025424;
+  --nav-forte:  #013D1A;
   --nav-texto:  #FFFFFF;
-  --nav-suave:  #B8C5E0;
-  --nav-borda:  #4A5F96;
-  --nav-activo: #009CBF;
+  --nav-suave:  #CFE3D6;
+  --nav-borda:  #6E9A82;
+  --nav-activo: #A7F3D0;
+  --accao:      #A7F3D0;
+  --accao-forte: #8FE9C0;
+  --verde:      #025424;
   --sombra:   0 1px 2px rgba(11,27,63,.05);
   --mono:     'DM Mono', monospace;
   --sans:     'Sora', sans-serif;
@@ -100,11 +103,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 
 .btn-main {
   width: 100%; padding: 13px; border-radius: 8px; border: none;
-  background: var(--nav); color: var(--nav-texto);
+  background: var(--accao); color: var(--verde);
+  border: 1px solid var(--verde);
   font-family: var(--sans); font-size: 14px; font-weight: 700;
   cursor: pointer; transition: all .15s;
 }
-.btn-main:hover { background: var(--nav-forte); }
+.btn-main:hover { background: var(--accao-forte); }
 .btn-main:disabled { opacity: .5; cursor: not-allowed; }
 
 .err-box {
@@ -133,7 +137,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   padding: 20px 20px 0;
   margin-bottom: 28px;
 }
-.sb-brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-vivo); }
+.sb-brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nav-activo); }
 .sb-brand-name { font-size: 11px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--nav-texto); }
 
 .sb-section { font-size: 9px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--nav-suave); padding: 0 20px; margin-bottom: 6px; }
@@ -146,7 +150,7 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   cursor: pointer; transition: all .15s; border: none; background: none; width: calc(100% - 16px); text-align: left;
 }
 .nav-item:hover { background: rgba(255,255,255,.10); color: var(--nav-texto); }
-.nav-item.active { background: var(--nav-activo); color: #0B1B3F; font-weight: 600; }
+.nav-item.active { background: var(--nav-activo); color: var(--verde); font-weight: 600; }
 .nav-item .ni { font-size: 15px; width: 18px; text-align: center; }
 .nav-badge { margin-left: auto; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 10px; }
 
@@ -246,8 +250,8 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 /* BUTTONS */
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--s2); font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; transition: all .15s; letter-spacing: .04em; }
 .btn:hover { border-color: var(--accent); color: var(--accent); }
-.btn-accent { background: var(--nav); border-color: var(--nav); color: var(--nav-texto); }
-.btn-accent:hover { background: var(--nav-forte); border-color: var(--nav-forte); color: var(--nav-texto); }
+.btn-accent { background: var(--accao); border-color: var(--verde); color: var(--verde); }
+.btn-accent:hover { background: var(--accao-forte); border-color: var(--verde); color: var(--verde); }
 .btn-danger { border-color: #F3B4B4; }
 .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
 .btn-sm { padding: 5px 10px; font-size: 11px; }
