@@ -128,9 +128,14 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
   flex-direction: column;
   flex-shrink: 0;
   height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   position: sticky;
   top: 0;
 }
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.30); border-radius: 4px; }
 
 .sb-brand {
   display: flex; align-items: center; gap: 10px;
