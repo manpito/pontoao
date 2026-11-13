@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Actualização
+- Portal de ponto: esquema de cor verde — cabeçalho #025424, cartões e modais #D9EDE3 com contorno, superfícies encaixadas (botões de marcação, mosaicos do saldo, campos) a branco com contorno, barras de título a #008CAC e botões de acção (Entrar, Pedir férias, Visar, Alterar password) a #A7F3D0 com contorno e texto #025424. Os distintivos de tipo de marcação passam a ter contorno na cor do texto, para continuarem a distinguir-se do cartão. Sem alterações de funcionalidade; contrastes mínimos de 4,5:1 para texto (WCAG AA) e 3:1 para os limites dos elementos.
 - Painel de RH: novo aspecto claro (fundo claro, cartões brancos, barra lateral azul-escuro da marca FTL com o item activo a ciano), substituindo o tema escuro. Sem alterações de funcionalidade: só cores, sombras e contrastes. Os textos passam a ter contraste mínimo de 4,5:1 (WCAG AA). Ficam definidas as variáveis --bg2, --bg3 e --err, que eram usadas sem estarem declaradas.
 - Portal de ponto: novo aspecto claro (fundo claro, cartões brancos, cabeçalho azul-escuro da marca FTL e ciano como cor de destaque), substituindo o tema escuro. Sem alterações de funcionalidade: só cores, sombras e contrastes. Os textos sobre fundo claro passam a ter contraste mínimo de 4,5:1 (WCAG AA).
 - Painel de RH: os modais fechados deixam de ser desenhados (display none em vez de opacidade 0 com desfoque de fundo); corrige o ecrã de login em branco em tablets e telemóveis.

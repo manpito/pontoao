@@ -14,22 +14,24 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:        #F4F7FB;
-  --surface:   #FFFFFF;
-  --surface2:  #EEF2F7;
-  --border:    #DCE3EE;
-  --accent:    #00708C;
-  --accent-vivo: #009CBF;
+  --bg:        #FFFFFF;
+  --surface:   #D9EDE3;
+  --surface2:  #FFFFFF;
+  --border:    #5E8C74;
+  --border-suave: #A9C9B8;
+  --accent:    #025424;
+  --accent-vivo: #008CAC;
   --accent2:   #0B63A8;
   --warn:      #B45309;
   --danger:    #B91C1C;
   --text:      #0B1B3F;
   --muted:     #56657F;
-  --nav:       #152F70;
-  --nav-forte: #0B2256;
+  --nav:       #025424;
+  --nav-forte: #013D1A;
   --nav-texto: #FFFFFF;
-  --nav-suave: #B8C5E0;
-  --nav-borda: #4A5F96;
+  --nav-suave: #CFE3D6;
+  --nav-borda: #CFE3D6;
+  --accao:     #A7F3D0;
   --mono:      'DM Mono', monospace;
   --sans:      'Sora', sans-serif;
 }
@@ -50,8 +52,8 @@ body::before {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(21,47,112,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(21,47,112,.035) 1px, transparent 1px);
+    linear-gradient(rgba(2,84,36,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(2,84,36,.05) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;
@@ -65,8 +67,8 @@ body::before {
   pointer-events: none;
   z-index: 0;
 }
-.glow-1 { top: -200px; left: -200px; background: rgba(0,156,191,.11); }
-.glow-2 { bottom: -200px; right: -200px; background: rgba(21,47,112,.07); }
+.glow-1 { top: -200px; left: -200px; background: rgba(0,140,172,.10); }
+.glow-2 { bottom: -200px; right: -200px; background: rgba(2,84,36,.07); }
 
 /* ── LAYOUT ── */
 #app { position: relative; z-index: 1; }
@@ -184,11 +186,12 @@ body::before {
 }
 
 .btn-primary {
-  background: var(--nav);
-  color: var(--nav-texto);
+  background: var(--accao);
+  color: var(--accent);
+  border: 1px solid var(--accent);
 }
 
-.btn-primary:hover { background: var(--nav-forte); transform: translateY(-1px); }
+.btn-primary:hover { background: #8FE9C0; transform: translateY(-1px); }
 .btn-primary:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
 .login-error {
@@ -230,7 +233,7 @@ body::before {
   color: var(--nav-texto);
 }
 
-.header-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-vivo); }
+.header-logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accao); }
 
 .header-user {
   display: flex;
@@ -347,7 +350,7 @@ body::before {
   font-size: 20px;
 }
 
-.marca-btn.entrada .icon { background: #E0F5FA; color: var(--accent); }
+.marca-btn.entrada .icon { background: #E3F2E9; color: var(--accent); }
 .marca-btn.entrada:hover { border-color: var(--accent); }
 .marca-btn.saida .icon { background: #FEF3C7; color: #92400E; }
 .marca-btn.saida:hover { border-color: var(--warn); }
@@ -413,7 +416,7 @@ body::before {
   align-items: center;
   justify-content: space-between;
   padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-suave);
   font-size: 13px;
 }
 
@@ -434,12 +437,12 @@ body::before {
   border-radius: 4px;
 }
 
-.tipo-entrada  { background: #E0F5FA; color: var(--accent); }
-.tipo-saida    { background: #FEF3C7; color: #92400E; }
-.tipo-ini_int  { background: #E7F1FA; color: var(--accent2); }
-.tipo-fim_int  { background: #E7F1FA; color: var(--accent2); }
-.tipo-saida_servico    { background: #FEE2E2; color: var(--danger); }
-.tipo-regresso_servico { background: #E0F5FA; color: var(--accent); }
+.tipo-entrada  { background: #E3F2E9; color: var(--accent); border: 1px solid var(--accent); }
+.tipo-saida    { background: #FEF3C7; color: #92400E; border: 1px solid #92400E; }
+.tipo-ini_int  { background: #E7F1FA; color: var(--accent2); border: 1px solid var(--accent2); }
+.tipo-fim_int  { background: #E7F1FA; color: var(--accent2); border: 1px solid var(--accent2); }
+.tipo-saida_servico    { background: #FEE2E2; color: var(--danger); border: 1px solid var(--danger); }
+.tipo-regresso_servico { background: #E3F2E9; color: var(--accent); border: 1px solid var(--accent); }
 
 .marcacao-hora {
   font-family: var(--mono);
@@ -459,6 +462,7 @@ body::before {
 
 .saldo-item {
   background: var(--surface2);
+  border: 1px solid var(--border-suave);
   border-radius: 10px;
   padding: 16px;
   text-align: center;
@@ -496,6 +500,9 @@ body::before {
 }
 
 .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-sm.btn-accao { background: var(--accao); border-color: var(--accent); color: var(--accent); }
+.btn-sm.btn-accao:hover { background: #8FE9C0; }
 
 /* QR MODAL */
 .modal-overlay {
@@ -585,6 +592,7 @@ body::before {
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--surface2);
+  border: 1px solid var(--border-suave);
   margin-top: 12px;
 }
 
@@ -688,7 +696,7 @@ body::before {
     <div id="alterarPassErro" style="display:none;color:var(--danger);font-size:13px;margin-bottom:16px"></div>
     <div style="display:flex;gap:10px">
       <button onclick="document.getElementById('modalAlterarPassword').style.display='none'" style="flex:1;background:transparent;color:var(--muted);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:14px;cursor:pointer">Cancelar</button>
-      <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="flex:2;background:var(--nav);color:var(--nav-texto);border:none;border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
+      <button id="alterarPassBtn" onclick="submeterAlteracaoPassword()" style="flex:2;background:var(--accao);color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:12px;font-size:14px;font-weight:600;cursor:pointer">Alterar password</button>
     </div>
   </div>
 </div>
@@ -751,7 +759,7 @@ body::before {
           <div class="saldo-item"><div class="saldo-num" id="feriasGozados">—</div><div class="saldo-label">Gozados</div></div>
           <div class="saldo-item"><div class="saldo-num" id="feriasPendentes">—</div><div class="saldo-label">Disponível</div></div>
         </div>
-        <button class="btn-sm" onclick="abrirPedidoFerias()">Pedir férias</button>
+        <button class="btn-sm btn-accao" onclick="abrirPedidoFerias()">Pedir férias</button>
       </div>
 
       <div class="card">
@@ -1229,7 +1237,7 @@ async function carregarStatusHorasExtra() {
         linhaRealizado = `<div style="margin-top:6px">Realizado: <span style="font-family:var(--mono)">${escHE(horaHE(p.inicio_real))}–${escHE(horaHE(p.fim_real))}</span> · ${escHE(p.minutos_reais)} min${visto}</div>`;
         if (porVisar(p)) {
           linhaRealizado += `<div style="color:var(--muted);margin:6px 0 10px">${escHE(p.registo_justificacao)}</div>
-          <button class="btn-sm" onclick="visarRegistoHE(${parseInt(p.id)})">Visar</button>`;
+          <button class="btn-sm btn-accao" onclick="visarRegistoHE(${parseInt(p.id)})">Visar</button>`;
         }
       }
       return `
