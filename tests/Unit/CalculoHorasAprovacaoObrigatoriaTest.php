@@ -29,7 +29,9 @@ final class CalculoHorasAprovacaoObrigatoriaTest extends TestCase
     {
         $r = $this->sabado(0, '2026-12-03');
         $this->assertSame(0, $r['minutos_extra_extraordinario']);
-        $this->assertSame(480, $r['minutos_totais']);
+        $this->assertSame(0, $r['minutos_totais']);
+        $this->assertSame(0.0, $r['horas_trabalhadas']);
+        $this->assertSame('sem_aprovacao', $r['tipo_presenca']);
     }
 
     public function testComConfiguracaoContaAteAoAprovado(): void

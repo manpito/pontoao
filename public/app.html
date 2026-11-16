@@ -4299,7 +4299,9 @@ function gerarHTMLRelatorioIndividual(res) {
     const iniInt = d.marcacoes.find(m => m.tipo === 'INI_INTERVALO');
     const fimInt = d.marcacoes.find(m => m.tipo === 'FIM_INTERVALO');
 
-    if (ent || sai) diasPresentes++;
+    // Dia sem trabalho previsto e sem horas extra aprovadas (ou com picagem incompleta): não conta como presença
+    const naoConta = r.tipo_presenca === 'sem_aprovacao' || r.tipo_presenca === 'picagem_incompleta';
+    if ((ent || sai) && !naoConta) diasPresentes++;
     totalHoras += r.total_horas || 0;
     totalAtrasos += r.atraso_minutos || 0;
     totalSaidasAntecipadas += r.saida_antecipada_minutos || 0;
@@ -4322,7 +4324,7 @@ function gerarHTMLRelatorioIndividual(res) {
     }
     const hTot = Math.floor(r.total_horas || 0);
     const mTot = Math.round(((r.total_horas || 0) - hTot) * 60);
-    const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : '--:--';
+    const tStr = (r.total_horas > 0) ? hTot.toString().padStart(2,'0') + ':' + mTot.toString().padStart(2,'0') : (naoConta ? '00:00' : '--:--');
 
     const eMin = (r.minutos_extra || 0) + (r.minutos_extra_extraordinario || 0);
     const eStr = eMin > 0
@@ -4371,6 +4373,13 @@ function gerarHTMLRelatorioIndividual(res) {
         ocor = badges.join(' ');
     }
 
+    if (naoConta) {
+        const diaDescanso = ['feriado', 'sabado', 'domingo'].includes(r.tipo_dia) ? ocor + ' ' : '';
+        ocor = diaDescanso + (r.tipo_presenca === 'sem_aprovacao'
+          ? '<span class="badge badge-red" title="Dia sem trabalho previsto e sem horas extra aprovadas: as picagens não contam.">Sem aprovação</span>'
+          : '<span class="badge badge-red" title="Dia sem trabalho previsto com uma só picagem: não é possível contar o tempo.">Picagem incompleta</span>');
+    }
+
     if (r.is_incoerente) {
         ocor = '<span class="badge badge-danger" title="Picagens incoerentes. Necessita revisão.">Incoerente - Rever</span> ' + ocor;
     }
@@ -4392,6 +4401,15 @@ function gerarHTMLRelatorioIndividual(res) {
 
       if (ent && !sai) acts += `<button class="btn btn-sm btn-accent no-print" onclick="abrirModalInserirMarcacao(${res.funcionario.id},'${d.data}','saida')" title="Registar saída">+ Saída</button>`;
     }
+
+    // Origem da picagem: só é assinalada quando não veio do relógio (visível no ecrã e no PDF)
+    const origemNomes = { web_pin: 'Portal', web_qr: 'Portal (QR)', web_face: 'Portal (facial)', manual: 'Manual RH' };
+    const origemTipos = { 'ENTRADA': 'Entrada', 'SAÍDA': 'Saída', 'INI_INTERVALO': 'Início interv.', 'FIM_INTERVALO': 'Fim interv.' };
+    const origemTags = (d.marcacoes || [])
+      .filter(m => m.origem && m.origem !== 'relogio')
+      .map(m => `<span class="badge badge-warn" title="Picagem das ${esc(m.hora)} registada fora do relógio">${esc(origemTipos[m.tipo] || m.tipo)}: ${esc(origemNomes[m.origem] || m.origem)}</span>`)
+      .join(' ');
+    if (origemTags) acts = `<div style="margin-bottom:4px">${origemTags}</div>` + acts;
 
     return `<tr>
       <td><span style="font-family:var(--mono)">${d.data}</span></td>
