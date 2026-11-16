@@ -313,6 +313,24 @@ class CalculoHorasService
             }
         }
 
+        // Desde a data configurada: em dia sem trabalho previsto (sábado, domingo, feriado ou folga) o tempo do dia
+        // é só o trabalho extraordinário aprovado. Sem aprovação o dia vale zero e não conta como presença;
+        // as picagens continuam visíveis nos relatórios. Uma picagem sozinha nesses dias também não conta.
+        if ($aprovacaoObrigatoriaDesde !== null && $dataStr >= $aprovacaoObrigatoriaDesde
+            && in_array($resultado['tipo_presenca'], ['completo', 'meio_dia'], true)
+            && self::semTrabalhoPrevisto($turno, $tipoDia, $regimeEscala)) {
+            $minutosContados = $resultado['tipo_presenca'] === 'completo'
+                ? $resultado['minutos_extra'] + $resultado['minutos_extra_extraordinario']
+                : 0;
+            $resultado['minutos_totais']    = $minutosContados;
+            $resultado['horas_trabalhadas'] = round($minutosContados / 60, 2);
+            if ($minutosExtraAprovados <= 0) {
+                $resultado['tipo_presenca'] = 'sem_aprovacao';
+            } elseif ($resultado['tipo_presenca'] === 'meio_dia') {
+                $resultado['tipo_presenca'] = 'picagem_incompleta';
+            }
+        }
+
         // Atrasos e Saídas antecipadas (regra baseada no horário esperado, usando timestamp real e não string truncada a minutos)
         if ($turno && $turno['tipo'] !== 'folga' && $resultado['tipo_presenca'] === 'completo') {
             if ($turno['hora_entrada'] && $resultado['primeira_entrada_ts']) {
@@ -344,6 +362,19 @@ class CalculoHorasService
         }
 
         return $resultado;
+    }
+
+    /**
+     * Dia sem trabalho previsto: fim-de-semana ou feriado (em regime de turnos só quando não há turno ou o turno é folga),
+     * ou qualquer dia em que o turno atribuído é folga. Segue a mesma divisão já usada no cálculo do trabalho extraordinário.
+     */
+    private static function semTrabalhoPrevisto(?array $turno, string $tipoDia, string $regimeEscala): bool
+    {
+        $folga = $turno !== null && ($turno['tipo'] ?? null) === 'folga';
+        if (in_array($tipoDia, ['sabado', 'domingo', 'feriado'], true)) {
+            return $regimeEscala !== 'turnos' || $turno === null || $folga;
+        }
+        return $folga;
     }
 
     /**
