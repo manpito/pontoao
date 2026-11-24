@@ -151,6 +151,41 @@ class RelatorioController
         ]);
         $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
+        // Picagens anuladas: só para mostrar no relatório; não entram em nenhum cálculo
+        $stmtA = $db->prepare("
+            SELECT m.id, m.tipo, m.data_hora, m.origem, m.motivo_anulacao, m.anulada_em,
+                   ua.nome AS anulada_por_nome
+            FROM marcacoes m
+            LEFT JOIN utilizadores ua ON m.anulada_por = ua.id
+            WHERE m.funcionario_id = :fid
+              AND m.data_hora BETWEEN :ini AND :fim
+              AND m.anulada = 1
+            ORDER BY m.data_hora ASC
+        ");
+        $stmtA->execute([
+            ':fid' => $funcId,
+            ':ini' => $dataInicio . ' 00:00:00',
+            ':fim' => $fimQuery
+        ]);
+        $anuladasPorDia = [];
+        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $a) {
+            $anuladasPorDia[substr($a['data_hora'], 0, 10)][] = [
+                'id'              => (int) $a['id'],
+                'hora'            => date('H:i', strtotime($a['data_hora'])),
+                'tipo'            => match($a['tipo']) {
+                    'entrada' => 'ENTRADA',
+                    'saida' => 'SAÍDA',
+                    'inicio_intervalo' => 'INI_INTERVALO',
+                    'fim_intervalo' => 'FIM_INTERVALO',
+                    default => strtoupper($a['tipo'])
+                },
+                'origem'          => $a['origem'],
+                'motivo_anulacao' => $a['motivo_anulacao'],
+                'anulada_em'      => $a['anulada_em'] ? date('d/m/Y H:i', strtotime($a['anulada_em'])) : null,
+                'anulada_por'     => $a['anulada_por_nome'],
+            ];
+        }
+
         $escalaService = new \App\Services\EscalaService($db);
 
         // Carregar pedidos de horas extra aprovados do período
@@ -449,6 +484,7 @@ class RelatorioController
                 'data' => $dataStr,
                 'dia_semana' => $nomesDias[$diaSemana],
                 'marcacoes' => $marcacoesFormatadas,
+                'marcacoes_anuladas' => $anuladasPorDia[$dataStr] ?? [],
                 'resumo' => [
                     'tipo_dia'                  => $tipoDia,
                     'hora_prevista_entrada'     => $turno ? substr($turno['hora_entrada'] ?? '', 0, 5) : null,

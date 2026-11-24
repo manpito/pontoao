@@ -1613,7 +1613,7 @@ input[type="month"]::-webkit-calendar-picker-indicator {
     </div>
     <div class="modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;">
       <button class="btn" onclick="fecharModal('modalAnularMarcacao')">Cancelar</button>
-      <button class="btn btn-accent" onclick="confirmarAnulacaoMarcacao()">Anular</button>
+      <button class="btn" style="border-color:var(--danger);color:var(--danger)" onclick="confirmarAnulacaoMarcacao()">Anular</button>
     </div>
   </div>
 </div>
@@ -4432,6 +4432,15 @@ function gerarHTMLRelatorioIndividual(res) {
       .map(m => `<span class="badge badge-warn" title="Picagem das ${esc(m.hora)} registada fora do relógio">${esc(origemTipos[m.tipo] || m.tipo)}: ${esc(origemNomes[m.origem] || m.origem)}</span>`)
       .join(' ');
     if (origemTags) acts = `<div style="margin-bottom:4px">${origemTags}</div>` + acts;
+
+    // Picagens anuladas: visíveis no ecrã e no PDF, sem contar para o cálculo
+    const anuladasHtml = (d.marcacoes_anuladas || [])
+      .map(m => {
+        const orig = (m.origem && m.origem !== 'relogio') ? ` (${esc(origemNomes[m.origem] || m.origem)})` : '';
+        return `<div style="margin-bottom:4px;font-size:11px;color:#B91C1C"><span style="text-decoration:line-through;font-weight:700">${esc(origemTipos[m.tipo] || m.tipo)} ${esc(m.hora)}${orig}</span> · anulada por ${esc(m.anulada_por || '—')} em ${esc(m.anulada_em || '—')}<br><span style="color:#555555">Motivo: ${esc(m.motivo_anulacao || '')}</span></div>`;
+      })
+      .join('');
+    if (anuladasHtml) acts = anuladasHtml + acts;
 
     return `<tr>
       <td><span style="font-family:var(--mono)">${d.data}</span></td>
