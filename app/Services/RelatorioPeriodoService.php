@@ -63,6 +63,7 @@ class RelatorioPeriodoService
             SELECT funcionario_id, tipo, data_hora
             FROM marcacoes
             WHERE data_hora BETWEEN :ini AND :fim
+              AND anulada = 0
             ORDER BY data_hora ASC
         ");
         $stmtM->execute([':ini' => $dataInicio . ' 00:00:00', ':fim' => $fimQuery]);

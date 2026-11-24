@@ -141,6 +141,7 @@ class RelatorioController
             LEFT JOIN utilizadores u ON m.editada_por = u.id
             WHERE m.funcionario_id = :fid
               AND m.data_hora BETWEEN :ini AND :fim
+              AND m.anulada = 0
             ORDER BY m.data_hora ASC
         ");
         $stmtM->execute([
@@ -631,6 +632,7 @@ class RelatorioController
             FROM marcacoes
             WHERE funcionario_id = :fid
               AND data_hora BETWEEN :ini AND :fim
+              AND anulada = 0
             ORDER BY data_hora ASC
         ");
         $stmtM->execute([
@@ -1014,6 +1016,7 @@ class RelatorioController
             FROM marcacoes
             WHERE funcionario_id IN ({$inStr})
               AND data_hora BETWEEN '{$dataInicio} 00:00:00' AND '{$dataFim} 23:59:59'
+              AND anulada = 0
             ORDER BY data_hora ASC
         ");
         $todasMarcacoes = $stmtM->fetchAll(PDO::FETCH_ASSOC);
@@ -1372,6 +1375,7 @@ class RelatorioController
             FROM marcacoes
             WHERE funcionario_id IN ({$inStr})
               AND data_hora BETWEEN :ini AND :fim
+              AND anulada = 0
             ORDER BY funcionario_id, data_hora ASC
         ");
         $stmtM->execute([':ini' => $dataInicio . ' 00:00:00', ':fim' => $fimQuery]);
@@ -1772,6 +1776,7 @@ class RelatorioController
             FROM marcacoes
             WHERE funcionario_id IN ($inStr)
               AND data_hora BETWEEN :ini AND :fim
+              AND anulada = 0
             ORDER BY data_hora ASC
         ");
         $stmtM->execute([':ini' => $inicio . ' 00:00:00', ':fim' => $fim . ' 23:59:59']);

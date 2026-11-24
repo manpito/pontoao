@@ -74,6 +74,7 @@ class MarcacaoController
             SELECT
                 m.id, m.tipo, m.data_hora, m.origem, m.editada,
                 m.motivo_edicao, m.bloqueada, m.criado_em,
+                m.anulada, m.anulada_em, m.motivo_anulacao,
                 m.latitude, m.longitude, m.dentro_geofence,
                 f.nome_completo AS funcionario, f.numero_funcionario
             FROM marcacoes m
@@ -142,6 +143,7 @@ class MarcacaoController
                     WHERE m.funcionario_id = f.id
                       AND m.data_hora >= :inicio_dia
                       AND m.data_hora < :inicio_dia_seguinte
+                      AND m.anulada = 0
                     ORDER BY m.data_hora DESC
                     LIMIT 1
                 ) AS ultima_marcacao_tipo,
@@ -151,6 +153,7 @@ class MarcacaoController
                     WHERE m.funcionario_id = f.id
                       AND m.data_hora >= :inicio_dia2
                       AND m.data_hora < :inicio_dia_seguinte2
+                      AND m.anulada = 0
                     ORDER BY m.data_hora DESC
                     LIMIT 1
                 ) AS ultima_marcacao_hora,
@@ -160,6 +163,7 @@ class MarcacaoController
                     WHERE m.funcionario_id = f.id
                       AND m.data_hora >= :inicio_dia3
                       AND m.data_hora < :inicio_dia_seguinte3
+                      AND m.anulada = 0
                 ) AS total_marcacoes_hoje
             FROM funcionarios f
             LEFT JOIN departamentos d ON f.departamento_id = d.id
@@ -262,7 +266,7 @@ class MarcacaoController
                 // Regra: uma picagem existente não é substituída nem duplicada por uma marcação manual
                 $chkDia = $db->prepare("
                     SELECT id FROM marcacoes
-                    WHERE funcionario_id = :fid AND tipo = :tipo AND DATE(data_hora) = :dia
+                    WHERE funcionario_id = :fid AND tipo = :tipo AND DATE(data_hora) = :dia AND anulada = 0
                     LIMIT 1
                 ");
                 $chkDia->execute([':fid' => $funcionarioId, ':tipo' => $tipo, ':dia' => substr($dataHora, 0, 10)]);
@@ -300,6 +304,7 @@ class MarcacaoController
             WHERE funcionario_id = :fid
               AND tipo = :tipo
               AND data_hora BETWEEN DATE_SUB(:dh1, INTERVAL 120 SECOND) AND DATE_ADD(:dh2, INTERVAL 120 SECOND)
+              AND anulada = 0
             ORDER BY id ASC
             LIMIT 1
         ");
@@ -454,13 +459,13 @@ class MarcacaoController
             return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação não encontrada.']);
         }
 
-        if ((int) $marcacao['anulada'] === 1) {
-            return $this->json(409, ['erro' => true, 'mensagem' => 'Esta marcação já está anulada.']);
-        }
-
         $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $marcacao['funcionario_id']);
         if ($erroPermissao !== null) {
             return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+        }
+
+        if ((int) $marcacao['anulada'] === 1) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Esta marcação já está anulada.']);
         }
 
         $dataMarcacao = substr($marcacao['data_hora'], 0, 10);
