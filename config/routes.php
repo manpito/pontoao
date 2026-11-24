@@ -180,6 +180,8 @@ $app->group('/api', function (\Slim\Routing\RouteCollectorProxy $group) {
 
     $group->put('/marcacoes/{id}',      [\App\Controllers\MarcacaoController::class, 'update'])
           ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
+    $group->post('/marcacoes/{id}/anular', [\App\Controllers\MarcacaoController::class, 'anular'])
+          ->add(AuthMiddleware::role(['super_admin_tenant', 'rh_manager']));
 
         // --- Justificações de Ausência ---
     $group->get('/justificacoes-ausencia', [\App\Controllers\JustificacaoAusenciaController::class, 'index'])
