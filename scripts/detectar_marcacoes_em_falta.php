@@ -132,6 +132,7 @@ foreach ($tenants as $tenant) {
                 SELECT id, tipo FROM marcacoes
                 WHERE funcionario_id = :fid
                 AND DATE(data_hora) = :data
+                AND anulada = 0
                 ORDER BY data_hora ASC
             ");
             $stmtMarc->execute(['fid' => $funcId, 'data' => $targetDate]);

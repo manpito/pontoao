@@ -245,6 +245,7 @@ class MarcacaoFaltaController
                 WHERE funcionario_id = :fid
                   AND tipo = :tipo
                   AND ABS(TIMESTAMPDIFF(SECOND, data_hora, :dh)) < 60
+                  AND anulada = 0
             ");
             $dup->execute([':fid' => $mf['funcionario_id'], ':tipo' => $tipoMarcacao, ':dh' => $dataHoraEntrada]);
             if (!$dup->fetch()) {
@@ -263,6 +264,7 @@ class MarcacaoFaltaController
                 WHERE funcionario_id = :fid
                   AND tipo = 'saida'
                   AND ABS(TIMESTAMPDIFF(SECOND, data_hora, :dh)) < 60
+                  AND anulada = 0
             ");
             $dup->execute([':fid' => $mf['funcionario_id'], ':dh' => $dataHoraSaida]);
             if (!$dup->fetch()) {

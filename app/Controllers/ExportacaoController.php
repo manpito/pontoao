@@ -125,6 +125,7 @@ class ExportacaoController
             FROM marcacoes
             WHERE funcionario_id IN ({$inStr})
               AND data_hora BETWEEN :ini AND :fim
+              AND anulada = 0
             ORDER BY funcionario_id, data_hora ASC
         ");
         $stmtM->execute([':ini' => $dataInicio . ' 00:00:00', ':fim' => $fimQuery]);

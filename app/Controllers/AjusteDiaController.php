@@ -113,7 +113,7 @@ class AjusteDiaController
         $justificacoesNovas = $stmtJA->fetchAll(PDO::FETCH_ASSOC);
 
         // Marcações (usado para tem_picagens e calculos se houver justificação sem ajuste)
-        $stmtM = $db->prepare("SELECT id, tipo, data_hora, origem FROM marcacoes WHERE funcionario_id = :fid AND data_hora BETWEEN :ini4 AND :fim4");
+        $stmtM = $db->prepare("SELECT id, tipo, data_hora, origem FROM marcacoes WHERE funcionario_id = :fid AND data_hora BETWEEN :ini4 AND :fim4 AND anulada = 0");
         $stmtM->execute([':fid' => $funcId, ':ini4' => $dataInicio . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
         $marcacoesRaw = $stmtM->fetchAll(PDO::FETCH_ASSOC);
 
@@ -505,7 +505,7 @@ class AjusteDiaController
         }
 
         // Pre-fetch picagens (informativo)
-        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini4 AND :fim4");
+        $stmtM = $db->prepare("SELECT funcionario_id, data_hora FROM marcacoes WHERE funcionario_id IN ($inIds) AND data_hora BETWEEN :ini4 AND :fim4 AND anulada = 0");
         $stmtM->execute([':ini4' => $dataIni . ' 00:00:00', ':fim4' => $dataFim . ' 23:59:59']);
         $picagensMap = [];
         foreach ($stmtM->fetchAll(PDO::FETCH_ASSOC) as $m) {
