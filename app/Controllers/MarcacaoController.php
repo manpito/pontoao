@@ -439,6 +439,82 @@ class MarcacaoController
         return $this->json(200, ['mensagem' => 'Marcação actualizada com sucesso.']);
     }
 
+    public function anular(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id   = (int) $args['id'];
+        $body = $request->getParsedBody() ?? [];
+        $user = $request->getAttribute('auth_user');
+        $db   = $this->db();
+
+        $stmt = $db->prepare("SELECT * FROM marcacoes WHERE id = :id LIMIT 1");
+        $stmt->execute([':id' => $id]);
+        $marcacao = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$marcacao) {
+            return $this->json(404, ['erro' => true, 'mensagem' => 'Marcação não encontrada.']);
+        }
+
+        if ((int) $marcacao['anulada'] === 1) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Esta marcação já está anulada.']);
+        }
+
+        $erroPermissao = \App\Services\PermissaoFuncionario::verificar($db, $user, (int) $marcacao['funcionario_id']);
+        if ($erroPermissao !== null) {
+            return $this->json(403, ['erro' => true, 'mensagem' => $erroPermissao]);
+        }
+
+        $dataMarcacao = substr($marcacao['data_hora'], 0, 10);
+        $periodo = $db->prepare("
+            SELECT estado
+            FROM periodos_mensais
+            WHERE estado = 'fechado'
+              AND :data_marc BETWEEN data_inicio AND data_fim
+            LIMIT 1
+        ");
+        $periodo->execute([':data_marc' => $dataMarcacao]);
+        $p = $periodo->fetch(PDO::FETCH_ASSOC);
+
+        if ($p || $marcacao['bloqueada']) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Marcação bloqueada — período mensal fechado. Não é possível anular.']);
+        }
+
+        $motivo = trim((string) ($body['motivo_anulacao'] ?? ''));
+        if (mb_strlen($motivo) < 10) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'O motivo da anulação é obrigatório e deve ter pelo menos 10 caracteres.']);
+        }
+        if (mb_strlen($motivo) > 500) {
+            return $this->json(422, ['erro' => true, 'mensagem' => 'O motivo da anulação não pode ter mais de 500 caracteres.']);
+        }
+
+        $upd = $db->prepare("
+            UPDATE marcacoes
+            SET anulada = 1, anulada_por = :anulada_por, anulada_em = NOW(), motivo_anulacao = :motivo
+            WHERE id = :id AND anulada = 0
+        ");
+        $upd->execute([
+            ':anulada_por' => $user ? (int) $user->sub : null,
+            ':motivo'      => $motivo,
+            ':id'          => $id,
+        ]);
+
+        if ($upd->rowCount() === 0) {
+            return $this->json(409, ['erro' => true, 'mensagem' => 'Esta marcação já está anulada.']);
+        }
+
+        $db->prepare("
+            INSERT INTO log_auditoria (utilizador_id, accao, entidade, entidade_id, dados_antes, dados_depois, ip)
+            VALUES (:uid, 'marcacao.anulada', 'marcacao', :eid, :antes, :depois, :ip)
+        ")->execute([
+            ':uid'    => $user ? (int) $user->sub : null,
+            ':eid'    => $id,
+            ':antes'  => json_encode(['anulada' => 0, 'tipo' => $marcacao['tipo'], 'data_hora' => $marcacao['data_hora'], 'origem' => $marcacao['origem']]),
+            ':depois' => json_encode(['anulada' => 1, 'motivo' => $motivo]),
+            ':ip'     => $_SERVER['REMOTE_ADDR'] ?? null,
+        ]);
+
+        return $this->json(200, ['mensagem' => 'Marcação anulada com sucesso.']);
+    }
+
     private function json(int $status, array $data): ResponseInterface
     {
         $response = new Response($status);
